@@ -70,14 +70,13 @@ flightopt/
 tests/       Unit-Tests und aufgezeichnete Fixtures
 ```
 
-## Regeln
+## Projektgrenzen
 
-- keine Credentials im Repo
-- keine lokalen Datenbanken im Repo
-- keine CAPTCHA-Umgehung
-- keine Login- oder Paywall-Umgehung
-- nur lokale Nutzung und transparente Tests
-- Vergleichsquellen werden als Richtwert markiert
+Dieses Repo enthält nur den sauberen App-Code, Tests und Beispiel-Fixtures.
+Lokale Datenbanken, Suchprofile, Cookies und API-Keys bleiben bewusst draußen.
+
+Die Quellen werden vorsichtig und transparent genutzt. Vergleichsdaten werden
+nicht als echte Endpreise verkauft, sondern als Richtwert markiert.
 
 ## Lizenz
 
