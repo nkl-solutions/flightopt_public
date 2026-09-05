@@ -187,9 +187,10 @@ input[type=date]:focus,input[type=number]:focus,select:focus{outline:2px solid v
 .outhead h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-subtle)}
 .tools{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .sortlbl{font-size:11.5px;color:var(--ink-subtle)}
-#sort{padding:5px 9px;background:var(--bg-elevated);border:1px solid var(--rule-interactive);
+.tools select{padding:5px 9px;background:var(--bg-elevated);border:1px solid var(--rule-interactive);
   border-radius:3px;font-size:13px}
-#sort:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.tools select:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.filtercount{font-size:12px;color:var(--ink-subtle)}
 .key{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-subtle)}
 .usedby{margin:0 0 10px;font-size:12.5px;color:var(--ink-subtle);display:flex;
   align-items:center;gap:8px;flex-wrap:wrap}
@@ -200,6 +201,7 @@ input[type=date]:focus,input[type=number]:focus,select:focus{outline:2px solid v
 .ruler span{position:absolute;top:0;transform:translateX(-50%);font-size:11px;color:var(--ink-subtle);
   white-space:nowrap}
 ol{list-style:none;margin:0;padding:0}
+ol.empty{padding:16px 0;color:var(--ink-subtle);font-size:13px}
 li.opt{display:grid;grid-template-columns:62px 104px minmax(96px,auto) 1fr;gap:12px;align-items:center;
   padding:10px 0;border-bottom:1px solid var(--rule);cursor:pointer}
 li.opt.best{box-shadow:inset 3px 0 0 var(--accent-bright);padding-left:9px}
@@ -349,6 +351,18 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--rule);font-si
         <option value="depart">Abflugdatum</option>
         <option value="length">Reisedauer</option>
       </select>
+      <label class="sortlbl" for="resultCarrier">Airline</label>
+      <select id="resultCarrier">
+        <option value="">Alle</option>
+      </select>
+      <label class="sortlbl" for="resultQuality">Status</label>
+      <select id="resultQuality">
+        <option value="">Alle</option>
+        <option value="verified">geprüft</option>
+        <option value="estimate">Schätzung</option>
+        <option value="indicative">Richtwert</option>
+      </select>
+      <span class="filtercount" id="filtercount"></span>
       <div class="key"><span>günstig</span><i class="ramp"></i><span>teuer</span></div>
     </div>
   </div>
@@ -885,6 +899,36 @@ function sortResults(results){
   else copy.sort((a,b) => a.total-b.total);
   return copy;
 }
+function resultQuality(o){
+  if (o.verified) return "verified";
+  return (o.legs || []).some(l => l.indicative) ? "indicative" : "estimate";
+}
+function filterResults(results){
+  const carrier = $("#resultCarrier").value;
+  const quality = $("#resultQuality").value;
+  return results.filter(o =>
+    (!carrier || carriersOf(o).includes(carrier)) &&
+    (!quality || resultQuality(o) === quality)
+  );
+}
+function resultFilterSummary(visible, total){
+  if (visible === total) return `${visible} Varianten sichtbar`;
+  return `${visible} von ${total} Varianten sichtbar`;
+}
+function updateResultFilters(results){
+  const sel = $("#resultCarrier");
+  const current = sel.value;
+  const codes = [...new Set(results.flatMap(carriersOf))].sort((a,b) => {
+    const an = (AIRLINES.find(x=>x.code===a)||{}).name || a;
+    const bn = (AIRLINES.find(x=>x.code===b)||{}).name || b;
+    return an.localeCompare(bn, "de");
+  });
+  sel.innerHTML = `<option value="">Alle</option>` + codes.map(c => {
+    const a = AIRLINES.find(x=>x.code===c);
+    return `<option value="${esc(c)}">${esc(a ? a.name : c)}</option>`;
+  }).join("");
+  sel.value = codes.includes(current) ? current : "";
+}
 function airlineSummary(results){
   const cheapest = new Map();
   results.forEach(o => carriersOf(o).forEach(c => {
@@ -910,8 +954,22 @@ function routeBadge(o){
 function render(results){
   lastResults = results;
   const list = $("#list"); list.innerHTML="";
+  list.className = "";
   $("#usedby").textContent = "";
+  $("#filtercount").textContent = "";
   if (!results.length){ $("#out").classList.remove("on"); return; }
+  updateResultFilters(results);
+  const visible = filterResults(results);
+  $("#filtercount").textContent = resultFilterSummary(visible.length, results.length);
+  if (!visible.length){
+    $("#outtitle").textContent = "Keine passenden Kandidaten";
+    $("#ruler").innerHTML = "";
+    list.className = "empty";
+    list.textContent = "Die Suche hat Ergebnisse, aber keiner passt zu den aktuellen Filtern.";
+    $("#out").classList.add("on");
+    return;
+  }
+  results = visible;
   airlineSummary(results);
   results = sortResults(results);
   const all = results.flatMap(o=>o.dates.map(d=>new Date(d+"T00:00:00")));
@@ -1083,7 +1141,9 @@ $("#to").value   = new Date(Date.now()+87*864e5).toISOString().slice(0,10);
 const restored = loadForm();
 $("#stayrow").classList.toggle("off", !TRIPS.find(t=>t.id===trip).stays);
 ["#from","#to","#checkedBags"].forEach(s => $(s).oninput = () => { size(); updateRouteGlance(); saveForm(); });
-$("#sort").onchange = () => { saveForm(); if (lastResults.length) render(lastResults); };
+["#sort","#resultCarrier","#resultQuality"].forEach(s => $(s).onchange = () => {
+  saveForm(); if (lastResults.length) render(lastResults);
+});
 drawTabs(); drawRoute(); loadAirlines().then(() => {
   // Restore the chips only after the registry has rendered them.
   if (restored) {

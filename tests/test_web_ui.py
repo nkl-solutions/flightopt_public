@@ -222,3 +222,36 @@ assert.strictEqual($("#go").textContent, "Suchen");
     )
 
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_result_filters_keep_matching_airline_and_quality():
+    result = run_ui_assertion(
+        r"""
+const rows = [
+  {total: 100, verified: true, legs: [{carriers:["FR"], indicative:false}]},
+  {total: 120, verified: false, legs: [{carriers:["A3"], indicative:false}]},
+  {total: 140, verified: false, legs: [{carriers:["XQ"], indicative:true}]},
+];
+
+$("#resultCarrier").value = "FR";
+$("#resultQuality").value = "verified";
+assert.deepStrictEqual(filterResults(rows), [rows[0]]);
+
+$("#resultCarrier").value = "";
+$("#resultQuality").value = "indicative";
+assert.deepStrictEqual(filterResults(rows), [rows[2]]);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_result_filter_summary_names_visible_count():
+    result = run_ui_assertion(
+        r"""
+assert.strictEqual(resultFilterSummary(1, 4), "1 von 4 Varianten sichtbar");
+assert.strictEqual(resultFilterSummary(4, 4), "4 Varianten sichtbar");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
