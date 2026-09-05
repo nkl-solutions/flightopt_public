@@ -20,6 +20,7 @@ keine lokale Datenbank.
 - Flughafen-Gruppen wie `DE` und `DE-OST`
 - gespeicherte Suchprofile als Basis für tägliche Scans
 - Preisbaseline mit einfachem Ausreißer-Signal
+- transparente Aufgabegepäck-Annahmen je Airline
 
 ## Warum das spannend ist
 

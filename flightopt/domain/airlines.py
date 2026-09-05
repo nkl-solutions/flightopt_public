@@ -25,6 +25,8 @@ class Airline:
     note: str = ""
     kind: Kind = "airline"
     """A comparison site is not an airline and must not be shown as one."""
+    checked_bag_minor: int = 3500
+    """Transparent estimate for one checked bag on one leg, in cents."""
 
     @property
     def initials(self) -> str:
@@ -38,34 +40,42 @@ AIRLINES: dict[str, Airline] = {
         # Note: the note text is shown in the UI, so it says what each source
         # can and cannot do rather than just that it works.
         Airline("FR", "Ryanair", "#073590", "live", "ryanair",
-                "Monatskalender und Tagessuche, beides bestätigt."),
+                "Monatskalender und Tagessuche, beides bestätigt.",
+                checked_bag_minor=4000),
 
         # Not an airline. Kept in the registry so results that rely on it can
         # say so, instead of inventing a carrier that does not fly the route.
         Airline("KIWI", "Kiwi (Vergleich)", "#00a991", "live", "kiwi",
                 "Vergleichsportal, deckt jede Strecke ab. Preise liegen etwa "
                 "13 Prozent über dem echten Tarif und gelten als Richtwert.",
-                kind="comparison"),
+                kind="comparison", checked_bag_minor=4500),
 
         Airline("W6", "Wizz Air", "#c6007e", "live", "wizz",
                 "Tagespreise aus dem Flugplan. Preise folgen der Währung des "
-                "Abflugmarkts, abweichende Währungen werden übersprungen."),
+                "Abflugmarkts, abweichende Währungen werden übersprungen.",
+                checked_bag_minor=4500),
         Airline("A3", "Aegean", "#00594f", "live", "aegean",
                 "Monatskalender mit günstigsten Preisen. Liefert keine "
-                "Flugzeiten, daher ohne Live-Nachprüfung."),
+                "Flugzeiten, daher ohne Live-Nachprüfung.",
+                checked_bag_minor=3000),
         Airline("EW", "Eurowings", "#a4147a", "live", "eurowings",
                 "Bis zu 15 Monate Tagespreise in einem Aufruf. Braucht einen "
-                "Seitenaufruf vorab für das Cloudflare-Cookie."),
+                "Seitenaufruf vorab für das Cloudflare-Cookie.",
+                checked_bag_minor=3500),
         Airline("DE", "Condor", "#ffad00", "live", "condor",
                 "Monatskalender ohne Anmeldung. Deckt Griechenland und die "
-                "Türkei ab Deutschland ab. Keine Flugzeiten."),
+                "Türkei ab Deutschland ab. Keine Flugzeiten.",
+                checked_bag_minor=3500),
         Airline("DI", "Marabu", "#e8112d", "live", "condor",
-                "Läuft über dieselbe Buchungsmaschine wie Condor."),
+                "Läuft über dieselbe Buchungsmaschine wie Condor.",
+                checked_bag_minor=3500),
         Airline("BA", "British Airways", "#2e5c99", "live", "britishairways",
                 "Offene Suchmaschine mit Tagespreisen. Nur Strecken, die "
-                "British Airways ab dem Abflugmarkt selbst verkauft."),
+                "British Airways ab dem Abflugmarkt selbst verkauft.",
+                checked_bag_minor=4500),
         Airline("FI", "Icelandair", "#003366", "live", "icelandair",
-                "Tagespreise mit rund einem Jahr Vorlauf in einem Aufruf."),
+                "Tagespreise mit rund einem Jahr Vorlauf in einem Aufruf.",
+                checked_bag_minor=4000),
         Airline("TK", "Turkish Airlines", "#c70a0c", "planned", "turkish",
                 "Offizielles Entwicklerportal, Registrierung nötig."),
 
@@ -101,6 +111,11 @@ def color_of(code: str) -> str:
     return airline.color if airline else "#585f73"
 
 
+def checked_bag_minor(code: str) -> int:
+    airline = get(code)
+    return airline.checked_bag_minor if airline else 3500
+
+
 def as_dicts() -> list[dict]:
     return [
         {
@@ -110,6 +125,7 @@ def as_dicts() -> list[dict]:
             "status": a.status,
             "note": a.note,
             "kind": a.kind,
+            "checked_bag_price": a.checked_bag_minor / 100,
         }
         for a in AIRLINES.values()
     ]

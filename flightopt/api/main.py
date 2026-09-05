@@ -79,6 +79,7 @@ class SearchRequest(BaseModel):
     adults: int = 1
     cabin: str = "economy"
     currency: str = "EUR"
+    checked_bags: int = Field(default=0, ge=0, le=2)
     airlines: list[str] = Field(default_factory=list)
     """Restrict to these carrier codes. Empty means every source we have."""
 
@@ -140,6 +141,7 @@ class SearchRequest(BaseModel):
             pax=Pax(adults=self.adults),
             cabin=Cabin(self.cabin),
             currency=self.currency,
+            checked_bags=self.checked_bags,
         )
 
     def to_spec(self) -> SearchSpec:

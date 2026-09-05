@@ -7,8 +7,9 @@ from datetime import date
 
 import pytest
 
-from flightopt.domain.models import LegSpec, SearchSpec
+from flightopt.domain.models import LegSpec, Money, SearchSpec
 from flightopt.jobs.runner import JobRunner
+from flightopt.jobs.runner import checked_bag_fee_minor
 from flightopt.jobs.runner import merge_variant_payloads
 
 
@@ -58,6 +59,33 @@ def test_merge_variant_payloads_deduplicates_same_route_and_dates():
 
     assert len(merged) == 1
     assert merged[0]["total"] == 120.0
+
+
+def test_leg_payload_breaks_out_checked_bag_estimate():
+    day = date(2026, 10, 1)
+    with_bag = SearchSpec(
+        legs=(LegSpec("BER", "ATH"),),
+        stays=(),
+        window_start=day,
+        window_end=day,
+        checked_bags=1,
+    )
+    fee = checked_bag_fee_minor(["FR"], 1)
+
+    leg = JobRunner._leg_payload(
+        with_bag,
+        [{day: Money(7900 + fee)}],
+        None,
+        0,
+        day,
+        None,
+        winner={(0, day): "FR"},
+    )
+
+    assert leg["price"] == 119.0
+    assert leg["base_price"] == 79.0
+    assert leg["bag_fee"] == 40.0
+    assert leg["checked_bags"] == 1
 
 
 def spec(origin: str) -> SearchSpec:

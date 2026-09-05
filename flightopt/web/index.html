@@ -93,9 +93,9 @@ button,input{font:inherit;color:inherit}
 
 .row{display:flex;gap:10px;flex-wrap:wrap}
 .row>div{flex:1;min-width:126px}
-input[type=date],input[type=number]{width:100%;padding:9px 10px;background:var(--bg-elevated);
+input[type=date],input[type=number],select{width:100%;padding:9px 10px;background:var(--bg-elevated);
   border:1px solid var(--rule-interactive);border-radius:3px}
-input[type=date]:focus,input[type=number]:focus{outline:2px solid var(--accent);outline-offset:-1px;
+input[type=date]:focus,input[type=number]:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;
   border-color:transparent}
 .stayrow{margin-top:15px}
 .stayrow.off{opacity:.4;pointer-events:none}
@@ -275,6 +275,16 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--rule);font-si
         <div><label class="lab" for="from">Fenster ab</label><input type="date" id="from" required></div>
         <div><label class="lab" for="to">bis</label><input type="date" id="to" required></div>
       </div>
+      <div class="row stayrow">
+        <div>
+          <label class="lab" for="checkedBags">Aufgabegepäck</label>
+          <select id="checkedBags">
+            <option value="0">ohne Aufgabegepäck</option>
+            <option value="1">1 Aufgabegepäckstück</option>
+            <option value="2">2 Aufgabegepäckstücke</option>
+          </select>
+        </div>
+      </div>
       <div class="stayrow" id="stayrow">
         <div class="stayhead">
           <span class="lab">Aufenthalt</span>
@@ -374,6 +384,11 @@ const PROGRESS_RANGES = {
   verifying:[84, 12],
   done:[100, 0],
   failed:[100, 0],
+};
+const SEARCH_WARNINGS = {
+  largeCombinations: 20000,
+  hugeCombinations: 100000,
+  manyCells: 500,
 };
 
 let trip = "return";
@@ -634,6 +649,7 @@ function payload(){
     airports: hops.map(h=>h.code), trip,
     window_start: $("#from").value, window_end: $("#to").value,
     stays: Array.from({length: count}, (_, i) => stayRanges[i] || [3, 10]),
+    checked_bags: Number($("#checkedBags").value || 0),
     airlines: [...picked], adults:1, cabin:"economy", currency:"EUR"
   };
 }
@@ -646,6 +662,28 @@ function profilePayload(){
 }
 let sizeTimer;
 function validPlaceCode(code){ return /^[A-Z0-9-]{2,12}$/.test(code || ""); }
+function estimateWarning(d, tripId){
+  const combinations = Number(d.combinations) || 0;
+  const cells = Number(d.cells) || 0;
+  if (tripId !== "one_way" && combinations >= SEARCH_WARNINGS.hugeCombinations) {
+    return {warn:true, suffix: ". Sehr großer Suchraum, die Suche kann deutlich länger dauern."};
+  }
+  if (tripId !== "one_way" && combinations >= SEARCH_WARNINGS.largeCombinations) {
+    return {warn:true, suffix: ". Großer Suchraum, bitte etwas Wartezeit einplanen."};
+  }
+  if (cells >= SEARCH_WARNINGS.manyCells) {
+    return {warn:true, suffix: ". Viele Teilstrecken-Tage, der Abruf kann länger laufen."};
+  }
+  return {warn:false, suffix:""};
+}
+function estimateSummary(d, tripId){
+  const variants = d.variants > 1 ? ` über <b>${d.variants}</b> Routenvarianten` : "";
+  const warning = estimateWarning(d, tripId);
+  const main = tripId==="one_way"
+    ? `<b>${d.cells}</b> Abflugtage werden bepreist${variants}`
+    : `<b>${d.combinations.toLocaleString("de-DE")}</b> Kombinationen aus <b>${d.cells}</b> Leg-Tagen${variants}`;
+  return {html: main + warning.suffix, warn: warning.warn};
+}
 function size(){
   clearTimeout(sizeTimer);
   sizeTimer = setTimeout(async () => {
@@ -662,10 +700,9 @@ function size(){
       if (!d.combinations){ el.textContent="Keine Kombination passt in dieses Fenster";
         el.classList.add("warn"); return; }
       // A one-way search has no combinations to weigh up, only days to price.
-      const variants = d.variants > 1 ? ` über <b>${d.variants}</b> Routenvarianten` : "";
-      el.innerHTML = trip==="one_way"
-        ? `<b>${d.cells}</b> Abflugtage werden bepreist${variants}`
-        : `<b>${d.combinations.toLocaleString("de-DE")}</b> Kombinationen aus <b>${d.cells}</b> Leg-Tagen${variants}`;
+      const summary = estimateSummary(d, trip);
+      el.innerHTML = summary.html;
+      el.classList.toggle("warn", summary.warn);
   } catch { el.textContent=""; }
   }, 200);
 }
@@ -766,11 +803,14 @@ function detailRows(o){
         ? "Richtwert eines Vergleichsportals, echter Flugpreis liegt meist darunter"
         : "Tagesbestpreis, kein konkreter Flug geprüft";
       const src = (l.carriers||[])[0];
+      const bag = l.bag_fee
+        ? ` Grundtarif ${Number(l.base_price||0).toFixed(2)} € + Gepäck ${Number(l.bag_fee).toFixed(2)} €.`
+        : "";
       return `<div class="fl">
         <span>${src?tailMark(src):""}</span>
         <span class="pair">${esc(l.origin)}–${esc(l.destination)}</span>
         <span class="when">${fmtDay(l.date)}</span>
-        <span class="miss">${why}</span>
+        <span class="miss">${why}.${bag}</span>
         <span class="fare">${(l.price||0).toFixed(2)} €</span><span></span></div>`;
     }
     const c = (l.carriers||[])[0] || "";
@@ -783,11 +823,14 @@ function detailRows(o){
       ? `${esc(l.depart)} – ${esc(l.arrive||"")}
          <i>${esc(l.flights||"")}${l.duration?" · "+esc(l.duration):""}${l.stops?" · "+l.stops+" Umstieg":" · direkt"}</i>`
       : `<i>Tagespreis bestätigt, Flugzeiten nennt diese Quelle nicht</i>`;
+    const bag = l.bag_fee
+      ? `<i>Grundtarif ${Number(l.base_price||0).toFixed(2)} € + Gepäck ${Number(l.bag_fee).toFixed(2)} €</i>`
+      : "";
     return `<div class="fl">
       <span>${c?tailMark(c):""}</span>
       <span class="pair">${esc(l.origin)}–${esc(l.destination)}</span>
       <span class="when">${fmtDay(l.date)}</span>
-      <span class="times">${times}</span>
+      <span class="times">${times}${bag}</span>
       <span class="fare">${(l.price||0).toFixed(2)} €</span>${link}</div>`;
   }).join("");
   let foot;
@@ -971,6 +1014,7 @@ function saveForm(){
       trip, hops, airlines: [...picked],
       from: $("#from").value, to: $("#to").value,
       stays: stayRanges,
+      checked_bags: Number($("#checkedBags").value || 0),
       sort: $("#sort").value,
     }));
   } catch { /* private mode or full quota: not worth interrupting anyone over */ }
@@ -994,6 +1038,7 @@ function loadForm(){
   } else if (saved.smin && saved.smax) {
     stayRanges = [[+saved.smin, +saved.smax]];
   }
+  if (saved.checked_bags !== undefined) $("#checkedBags").value = String(saved.checked_bags);
   if (saved.sort) $("#sort").value = saved.sort;
   return true;
 }
@@ -1003,7 +1048,7 @@ $("#from").value = new Date(Date.now()+30*864e5).toISOString().slice(0,10);
 $("#to").value   = new Date(Date.now()+87*864e5).toISOString().slice(0,10);
 const restored = loadForm();
 $("#stayrow").classList.toggle("off", !TRIPS.find(t=>t.id===trip).stays);
-["#from","#to"].forEach(s => $(s).oninput = () => { size(); saveForm(); });
+["#from","#to","#checkedBags"].forEach(s => $(s).oninput = () => { size(); saveForm(); });
 $("#sort").onchange = () => { saveForm(); if (lastResults.length) render(lastResults); };
 drawTabs(); drawRoute(); loadAirlines().then(() => {
   // Restore the chips only after the registry has rendered them.

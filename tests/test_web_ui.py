@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -63,13 +64,24 @@ global.fetch = async () => ({ json: async () => ({ airlines: [], results: [] }) 
 global.EventSource = function() {};
 """
     code = harness + "\n" + script_from_index() + "\n" + assertion
-    return subprocess.run(
-        ["node", "-e", code],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        suffix=".cjs",
+        delete=False,
+    ) as script:
+        script.write(code)
+        path = Path(script.name)
+    try:
+        return subprocess.run(
+            ["node", str(path)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    finally:
+        path.unlink(missing_ok=True)
 
 
 def test_multi_stop_payload_keeps_each_stop_stay_range_separate():
@@ -130,11 +142,13 @@ def test_profile_payload_reuses_current_search():
     result = run_ui_assertion(
         r"""
 $("#profileName").value = "Ost nach Athen";
+$("#checkedBags").value = "1";
 const body = profilePayload();
 
 assert.strictEqual(body.name, "Ost nach Athen");
 assert.deepStrictEqual(body.airports, payload().airports);
 assert.strictEqual(body.cadence_days, 1);
+assert.strictEqual(body.checked_bags, 1);
 """
     )
 
@@ -152,6 +166,21 @@ assert.strictEqual(
   scannerSummary({scanner:{running:false}, due:{profiles:[]}}),
   "Scanner bereit. Keine fälligen Profile."
 );
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_estimate_summary_warns_when_search_space_is_large():
+    result = run_ui_assertion(
+        r"""
+const summary = estimateSummary({combinations: 120000, cells: 820, variants: 3}, "multi");
+
+assert.strictEqual(summary.warn, true);
+assert.ok(summary.html.includes("120.000"));
+assert.ok(summary.html.includes("3</b> Routenvarianten"));
+assert.ok(summary.html.includes("Sehr großer Suchraum"));
 """
     )
 

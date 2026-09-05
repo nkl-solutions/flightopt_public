@@ -43,6 +43,23 @@ def test_saved_profile_is_due_and_can_be_rescheduled(tmp_path):
     ]
 
 
+def test_saved_profile_keeps_checked_bags(tmp_path):
+    conn = db.connect(tmp_path / "daily_bags.db")
+    with_bag = SearchSpec(
+        legs=(LegSpec("BER", "ATH"), LegSpec("ATH", "BER")),
+        stays=(StayRange(3, 5),),
+        window_start=date(2026, 10, 1),
+        window_end=date(2026, 10, 10),
+        checked_bags=1,
+    )
+
+    profile_id = save_profile(conn, "Athen mit Gepäck", [with_bag])
+
+    due = due_profiles(conn)
+    assert due[0].id == profile_id
+    assert due[0].specs[0].checked_bags == 1
+
+
 def test_dispatch_due_profiles_starts_jobs_and_reschedules(tmp_path):
     conn = db.connect(tmp_path / "dispatch.db")
     now = datetime(2026, 9, 5, 8, 0, 0)

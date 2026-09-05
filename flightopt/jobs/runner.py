@@ -15,6 +15,7 @@ from datetime import date, datetime
 from collections.abc import Sequence
 from typing import Any, Callable
 
+from flightopt.domain import airlines as airline_registry
 from flightopt.domain.models import Money, SearchSpec
 from flightopt.search.dp import count_combinations, feasible_dates, solve
 from flightopt.search.grid import build_grid
@@ -54,6 +55,7 @@ def spec_to_dict(spec: SearchSpec) -> dict[str, Any]:
         "adults": spec.pax.adults,
         "cabin": spec.cabin.value,
         "currency": spec.currency,
+        "checked_bags": spec.checked_bags,
     }
 
 
@@ -93,6 +95,12 @@ def merge_variant_payloads(payloads: Sequence[dict[str, Any]], *,
     for rank, row in enumerate(rows, 1):
         row["rank"] = rank
     return rows
+
+
+def checked_bag_fee_minor(carriers: Sequence[str], checked_bags: int) -> int:
+    if checked_bags <= 0 or not carriers:
+        return 0
+    return checked_bags * airline_registry.checked_bag_minor(carriers[0])
 
 
 class JobRunner:
@@ -213,6 +221,9 @@ class JobRunner:
                      indicative=None, by_source=None) -> dict[str, Any]:
         """One leg for the UI: estimate always, real flight when confirmed."""
         leg = spec.legs[i]
+        estimated_by = (winner or {}).get((i, day))
+        estimated_carriers = [estimated_by] if estimated_by else []
+        estimate_bag_minor = checked_bag_fee_minor(estimated_carriers, spec.checked_bags)
         out: dict[str, Any] = {
             "origin": leg.origin,
             "destination": leg.destination,
@@ -220,9 +231,12 @@ class JobRunner:
             "price": grid[i][day].minor / 100,
             "verified": False,
         }
-        estimated_by = (winner or {}).get((i, day))
         if estimated_by:
             out["carriers"] = [estimated_by]
+        if estimate_bag_minor:
+            out["base_price"] = max(0, grid[i][day].minor - estimate_bag_minor) / 100
+            out["bag_fee"] = estimate_bag_minor / 100
+            out["checked_bags"] = spec.checked_bags
         # A price from a comparison site is a guide, not a fare. Say so, or the
         # total looks firmer than it is.
         out["indicative"] = (i, day) in (indicative or set())
@@ -236,6 +250,12 @@ class JobRunner:
         # the estimate: those are often different sources.
         fallback = (by_source or {}).get(offer.source)
         out["carriers"] = list(offer.carriers) or ([fallback] if fallback else [])
+        live_bag_minor = checked_bag_fee_minor(out["carriers"], spec.checked_bags)
+        if live_bag_minor:
+            out["base_price"] = out["price"]
+            out["bag_fee"] = live_bag_minor / 100
+            out["checked_bags"] = spec.checked_bags
+            out["price"] = round(out["price"] + out["bag_fee"], 2)
         # The live price replaces the estimate, so this cell is no longer one.
         out["indicative"] = False
         out["deep_link"] = offer.deep_link
@@ -249,6 +269,17 @@ class JobRunner:
             minutes = int((last.arrival - first.departure).total_seconds() // 60)
             out["duration"] = f"{minutes // 60}h {minutes % 60:02d}m"
         return out
+
+    @staticmethod
+    def _apply_checked_bag_estimates(spec: SearchSpec, grid, winner) -> None:
+        if spec.checked_bags <= 0:
+            return
+        for i, days in enumerate(grid):
+            for day, price in list(days.items()):
+                carrier = (winner or {}).get((i, day))
+                fee_minor = checked_bag_fee_minor([carrier] if carrier else [], spec.checked_bags)
+                if fee_minor:
+                    days[day] = Money(price.minor + fee_minor, price.currency)
 
     async def _run_variant_payloads(self, job_id: int, conn, spec: SearchSpec, *,
                                     airlines: list[str] | None = None,
@@ -362,6 +393,7 @@ class JobRunner:
                 f"{spec.route}: Keine Preise für {names}. Jedes Teilstück braucht "
                 f"mindestens einen Preis, bevor Kombinationen gebildet werden können."
             )
+        self._apply_checked_bag_estimates(spec, grid, report.winner)
 
         self._emit(job_id, Progress("solving", f"{spec.route}: Kombiniere Datumsvarianten"))
         best = solve(spec, grid, top_k=20, max_per_start=3)
@@ -399,11 +431,7 @@ class JobRunner:
             ]
             confirmed = live is not None and live.complete
             shown = sum(round(l["price"] * 100) for l in legs)
-            drift = (
-                round(live.drift / 100, 2)
-                if confirmed and live is not None and live.drift is not None
-                else None
-            )
+            drift = round((shown - combo.total.minor) / 100, 2) if confirmed else None
             rows.append((Money(shown, combo.total.currency), confirmed, combo, legs, drift))
         rows.sort(key=lambda row: row[0].minor)
 
@@ -615,6 +643,7 @@ class JobRunner:
                     f"Keine Preise für {names}. Jedes Teilstück braucht mindestens "
                     f"einen Preis, bevor Kombinationen gebildet werden können."
                 )
+            self._apply_checked_bag_estimates(spec, grid, report.winner)
 
             self._emit(job_id, Progress("solving", "Kombiniere Datumsvarianten"))
             best = solve(spec, grid, top_k=20, max_per_start=3)
@@ -661,11 +690,7 @@ class JobRunner:
                 # prices actually displayed keeps the total honest; taking the
                 # estimate total would contradict the rows beneath it.
                 shown = sum(round(l["price"] * 100) for l in legs)
-                drift = (
-                    round(live.drift / 100, 2)
-                    if confirmed and live is not None and live.drift is not None
-                    else None
-                )
+                drift = round((shown - combo.total.minor) / 100, 2) if confirmed else None
                 rows.append(
                     (Money(shown, combo.total.currency), confirmed, combo, legs, drift)
                 )

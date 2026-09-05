@@ -114,6 +114,17 @@ def test_job_serialisation_keeps_per_stop_stays():
     assert spec_to_dict(spec)["stays"] == [[2, 3], [7, 9]]
 
 
+def test_job_serialisation_keeps_checked_bags():
+    from flightopt.jobs.runner import spec_to_dict
+
+    spec = SearchRequest(
+        airports=["BER", "ATH"], trip="return", checked_bags=1, **W,
+    ).to_spec()
+
+    assert spec.checked_bags == 1
+    assert spec_to_dict(spec)["checked_bags"] == 1
+
+
 def test_codes_are_normalised():
     spec = SearchRequest(airports=[" ber ", "ath"], trip="return", **W).to_spec()
     assert spec.route == "BER-ATH-BER"
@@ -241,7 +252,16 @@ def test_every_airline_explains_itself():
 def test_registry_serialises_for_the_ui():
     rows = airlines.as_dicts()
     assert rows
-    assert {"code", "name", "color", "status", "note", "kind"} == set(rows[0])
+    assert {
+        "code",
+        "name",
+        "color",
+        "status",
+        "note",
+        "kind",
+        "checked_bag_price",
+    } == set(rows[0])
+    assert rows[0]["checked_bag_price"] >= 0
 
 
 # --- adapters covering several airlines --------------------------------------

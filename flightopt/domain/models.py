@@ -143,6 +143,7 @@ class SearchSpec:
     pax: Pax = Pax()
     cabin: Cabin = Cabin.ECONOMY
     currency: str = "EUR"
+    checked_bags: int = 0
 
     def __post_init__(self) -> None:
         if not self.legs:
@@ -154,6 +155,8 @@ class SearchSpec:
             )
         if self.window_end < self.window_start:
             raise ValueError("window_end must be >= window_start")
+        if self.checked_bags < 0:
+            raise ValueError("checked_bags must be >= 0")
         for i in range(len(self.legs) - 1):
             if self.legs[i].destination != self.legs[i + 1].origin:
                 raise ValueError(

@@ -34,6 +34,7 @@ def _spec_from_dict(row: dict) -> SearchSpec:
         pax=Pax(adults=int(row.get("adults", 1))),
         cabin=Cabin(row.get("cabin", "economy")),
         currency=row.get("currency", "EUR"),
+        checked_bags=int(row.get("checked_bags", 0)),
     )
 
 
