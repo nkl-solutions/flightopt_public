@@ -1,0 +1,223 @@
+{
+  "data": [
+    [
+      {
+        "compartment": "Y",
+        "date": "20260927",
+        "offer": true,
+        "price": 25599
+      },
+      {
+        "compartment": "Y",
+        "date": "20260928",
+        "offer": true,
+        "price": 22599
+      },
+      {
+        "compartment": "Y",
+        "date": "20260929",
+        "offer": true,
+        "price": 22599
+      },
+      {
+        "compartment": "Y",
+        "date": "20260930",
+        "offer": true,
+        "price": 22599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261001",
+        "offer": true,
+        "price": 36599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261002",
+        "offer": true,
+        "price": 47599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261003",
+        "offer": true,
+        "price": 47599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261004",
+        "offer": true,
+        "price": 47599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261005",
+        "offer": true,
+        "price": 25599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261006",
+        "offer": true,
+        "price": 31599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261007",
+        "offer": true,
+        "price": 31599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261008",
+        "offer": true,
+        "price": 22599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261009",
+        "offer": true,
+        "price": 31599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261010",
+        "offer": true,
+        "price": 41599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261011",
+        "offer": true,
+        "price": 41599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261012",
+        "offer": true,
+        "price": 25599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261013",
+        "offer": true,
+        "price": 17599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261014",
+        "offer": true,
+        "price": 17599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261015",
+        "offer": true,
+        "price": 17599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261016",
+        "offer": true,
+        "price": 22599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261017",
+        "offer": true,
+        "price": 41599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261018",
+        "offer": true,
+        "price": 31599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261019",
+        "offer": true,
+        "price": 25599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261020",
+        "offer": true,
+        "price": 17599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261021",
+        "offer": true,
+        "price": 15599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261022",
+        "offer": true,
+        "price": 9599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261023",
+        "offer": true,
+        "price": 9599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261024",
+        "offer": true,
+        "price": 16599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261025",
+        "offer": true,
+        "price": 16599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261026",
+        "offer": true,
+        "price": 17599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261027",
+        "offer": true,
+        "price": 6199
+      },
+      {
+        "compartment": "Y",
+        "date": "20261028",
+        "offer": true,
+        "price": 6199
+      },
+      {
+        "compartment": "Y",
+        "date": "20261029",
+        "offer": true,
+        "price": 6199
+      },
+      {
+        "compartment": "Y",
+        "date": "20261030",
+        "offer": true,
+        "price": 15599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261031",
+        "offer": true,
+        "price": 31599
+      },
+      {
+        "compartment": "Y",
+        "date": "20261101",
+        "offer": true,
+        "price": 12599
+      }
+    ]
+  ],
+  "messages": []
+}

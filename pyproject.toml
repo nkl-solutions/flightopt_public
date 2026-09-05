@@ -1,0 +1,26 @@
+[project]
+name = "multistopflights"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "curl-cffi>=0.16.3",
+    "fast-flights>=3.1.0",
+    "fastapi>=0.141.1",
+    "flights",
+    "swoop-flights>=0.7.0",
+    "uvicorn>=0.52.4",
+]
+
+[tool.uv.sources]
+flights = { git = "https://github.com/punitarani/fli" }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[project.scripts]
+flightopt = "flightopt.cli:main"
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

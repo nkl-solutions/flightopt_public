@@ -1,0 +1,468 @@
+{
+ "outbound": {
+  "fares": [
+   {
+    "day": "2026-10-01",
+    "arrivalDate": "2026-10-01T14:30:00",
+    "departureDate": "2026-10-01T12:20:00",
+    "price": {
+     "value": 95.99,
+     "valueMainUnit": "95",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-02",
+    "arrivalDate": "2026-10-02T08:10:00",
+    "departureDate": "2026-10-02T06:00:00",
+    "price": {
+     "value": 64.99,
+     "valueMainUnit": "64",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-03",
+    "arrivalDate": "2026-10-03T14:30:00",
+    "departureDate": "2026-10-03T12:20:00",
+    "price": {
+     "value": 137.99,
+     "valueMainUnit": "137",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-04",
+    "arrivalDate": "2026-10-04T15:10:00",
+    "departureDate": "2026-10-04T13:00:00",
+    "price": {
+     "value": 117.99,
+     "valueMainUnit": "117",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-05",
+    "arrivalDate": "2026-10-05T19:20:00",
+    "departureDate": "2026-10-05T17:10:00",
+    "price": {
+     "value": 96.99,
+     "valueMainUnit": "96",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-06",
+    "arrivalDate": "2026-10-07T00:15:00",
+    "departureDate": "2026-10-06T22:05:00",
+    "price": {
+     "value": 79.74,
+     "valueMainUnit": "79",
+     "valueFractionalUnit": "74",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-07",
+    "arrivalDate": "2026-10-07T08:20:00",
+    "departureDate": "2026-10-07T06:10:00",
+    "price": {
+     "value": 38.99,
+     "valueMainUnit": "38",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-08",
+    "arrivalDate": "2026-10-08T14:30:00",
+    "departureDate": "2026-10-08T12:20:00",
+    "price": {
+     "value": 80.99,
+     "valueMainUnit": "80",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-09",
+    "arrivalDate": "2026-10-09T08:10:00",
+    "departureDate": "2026-10-09T06:00:00",
+    "price": {
+     "value": 102.19,
+     "valueMainUnit": "102",
+     "valueFractionalUnit": "19",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-10",
+    "arrivalDate": "2026-10-10T14:30:00",
+    "departureDate": "2026-10-10T12:20:00",
+    "price": {
+     "value": 176.99,
+     "valueMainUnit": "176",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-11",
+    "arrivalDate": "2026-10-11T15:10:00",
+    "departureDate": "2026-10-11T13:00:00",
+    "price": {
+     "value": 173.99,
+     "valueMainUnit": "173",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-12",
+    "arrivalDate": "2026-10-12T08:10:00",
+    "departureDate": "2026-10-12T06:00:00",
+    "price": {
+     "value": 88.99,
+     "valueMainUnit": "88",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-13",
+    "arrivalDate": "2026-10-14T00:15:00",
+    "departureDate": "2026-10-13T22:05:00",
+    "price": {
+     "value": 82.24,
+     "valueMainUnit": "82",
+     "valueFractionalUnit": "24",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-14",
+    "arrivalDate": "2026-10-14T08:20:00",
+    "departureDate": "2026-10-14T06:10:00",
+    "price": {
+     "value": 65.99,
+     "valueMainUnit": "65",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-15",
+    "arrivalDate": "2026-10-15T20:50:00",
+    "departureDate": "2026-10-15T18:40:00",
+    "price": {
+     "value": 126.99,
+     "valueMainUnit": "126",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-16",
+    "arrivalDate": "2026-10-16T08:10:00",
+    "departureDate": "2026-10-16T06:00:00",
+    "price": {
+     "value": 185.39,
+     "valueMainUnit": "185",
+     "valueFractionalUnit": "39",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-17",
+    "arrivalDate": "2026-10-17T14:30:00",
+    "departureDate": "2026-10-17T12:20:00",
+    "price": {
+     "value": 346.02,
+     "valueMainUnit": "346",
+     "valueFractionalUnit": "02",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-18",
+    "arrivalDate": "2026-10-18T15:10:00",
+    "departureDate": "2026-10-18T13:00:00",
+    "price": {
+     "value": 346.52,
+     "valueMainUnit": "346",
+     "valueFractionalUnit": "52",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-19",
+    "arrivalDate": "2026-10-19T19:20:00",
+    "departureDate": "2026-10-19T17:10:00",
+    "price": {
+     "value": 186.99,
+     "valueMainUnit": "186",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-20",
+    "arrivalDate": "2026-10-21T00:15:00",
+    "departureDate": "2026-10-20T22:05:00",
+    "price": {
+     "value": 100.4,
+     "valueMainUnit": "100",
+     "valueFractionalUnit": "40",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-21",
+    "arrivalDate": "2026-10-21T19:35:00",
+    "departureDate": "2026-10-21T17:25:00",
+    "price": {
+     "value": 130.99,
+     "valueMainUnit": "130",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-22",
+    "arrivalDate": "2026-10-22T20:50:00",
+    "departureDate": "2026-10-22T18:40:00",
+    "price": {
+     "value": 140.99,
+     "valueMainUnit": "140",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-23",
+    "arrivalDate": "2026-10-23T08:10:00",
+    "departureDate": "2026-10-23T06:00:00",
+    "price": {
+     "value": 107.99,
+     "valueMainUnit": "107",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-24",
+    "arrivalDate": "2026-10-24T14:30:00",
+    "departureDate": "2026-10-24T12:20:00",
+    "price": {
+     "value": 214.99,
+     "valueMainUnit": "214",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-25",
+    "arrivalDate": "2026-10-25T14:40:00",
+    "departureDate": "2026-10-25T12:30:00",
+    "price": {
+     "value": 156.99,
+     "valueMainUnit": "156",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-26",
+    "arrivalDate": "2026-10-26T11:00:00",
+    "departureDate": "2026-10-26T08:50:00",
+    "price": {
+     "value": 132.99,
+     "valueMainUnit": "132",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-27",
+    "arrivalDate": "2026-10-27T19:40:00",
+    "departureDate": "2026-10-27T17:30:00",
+    "price": {
+     "value": 36.55,
+     "valueMainUnit": "36",
+     "valueFractionalUnit": "55",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-28",
+    "arrivalDate": "2026-10-29T00:30:00",
+    "departureDate": "2026-10-28T22:20:00",
+    "price": {
+     "value": 27.99,
+     "valueMainUnit": "27",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-29",
+    "arrivalDate": "2026-10-29T23:59:00",
+    "departureDate": "2026-10-29T21:50:00",
+    "price": {
+     "value": 21.99,
+     "valueMainUnit": "21",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-30",
+    "arrivalDate": "2026-10-30T22:45:00",
+    "departureDate": "2026-10-30T20:35:00",
+    "price": {
+     "value": 32.49,
+     "valueMainUnit": "32",
+     "valueFractionalUnit": "49",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   },
+   {
+    "day": "2026-10-31",
+    "arrivalDate": "2026-11-01T00:30:00",
+    "departureDate": "2026-10-31T22:20:00",
+    "price": {
+     "value": 27.99,
+     "valueMainUnit": "27",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "soldOut": false,
+    "unavailable": false
+   }
+  ],
+  "maxFare": {
+   "day": "2026-10-18",
+   "arrivalDate": "2026-10-18T15:10:00",
+   "departureDate": "2026-10-18T13:00:00",
+   "price": {
+    "value": 346.52,
+    "valueMainUnit": "346",
+    "valueFractionalUnit": "52",
+    "currencyCode": "EUR",
+    "currencySymbol": "€"
+   },
+   "soldOut": false,
+   "unavailable": false
+  },
+  "minFare": {
+   "day": "2026-10-29",
+   "arrivalDate": "2026-10-29T23:59:00",
+   "departureDate": "2026-10-29T21:50:00",
+   "price": {
+    "value": 21.99,
+    "valueMainUnit": "21",
+    "valueFractionalUnit": "99",
+    "currencyCode": "EUR",
+    "currencySymbol": "€"
+   },
+   "soldOut": false,
+   "unavailable": false
+  }
+ }
+}

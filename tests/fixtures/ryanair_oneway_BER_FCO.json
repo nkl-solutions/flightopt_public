@@ -1,0 +1,59 @@
+{
+ "arrivalAirportCategories": null,
+ "fares": [
+  {
+   "outbound": {
+    "departureAirport": {
+     "countryName": "Germany",
+     "iataCode": "BER",
+     "name": "Berlin Brandenburg",
+     "seoName": "brandenburg",
+     "city": {
+      "code": "BERLIN",
+      "countryCode": "de",
+      "macCode": "BER",
+      "name": "Berlin"
+     }
+    },
+    "arrivalAirport": {
+     "countryName": "Italy",
+     "iataCode": "FCO",
+     "name": "Rome Fiumicino",
+     "seoName": "rome-fiumicino",
+     "city": {
+      "code": "ROME",
+      "countryCode": "it",
+      "macCode": "ROM",
+      "name": "Rome"
+     }
+    },
+    "departureDate": "2026-10-01T12:20:00",
+    "arrivalDate": "2026-10-01T14:30:00",
+    "price": {
+     "value": 95.99,
+     "valueMainUnit": "95",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "flightKey": "FR~  40~ ~~BER~10/01/2026 12:20~FCO~10/01/2026 14:30~~",
+    "flightNumber": "FR40",
+    "previousPrice": null,
+    "priceUpdated": 1788517415000
+   },
+   "summary": {
+    "price": {
+     "value": 95.99,
+     "valueMainUnit": "95",
+     "valueFractionalUnit": "99",
+     "currencyCode": "EUR",
+     "currencySymbol": "€"
+    },
+    "previousPrice": null,
+    "newRoute": false
+   }
+  }
+ ],
+ "nextPage": null,
+ "size": 1
+}

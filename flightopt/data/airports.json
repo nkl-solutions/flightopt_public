@@ -1,0 +1,2968 @@
+[
+{
+"code": "AAR",
+"name": "Aarhus",
+"city": "Aarhus",
+"country": "Denmark",
+"cc": "DK",
+"lat": 56.3,
+"lon": 10.619,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ABZ",
+"name": "Aberdeen",
+"city": "Aberdeen",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 57.2019,
+"lon": -2.19778,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ACE",
+"name": "Lanzarote",
+"city": "Lanzarote",
+"country": "Spain",
+"cc": "ES",
+"lat": 28.9455,
+"lon": -13.6052,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ADB",
+"name": "Izmir",
+"city": "Izmir",
+"country": "Türkei",
+"cc": "TR",
+"lat": 38.292,
+"lon": 27.157,
+"carriers": [
+"XQ",
+"PC",
+"TK"
+]
+},
+{
+"code": "AGA",
+"name": "Agadir",
+"city": "Agadir",
+"country": "Morocco",
+"cc": "MA",
+"lat": 30.325,
+"lon": -9.41307,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "AGP",
+"name": "Malaga",
+"city": "Malaga",
+"country": "Spain",
+"cc": "ES",
+"lat": 36.6749,
+"lon": -4.49911,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "AHO",
+"name": "Alghero",
+"city": "Alghero",
+"country": "Italy",
+"cc": "IT",
+"lat": 40.6321,
+"lon": 8.29077,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ALC",
+"name": "Alicante",
+"city": "Alicante",
+"country": "Spain",
+"cc": "ES",
+"lat": 38.2822,
+"lon": -0.558156,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "AMM",
+"name": "Amman Jordan",
+"city": "Amman",
+"country": "Jordan",
+"cc": "JO",
+"lat": 31.5659,
+"lon": 35.5558,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "AMS",
+"name": "Amsterdam",
+"city": "Amsterdam",
+"country": "Niederlande",
+"cc": "NL",
+"lat": 52.3105,
+"lon": 4.76827,
+"carriers": [
+"FR",
+"HV",
+"KL"
+]
+},
+{
+"code": "AOI",
+"name": "Ancona",
+"city": "Ancona",
+"country": "Italy",
+"cc": "IT",
+"lat": 43.6163,
+"lon": 13.3623,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ARN",
+"name": "Stockholm Arlanda",
+"city": "Stockholm",
+"country": "Sweden",
+"cc": "SE",
+"lat": 59.6498,
+"lon": 17.9239,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ATH",
+"name": "Athens",
+"city": "Athen",
+"country": "Griechenland",
+"cc": "GR",
+"lat": 37.9364,
+"lon": 23.9445,
+"carriers": [
+"A3",
+"FR",
+"W6"
+]
+},
+{
+"code": "AYT",
+"name": "Antalya",
+"city": "Antalya",
+"country": "Türkei",
+"cc": "TR",
+"lat": 36.899,
+"lon": 30.801,
+"carriers": [
+"XQ",
+"PC",
+"TK"
+]
+},
+{
+"code": "BBU",
+"name": "Bucharest Baneasa ",
+"city": "Bucharest",
+"country": "Romania",
+"cc": "RO",
+"lat": 44.502164658,
+"lon": 26.102166258,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BCN",
+"name": "Barcelona",
+"city": "Barcelona",
+"country": "Spain",
+"cc": "ES",
+"lat": 41.2971,
+"lon": 2.07846,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BDS",
+"name": "Brindisi",
+"city": "Brindisi",
+"country": "Italy",
+"cc": "IT",
+"lat": 40.6576,
+"lon": 17.947,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BEM",
+"name": "Beni Mellal",
+"city": "Beni Mellal",
+"country": "Morocco",
+"cc": "MA",
+"lat": 32.2022,
+"lon": 6.2139,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BER",
+"name": "Berlin Brandenburg",
+"city": "Berlin",
+"country": "Germany",
+"cc": "DE",
+"lat": 52.3667,
+"lon": 13.5033,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BFS",
+"name": "Belfast International",
+"city": "Belfast",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 54.6575,
+"lon": -6.2158,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BGY",
+"name": "Milan Bergamo",
+"city": "Bergamo",
+"country": "Italy",
+"cc": "IT",
+"lat": 45.6739,
+"lon": 9.70417,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BHX",
+"name": "Birmingham",
+"city": "Birmingham",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 52.4539,
+"lon": -1.74803,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BIQ",
+"name": "Biarritz",
+"city": "Biarritz",
+"country": "France",
+"cc": "FR",
+"lat": 43.4684,
+"lon": -1.52332,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BJV",
+"name": "Bodrum",
+"city": "Bodrum",
+"country": "Türkei",
+"cc": "TR",
+"lat": 37.2506,
+"lon": 27.6642,
+"carriers": [
+"FR",
+"PC",
+"XQ"
+]
+},
+{
+"code": "BLQ",
+"name": "Bologna",
+"city": "Bologna",
+"country": "Italy",
+"cc": "IT",
+"lat": 44.5354,
+"lon": 11.2887,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BNX",
+"name": "Banja Luka",
+"city": "Banja Luka",
+"country": "Bosnia & Herzegovina",
+"cc": "BA",
+"lat": 44.4621,
+"lon": 17.1133,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BOH",
+"name": "Bournemouth",
+"city": "Bournemouth",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 50.78,
+"lon": -1.8425,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BOJ",
+"name": "Burgas",
+"city": "Burgas",
+"country": "Bulgaria",
+"cc": "BG",
+"lat": 42.301,
+"lon": 27.2812,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BRE",
+"name": "Bremen",
+"city": "Bremen",
+"country": "Germany",
+"cc": "DE",
+"lat": 53.0475,
+"lon": 8.78667,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BRI",
+"name": "Bari",
+"city": "Bari",
+"country": "Italy",
+"cc": "IT",
+"lat": 41.1389,
+"lon": 16.7606,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BRQ",
+"name": "Brno",
+"city": "Brno",
+"country": "Czech Republic",
+"cc": "CZ",
+"lat": 49.1513,
+"lon": 16.6944,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BRS",
+"name": "Bristol",
+"city": "Bristol",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 51.3827,
+"lon": -2.71909,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BRU",
+"name": "Brussels",
+"city": "Brussels",
+"country": "Belgium",
+"cc": "BE",
+"lat": 50.9014,
+"lon": 4.48444,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BSL",
+"name": "Basel",
+"city": "Basel",
+"country": "Switzerland",
+"cc": "CH",
+"lat": 47.5896,
+"lon": 7.52991,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BTS",
+"name": "Bratislava",
+"city": "Bratislava",
+"country": "Slovakia",
+"cc": "SK",
+"lat": 48.1702,
+"lon": 17.2127,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BUD",
+"name": "Budapest",
+"city": "Budapest",
+"country": "Hungary",
+"cc": "HU",
+"lat": 47.4369,
+"lon": 19.2556,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BVA",
+"name": "Paris Beauvais",
+"city": "Paris",
+"country": "France",
+"cc": "FR",
+"lat": 49.4544,
+"lon": 2.11278,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BVE",
+"name": "Brive",
+"city": "Brive",
+"country": "France",
+"cc": "FR",
+"lat": 45.0223,
+"lon": 1.2908,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BZG",
+"name": "Bydgoszcz",
+"city": "Bydgoszcz",
+"country": "Poland",
+"cc": "PL",
+"lat": 53.0968,
+"lon": 17.9777,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "BZR",
+"name": "Beziers Cap d'Agde",
+"city": "Beziers",
+"country": "France",
+"cc": "FR",
+"lat": 43.3235,
+"lon": 3.3539,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CAG",
+"name": "Cagliari",
+"city": "Cagliari",
+"country": "Italy",
+"cc": "IT",
+"lat": 39.2515,
+"lon": 9.05428,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CCF",
+"name": "Carcassonne",
+"city": "Carcassonne",
+"country": "France",
+"cc": "FR",
+"lat": 43.216,
+"lon": 2.30632,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CDG",
+"name": "Paris CDG",
+"city": "Paris",
+"country": "Frankreich",
+"cc": "FR",
+"lat": 49.01,
+"lon": 2.548,
+"carriers": [
+"AF"
+]
+},
+{
+"code": "CDT",
+"name": "Castellon (Valencia)",
+"city": "Castellon",
+"country": "Spain",
+"cc": "ES",
+"lat": 39.999,
+"lon": 0.026,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CFU",
+"name": "Corfu",
+"city": "Korfu",
+"country": "Griechenland",
+"cc": "GR",
+"lat": 39.6019,
+"lon": 19.9117,
+"carriers": [
+"A3",
+"FR"
+]
+},
+{
+"code": "CGN",
+"name": "Cologne",
+"city": "Cologne",
+"country": "Germany",
+"cc": "DE",
+"lat": 50.8659,
+"lon": 7.14274,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CHQ",
+"name": "Chania",
+"city": "Chania",
+"country": "Greece",
+"cc": "GR",
+"lat": 35.5317,
+"lon": 24.1497,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CIA",
+"name": "Rome Ciampino",
+"city": "Rome",
+"country": "Italy",
+"cc": "IT",
+"lat": 41.7994,
+"lon": 12.5949,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CLJ",
+"name": "Cluj",
+"city": "Cluj",
+"country": "Romania",
+"cc": "RO",
+"lat": 46.785,
+"lon": 23.6861,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CPH",
+"name": "Copenhagen",
+"city": "Copenhagen",
+"country": "Denmark",
+"cc": "DK",
+"lat": 55.6181,
+"lon": 12.6561,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CRL",
+"name": "Brussels Charleroi",
+"city": "Charleroi",
+"country": "Belgium",
+"cc": "BE",
+"lat": 50.4592,
+"lon": 4.45382,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CRV",
+"name": "Crotone",
+"city": "Crotone",
+"country": "Italy",
+"cc": "IT",
+"lat": 38.99722,
+"lon": 17.08028,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CTA",
+"name": "Catania",
+"city": "Catania",
+"country": "Italy",
+"cc": "IT",
+"lat": 37.4668,
+"lon": 15.0664,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CUF",
+"name": "Cuneo",
+"city": "Cuneo",
+"country": "Italy",
+"cc": "IT",
+"lat": 44.547,
+"lon": 7.62322,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "CWL",
+"name": "Cardiff",
+"city": "Cardiff",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 51.3967,
+"lon": -3.34333,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "DBV",
+"name": "Dubrovnik",
+"city": "Dubrovnik",
+"country": "Croatia",
+"cc": "HR",
+"lat": 42.5614,
+"lon": 18.2683,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "DLE",
+"name": "Dole",
+"city": "Dole",
+"country": "France",
+"cc": "FR",
+"lat": 47.039,
+"lon": 5.42725,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "DLM",
+"name": "Dalaman",
+"city": "Dalaman",
+"country": "Türkei",
+"cc": "TR",
+"lat": 36.7147,
+"lon": 28.7928,
+"carriers": [
+"FR",
+"PC",
+"XQ"
+]
+},
+{
+"code": "DRS",
+"name": "Dresden",
+"city": "Dresden",
+"country": "Deutschland",
+"cc": "DE",
+"lat": 51.133,
+"lon": 13.767,
+"carriers": [
+"EW"
+]
+},
+{
+"code": "DUB",
+"name": "Dublin",
+"city": "Dublin",
+"country": "Ireland",
+"cc": "IE",
+"lat": 53.4213,
+"lon": -6.27007,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "DUS",
+"name": "Duesseldorf",
+"city": "Duesseldorf",
+"country": "Germany",
+"cc": "DE",
+"lat": 51.289,
+"lon": 6.767,
+"carriers": [
+"EW",
+"XQ",
+"TK"
+]
+},
+{
+"code": "EDI",
+"name": "Edinburgh",
+"city": "Edinburgh",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 55.95,
+"lon": -3.3725,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "EFL",
+"name": "Kefalonia",
+"city": "Kefalonia",
+"country": "Greece",
+"cc": "GR",
+"lat": 38.1201,
+"lon": 20.5005,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "EGC",
+"name": "Bergerac",
+"city": "Bergerac",
+"country": "France",
+"cc": "FR",
+"lat": 44.8253,
+"lon": 0.518611,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "EIN",
+"name": "Eindhoven",
+"city": "Eindhoven",
+"country": "Netherlands",
+"cc": "NL",
+"lat": 51.4501,
+"lon": 5.37453,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "EMA",
+"name": "East Midlands",
+"city": "East Midlands",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 52.8311,
+"lon": -1.32806,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ERH",
+"name": "Errachidia",
+"city": "Errachidia",
+"country": "Morocco",
+"cc": "MA",
+"lat": 31.5555,
+"lon": 4.2528,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ESB",
+"name": "Ankara",
+"city": "Ankara",
+"country": "Türkei",
+"cc": "TR",
+"lat": 40.128,
+"lon": 32.995,
+"carriers": [
+"TK",
+"PC"
+]
+},
+{
+"code": "ESU",
+"name": "Essaouira",
+"city": "Essaouira",
+"country": "Morocco",
+"cc": "MA",
+"lat": 31.3918,
+"lon": -9.6757,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "EXT",
+"name": "Exeter",
+"city": "Exeter",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 50.7344,
+"lon": -3.4139,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FAO",
+"name": "Faro",
+"city": "Faro",
+"country": "Portugal",
+"cc": "PT",
+"lat": 37.0144,
+"lon": -7.96591,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FCO",
+"name": "Rome Fiumicino",
+"city": "Rom",
+"country": "Italien",
+"cc": "IT",
+"lat": 41.8045,
+"lon": 12.2508,
+"carriers": [
+"AZ",
+"FR",
+"W6"
+]
+},
+{
+"code": "FDH",
+"name": "Friedrichshafen",
+"city": "Friedrichshafen",
+"country": "Germany",
+"cc": "DE",
+"lat": 47.6714,
+"lon": 9.5114,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FEZ",
+"name": "Fez",
+"city": "Fez",
+"country": "Morocco",
+"cc": "MA",
+"lat": 33.9273,
+"lon": -4.97796,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FKB",
+"name": "Karlsruhe / Baden-Baden",
+"city": "Karlsruhe",
+"country": "Germany",
+"cc": "DE",
+"lat": 48.7794,
+"lon": 8.0805,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FLR",
+"name": "Florenz",
+"city": "Florenz",
+"country": "Italien",
+"cc": "IT",
+"lat": 43.81,
+"lon": 11.205,
+"carriers": [
+"AZ"
+]
+},
+{
+"code": "FMM",
+"name": "Memmingen",
+"city": "Memmingen",
+"country": "Germany",
+"cc": "DE",
+"lat": 47.9888,
+"lon": 10.2395,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FMO",
+"name": "Münster",
+"city": "Münster",
+"country": "Germany",
+"cc": "DE",
+"lat": 52.1346,
+"lon": 7.68483,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FNC",
+"name": "Madeira Funchal",
+"city": "Funchal",
+"country": "Portugal",
+"cc": "PT",
+"lat": 32.6942,
+"lon": -16.7781,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FNI",
+"name": "Nimes",
+"city": "Nimes",
+"country": "France",
+"cc": "FR",
+"lat": 43.7574,
+"lon": 4.41635,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FRA",
+"name": "Frankfurt",
+"city": "Frankfurt",
+"country": "Germany",
+"cc": "DE",
+"lat": 50.033,
+"lon": 8.57,
+"carriers": [
+"LH",
+"XQ",
+"TK"
+]
+},
+{
+"code": "FRL",
+"name": "Bologna Forlí-Ravenna",
+"city": "Bologna",
+"country": "Italy",
+"cc": "IT",
+"lat": 44.1948,
+"lon": 12.0701,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FSC",
+"name": "Figari-Corsica",
+"city": "Figari",
+"country": "France",
+"cc": "FR",
+"lat": 41.5006,
+"lon": 9.09778,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "FUE",
+"name": "Fuerteventura",
+"city": "Fuerteventura",
+"country": "Spain",
+"cc": "ES",
+"lat": 28.4527,
+"lon": -13.8638,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "GDN",
+"name": "Gdansk",
+"city": "Gdansk",
+"country": "Poland",
+"cc": "PL",
+"lat": 54.3776,
+"lon": 18.4662,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "GLA",
+"name": "Glasgow",
+"city": "Glasgow",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 55.87194,
+"lon": -4.43306,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "GNB",
+"name": "Grenoble",
+"city": "Grenoble",
+"country": "France",
+"cc": "FR",
+"lat": 45.3629,
+"lon": 5.32937,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "GOA",
+"name": "Genoa",
+"city": "Genoa",
+"country": "Italy",
+"cc": "IT",
+"lat": 44.4133,
+"lon": 8.8375,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "GOT",
+"name": "Göteborg Landvetter",
+"city": "Gothenburg",
+"country": "Sweden",
+"cc": "SE",
+"lat": 57.6741,
+"lon": 12.2925,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "GRO",
+"name": "Barcelona Girona",
+"city": "Girona",
+"country": "Spain",
+"cc": "ES",
+"lat": 41.901,
+"lon": 2.76055,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "GVA",
+"name": "Genf",
+"city": "Genf",
+"country": "Schweiz",
+"cc": "CH",
+"lat": 46.238,
+"lon": 6.109,
+"carriers": [
+"LX",
+"U2"
+]
+},
+{
+"code": "HAJ",
+"name": "Hannover",
+"city": "Hannover",
+"country": "Deutschland",
+"cc": "DE",
+"lat": 52.461,
+"lon": 9.685,
+"carriers": [
+"EW",
+"TK"
+]
+},
+{
+"code": "HAM",
+"name": "Hamburg",
+"city": "Hamburg",
+"country": "Germany",
+"cc": "DE",
+"lat": 53.63028,
+"lon": 9.99111,
+"carriers": [
+"EW",
+"FR",
+"TK",
+"XQ"
+]
+},
+{
+"code": "HEL",
+"name": "Helsinki",
+"city": "Helsinki",
+"country": "Finland",
+"cc": "FI",
+"lat": 60.3172,
+"lon": 24.9633,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "HER",
+"name": "Heraklion Crete",
+"city": "Kreta",
+"country": "Griechenland",
+"cc": "GR",
+"lat": 35.3397,
+"lon": 25.1803,
+"carriers": [
+"A3",
+"FR"
+]
+},
+{
+"code": "HHN",
+"name": "Frankfurt Hahn",
+"city": "Frankfurt",
+"country": "Germany",
+"cc": "DE",
+"lat": 49.9487,
+"lon": 7.26389,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "IAS",
+"name": "Iasi",
+"city": "IASI",
+"country": "Romania",
+"cc": "RO",
+"lat": 47.17889,
+"lon": 27.617,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "IBZ",
+"name": "Ibiza",
+"city": "Ibiza",
+"country": "Spain",
+"cc": "ES",
+"lat": 38.8729,
+"lon": 1.37312,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "INI",
+"name": "Nis",
+"city": "Nis",
+"country": "Serbia",
+"cc": "RS",
+"lat": 43.3372,
+"lon": 21.8536,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "IST",
+"name": "Istanbul",
+"city": "Istanbul",
+"country": "Türkei",
+"cc": "TR",
+"lat": 41.262,
+"lon": 28.742,
+"carriers": [
+"TK",
+"PC"
+]
+},
+{
+"code": "JMK",
+"name": "Mykonos",
+"city": "Mykonos",
+"country": "Greece",
+"cc": "GR",
+"lat": 37.4351,
+"lon": 25.3481,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "JSI",
+"name": "Skiathos",
+"city": "Skiathos",
+"country": "Greece",
+"cc": "GR",
+"lat": 39.1775,
+"lon": 23.5036,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "JTR",
+"name": "Santorini",
+"city": "Santorin",
+"country": "Griechenland",
+"cc": "GR",
+"lat": 36.3992,
+"lon": 25.4793,
+"carriers": [
+"A3",
+"FR"
+]
+},
+{
+"code": "KGS",
+"name": "Kos",
+"city": "Kos",
+"country": "Greece",
+"cc": "GR",
+"lat": 36.7933,
+"lon": 27.0917,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "KIR",
+"name": "Kerry",
+"city": "Kerry",
+"country": "Ireland",
+"cc": "IE",
+"lat": 52.1809,
+"lon": -9.52378,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "KLU",
+"name": "Klagenfurt",
+"city": "Klagenfurt",
+"country": "Austria",
+"cc": "AT",
+"lat": 46.6425,
+"lon": 14.3377,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "KLX",
+"name": "Kalamata",
+"city": "Kalamata",
+"country": "Greece",
+"cc": "GR",
+"lat": 37.0683,
+"lon": 22.0255,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "KRK",
+"name": "Krakow",
+"city": "Krakow",
+"country": "Poland",
+"cc": "PL",
+"lat": 50.0777,
+"lon": 19.7848,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "KSC",
+"name": "Kosice",
+"city": "Kosice",
+"country": "Slovakia",
+"cc": "SK",
+"lat": 48.6631,
+"lon": 21.2411,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "KTW",
+"name": "Katowice",
+"city": "Katowice",
+"country": "Poland",
+"cc": "PL",
+"lat": 50.4743,
+"lon": 19.08,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "KUN",
+"name": "Kaunas",
+"city": "Kaunas",
+"country": "Lithuania",
+"cc": "LT",
+"lat": 54.9639,
+"lon": 24.0848,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LBA",
+"name": "Leeds Bradford",
+"city": "Leeds",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 53.8659,
+"lon": -1.66057,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LBC",
+"name": "Lubeck",
+"city": "Hamburg",
+"country": "Germany",
+"cc": "DE",
+"lat": 53.8054,
+"lon": 10.7192,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LCA",
+"name": "Larnaca",
+"city": "Larnaca",
+"country": "Cyprus",
+"cc": "CY",
+"lat": 34.8751,
+"lon": 33.6249,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LCJ",
+"name": "Lodz",
+"city": "Lodz",
+"country": "Poland",
+"cc": "PL",
+"lat": 51.7219,
+"lon": 19.3981,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LDE",
+"name": "Lourdes–Pyrenees",
+"city": "Lourdes",
+"country": "France",
+"cc": "FR",
+"lat": 43.1787,
+"lon": -0.006439,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LDY",
+"name": "Derry",
+"city": "Derry",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 55.0428,
+"lon": -7.16111,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LEI",
+"name": "Almeria",
+"city": "Almeria",
+"country": "Spain",
+"cc": "ES",
+"lat": 36.8439,
+"lon": -2.3701,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LEJ",
+"name": "Leipzig/Halle",
+"city": "Leipzig",
+"country": "Deutschland",
+"cc": "DE",
+"lat": 51.424,
+"lon": 12.236,
+"carriers": [
+"EW"
+]
+},
+{
+"code": "LGW",
+"name": "London Gatwick",
+"city": "London",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 51.1481,
+"lon": -0.190278,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LHR",
+"name": "London Heathrow",
+"city": "London",
+"country": "Grossbritannien",
+"cc": "GB",
+"lat": 51.47,
+"lon": -0.454,
+"carriers": [
+"BA"
+]
+},
+{
+"code": "LIG",
+"name": "Limoges",
+"city": "Limoges",
+"country": "France",
+"cc": "FR",
+"lat": 45.8628,
+"lon": 1.17944,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LIL",
+"name": "Lille",
+"city": "Lille",
+"country": "France",
+"cc": "FR",
+"lat": 50.5619,
+"lon": 3.08944,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LIN",
+"name": "Mailand Linate",
+"city": "Mailand",
+"country": "Italien",
+"cc": "IT",
+"lat": 45.445,
+"lon": 9.277,
+"carriers": [
+"AZ"
+]
+},
+{
+"code": "LIS",
+"name": "Lisbon",
+"city": "Lisbon",
+"country": "Portugal",
+"cc": "PT",
+"lat": 38.7813,
+"lon": -9.13592,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LNZ",
+"name": "Linz",
+"city": "Linz",
+"country": "Austria",
+"cc": "AT",
+"lat": 48.2332,
+"lon": 14.1875,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LPA",
+"name": "Gran Canaria",
+"city": "Gran Canaria",
+"country": "Spain",
+"cc": "ES",
+"lat": 27.9319,
+"lon": -15.3866,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LPL",
+"name": "Liverpool",
+"city": "Liverpool",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 53.3336,
+"lon": -2.84972,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LRH",
+"name": "La Rochelle",
+"city": "La Rochelle",
+"country": "France",
+"cc": "FR",
+"lat": 46.1792,
+"lon": -1.19528,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LTN",
+"name": "London Luton",
+"city": "London",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 51.8747,
+"lon": -0.368333,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LUX",
+"name": "Luxembourg",
+"city": "Luxembourg",
+"country": "Luxembourg",
+"cc": "LU",
+"lat": 49.6233,
+"lon": 6.2044,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LUZ",
+"name": "Lublin",
+"city": "Lublin",
+"country": "Poland",
+"cc": "PL",
+"lat": 51.2319,
+"lon": 22.6903,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "LXS",
+"name": "Lemnos",
+"city": "Lemnos",
+"country": "Greece",
+"cc": "GR",
+"lat": 39.5501,
+"lon": 25.1411,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "MAD",
+"name": "Madrid",
+"city": "Madrid",
+"country": "Spain",
+"cc": "ES",
+"lat": 40.4722,
+"lon": -3.5608,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "MAH",
+"name": "Menorca",
+"city": "Menorca",
+"country": "Spain",
+"cc": "ES",
+"lat": 39.8626,
+"lon": 4.21865,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "MAN",
+"name": "Manchester",
+"city": "Manchester",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 53.3537,
+"lon": -2.27495,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "MLA",
+"name": "Malta",
+"city": "Malta",
+"country": "Malta",
+"cc": "MT",
+"lat": 35.8575,
+"lon": 14.4775,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "MME",
+"name": "Teesside",
+"city": "Newcastle",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 54.5092,
+"lon": -1.42941,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "MMX",
+"name": "Malmo",
+"city": "Malmo",
+"country": "Sweden",
+"cc": "SE",
+"lat": 55.5363,
+"lon": 13.3762,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "MRS",
+"name": "Marseille",
+"city": "Marseille",
+"country": "France",
+"cc": "FR",
+"lat": 43.4393,
+"lon": 5.22142,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "MUC",
+"name": "Muenchen",
+"city": "Muenchen",
+"country": "Germany",
+"cc": "DE",
+"lat": 48.354,
+"lon": 11.786,
+"carriers": [
+"LH",
+"XQ",
+"TK",
+"A3"
+]
+},
+{
+"code": "MXP",
+"name": "Milan Malpensa",
+"city": "Milan",
+"country": "Italy",
+"cc": "IT",
+"lat": 45.63,
+"lon": 8.7231,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "NAP",
+"name": "Naples",
+"city": "Naples",
+"country": "Italy",
+"cc": "IT",
+"lat": 40.8844,
+"lon": 14.2908,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "NCE",
+"name": "Nice",
+"city": "Nice",
+"country": "France",
+"cc": "FR",
+"lat": 43.6584,
+"lon": 7.21587,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "NCL",
+"name": "Newcastle",
+"city": "Newcastle",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 55.0375,
+"lon": -1.69167,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "NDR",
+"name": "Nador",
+"city": "Nador",
+"country": "Morocco",
+"cc": "MA",
+"lat": 34.9888,
+"lon": -3.02821,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "NOC",
+"name": "Knock",
+"city": "Knock",
+"country": "Ireland",
+"cc": "IE",
+"lat": 53.9103,
+"lon": -8.81849,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "NQY",
+"name": "Newquay Cornwall",
+"city": "Newquay",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 50.4406,
+"lon": -4.99541,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "NRN",
+"name": "Dusseldorf Weeze",
+"city": "Dusseldorf",
+"country": "Germany",
+"cc": "DE",
+"lat": 51.6024,
+"lon": 6.14217,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "NTE",
+"name": "Nantes",
+"city": "Nantes",
+"country": "France",
+"cc": "FR",
+"lat": 47.1532,
+"lon": -1.61073,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "NUE",
+"name": "Nuremberg",
+"city": "Nuremberg",
+"country": "Germany",
+"cc": "DE",
+"lat": 49.4987,
+"lon": 11.0669,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "NWI",
+"name": "Norwich",
+"city": "Norwich",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 52.672163978,
+"lon": 1.276332228,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "OLB",
+"name": "Olbia",
+"city": "Olbia",
+"country": "Italy",
+"cc": "IT",
+"lat": 40.8987,
+"lon": 9.51763,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "OPO",
+"name": "Porto",
+"city": "Porto",
+"country": "Portugal",
+"cc": "PT",
+"lat": 41.2481,
+"lon": -8.68139,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ORK",
+"name": "Cork",
+"city": "Cork",
+"country": "Ireland",
+"cc": "IE",
+"lat": 51.8413,
+"lon": -8.49111,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ORY",
+"name": "Paris Orly",
+"city": "Paris",
+"country": "Frankreich",
+"cc": "FR",
+"lat": 48.726,
+"lon": 2.366,
+"carriers": [
+"AF",
+"U2"
+]
+},
+{
+"code": "OSI",
+"name": "Osijek",
+"city": "Osijek",
+"country": "Croatia",
+"cc": "HR",
+"lat": 45.4627,
+"lon": 18.8102,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "OSL",
+"name": "Oslo",
+"city": "Oslo",
+"country": "Norway",
+"cc": "NO",
+"lat": 60.2028,
+"lon": 11.0839,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "OSR",
+"name": "Ostrava",
+"city": "Ostrava",
+"country": "Czech Republic",
+"cc": "CZ",
+"lat": 49.6963,
+"lon": 18.1111,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "OTP",
+"name": "Bucharest Otopeni",
+"city": "Bucharest",
+"country": "Romania",
+"cc": "RO",
+"lat": 44.5722,
+"lon": 26.1022,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "OUD",
+"name": "Oujda",
+"city": "Oujda",
+"country": "Morocco",
+"cc": "MA",
+"lat": 34.7872,
+"lon": -1.92399,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "OZZ",
+"name": "Ouarzazate",
+"city": "Ouarzazate",
+"country": "Morocco",
+"cc": "MA",
+"lat": 30.9392,
+"lon": -6.9094,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PAD",
+"name": "Paderborn",
+"city": "Paderborn",
+"country": "Germany",
+"cc": "DE",
+"lat": 51.4305,
+"lon": 8.4515,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PDV",
+"name": "Plovdiv",
+"city": "Plovdiv",
+"country": "Bulgaria",
+"cc": "BG",
+"lat": 42.0678,
+"lon": 24.8508,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PED",
+"name": "Pardubice",
+"city": "Pardubice",
+"country": "Czech Republic",
+"cc": "CZ",
+"lat": 50.0048,
+"lon": 15.4419,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PEG",
+"name": "Perugia",
+"city": "Perugia",
+"country": "Italy",
+"cc": "IT",
+"lat": 43.0959,
+"lon": 12.5132,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PFO",
+"name": "Paphos",
+"city": "Paphos",
+"country": "Cyprus",
+"cc": "CY",
+"lat": 34.718,
+"lon": 32.4857,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PGF",
+"name": "Perpignan",
+"city": "Perpignan",
+"country": "France",
+"cc": "FR",
+"lat": 42.7404,
+"lon": 2.87067,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PIK",
+"name": "Glasgow Prestwick",
+"city": "Glasgow",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 55.5094,
+"lon": -4.58667,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PIS",
+"name": "Poitiers",
+"city": "Poitiers",
+"country": "France",
+"cc": "FR",
+"lat": 46.5877,
+"lon": 0.306666,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PLQ",
+"name": "Palanga",
+"city": "Palanga",
+"country": "Lithuania",
+"cc": "LT",
+"lat": 55.9733,
+"lon": 21.0939,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PMF",
+"name": "Parma",
+"city": "Parma",
+"country": "Italy",
+"cc": "IT",
+"lat": 44.8245,
+"lon": 10.2964,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PMI",
+"name": "Palma de Mallorca",
+"city": "Palma",
+"country": "Spain",
+"cc": "ES",
+"lat": 39.5517,
+"lon": 2.73881,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PMO",
+"name": "Palermo",
+"city": "Palermo",
+"country": "Italy",
+"cc": "IT",
+"lat": 38.176,
+"lon": 13.091,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "POZ",
+"name": "Poznan",
+"city": "Poznan",
+"country": "Poland",
+"cc": "PL",
+"lat": 52.421,
+"lon": 16.8263,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PRG",
+"name": "Prague",
+"city": "Prague",
+"country": "Czech Republic",
+"cc": "CZ",
+"lat": 50.1008,
+"lon": 14.26,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PSA",
+"name": "Pisa",
+"city": "Pisa",
+"country": "Italy",
+"cc": "IT",
+"lat": 43.6839,
+"lon": 10.3927,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PSR",
+"name": "Pescara",
+"city": "Pescara",
+"country": "Italy",
+"cc": "IT",
+"lat": 42.4317,
+"lon": 14.1811,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PUY",
+"name": "Pula",
+"city": "Pula",
+"country": "Croatia",
+"cc": "HR",
+"lat": 44.8935,
+"lon": 13.9222,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "PVK",
+"name": "Preveza - Aktion",
+"city": "Preveza",
+"country": "Greece",
+"cc": "GR",
+"lat": 38.9256,
+"lon": 20.7653,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "QSR",
+"name": "Salerno Costa d'Amalfi",
+"city": "Salerno ",
+"country": "Italy",
+"cc": "IT",
+"lat": 40.405,
+"lon": 14.4534,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "RAK",
+"name": "Marrakesh",
+"city": "Marrakesh",
+"country": "Morocco",
+"cc": "MA",
+"lat": 31.6069,
+"lon": -8.0363,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "RBA",
+"name": "Rabat",
+"city": "Rabat",
+"country": "Morocco",
+"cc": "MA",
+"lat": 34.0515,
+"lon": -6.75152,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "RDZ",
+"name": "Rodez",
+"city": "Rodez",
+"country": "France",
+"cc": "FR",
+"lat": 44.4079,
+"lon": 2.48267,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "REG",
+"name": "Reggio Calabria",
+"city": "Reggio Calabria",
+"country": "Italy",
+"cc": "IT",
+"lat": 38.0641,
+"lon": 15.3943,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "REU",
+"name": "Barcelona Reus",
+"city": "Reus",
+"country": "Spain",
+"cc": "ES",
+"lat": 41.1474,
+"lon": 1.16717,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "RHO",
+"name": "Rhodes",
+"city": "Rhodos",
+"country": "Griechenland",
+"cc": "GR",
+"lat": 36.4054,
+"lon": 28.0862,
+"carriers": [
+"A3",
+"FR"
+]
+},
+{
+"code": "RIX",
+"name": "Riga",
+"city": "Riga",
+"country": "Latvia",
+"cc": "LV",
+"lat": 56.9236,
+"lon": 23.9711,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "RJK",
+"name": "Rijeka",
+"city": "Rijeka",
+"country": "Croatia",
+"cc": "HR",
+"lat": 45.2169,
+"lon": 14.5703,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "RMI",
+"name": "Rimini",
+"city": "Rimini",
+"country": "Italy",
+"cc": "IT",
+"lat": 44.0203,
+"lon": 12.6117,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "RMU",
+"name": "Murcia International",
+"city": "Murcia",
+"country": "Spain",
+"cc": "ES",
+"lat": 37.7903,
+"lon": -1.1418,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "RVN",
+"name": "Lapland Rovaniemi",
+"city": "Rovaniemi",
+"country": "Finland",
+"cc": "FI",
+"lat": 66.5631,
+"lon": 25.8301,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "RZE",
+"name": "Rzeszow",
+"city": "Rzeszow",
+"country": "Poland",
+"cc": "PL",
+"lat": 50.11,
+"lon": 22.019,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SAW",
+"name": "Istanbul Sabiha Goekcen",
+"city": "Istanbul",
+"country": "Türkei",
+"cc": "TR",
+"lat": 40.899,
+"lon": 29.309,
+"carriers": [
+"PC",
+"W6"
+]
+},
+{
+"code": "SCN",
+"name": "Saarbrücken",
+"city": "Saarbrücken",
+"country": "Germany",
+"cc": "DE",
+"lat": 49.2161,
+"lon": 7.1103,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SCQ",
+"name": "Santiago",
+"city": "Santiago",
+"country": "Spain",
+"cc": "ES",
+"lat": 42.8963,
+"lon": -8.41514,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SDR",
+"name": "Santander",
+"city": "Santander",
+"country": "Spain",
+"cc": "ES",
+"lat": 43.4271,
+"lon": -3.82001,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SFT",
+"name": "Skelleftea",
+"city": "Skelleftea",
+"country": "Sweden",
+"cc": "SE",
+"lat": 64.6248,
+"lon": 21.0769,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SJJ",
+"name": "Sarajevo",
+"city": "Sarajevo",
+"country": "Bosnia & Herzegovina",
+"cc": "BA",
+"lat": 43.5123,
+"lon": 18.2447,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SKG",
+"name": "Thessaloniki",
+"city": "Thessaloniki",
+"country": "Griechenland",
+"cc": "GR",
+"lat": 40.5197,
+"lon": 22.9709,
+"carriers": [
+"A3",
+"FR",
+"W6"
+]
+},
+{
+"code": "SNN",
+"name": "Shannon",
+"city": "Shannon",
+"country": "Ireland",
+"cc": "IE",
+"lat": 52.702,
+"lon": -8.92482,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SOF",
+"name": "Sofia",
+"city": "Sofia",
+"country": "Bulgaria",
+"cc": "BG",
+"lat": 42.42,
+"lon": 23.2,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SPU",
+"name": "Split",
+"city": "Split",
+"country": "Croatia",
+"cc": "HR",
+"lat": 43.5389,
+"lon": 16.2981,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "STN",
+"name": "London Stansted",
+"city": "London",
+"country": "United Kingdom",
+"cc": "GB",
+"lat": 51.885,
+"lon": 0.235,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "STR",
+"name": "Stuttgart",
+"city": "Stuttgart",
+"country": "Germany",
+"cc": "DE",
+"lat": 48.69,
+"lon": 9.222,
+"carriers": [
+"EW",
+"XQ",
+"TK"
+]
+},
+{
+"code": "SUF",
+"name": "Lamezia",
+"city": "Lamezia",
+"country": "Italy",
+"cc": "IT",
+"lat": 38.9054,
+"lon": 16.2423,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SVQ",
+"name": "Seville",
+"city": "Seville",
+"country": "Spain",
+"cc": "ES",
+"lat": 37.418,
+"lon": -5.89311,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SZG",
+"name": "Salzburg",
+"city": "Salzburg",
+"country": "Austria",
+"cc": "AT",
+"lat": 47.7933,
+"lon": 13.0043,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SZY",
+"name": "Olsztyn - Mazury",
+"city": "Olsztyn",
+"country": "Poland",
+"cc": "PL",
+"lat": 53.4819,
+"lon": 20.9378,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "SZZ",
+"name": "Szczecin",
+"city": "Szczecin",
+"country": "Poland",
+"cc": "PL",
+"lat": 53.5847,
+"lon": 14.9022,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TFS",
+"name": "Tenerife South",
+"city": "Tenerife",
+"country": "Spain",
+"cc": "ES",
+"lat": 28.0445,
+"lon": -16.5725,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TGD",
+"name": "Podgorica",
+"city": "Podgorica",
+"country": "Montenegro",
+"cc": "ME",
+"lat": 42.3594,
+"lon": 19.2519,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TIA",
+"name": "Tirana",
+"city": "Tirana",
+"country": "Albania",
+"cc": "AL",
+"lat": 41.4147,
+"lon": 19.7206,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TLL",
+"name": "Tallinn",
+"city": "Tallinn",
+"country": "Estonia",
+"cc": "EE",
+"lat": 59.4133,
+"lon": 24.8328,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TLS",
+"name": "Toulouse",
+"city": "Toulouse",
+"country": "France",
+"cc": "FR",
+"lat": 43.3616,
+"lon": 1.2638,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TNG",
+"name": "Tangier",
+"city": "Tangier",
+"country": "Morocco",
+"cc": "MA",
+"lat": 35.7269,
+"lon": -5.91689,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TPS",
+"name": "Trapani-Marsala",
+"city": "Trapani",
+"country": "Italy",
+"cc": "IT",
+"lat": 37.9114,
+"lon": 12.488,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TRF",
+"name": "Oslo Torp",
+"city": "Sandefjord",
+"country": "Norway",
+"cc": "NO",
+"lat": 59.1867,
+"lon": 10.2586,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TRN",
+"name": "Turin",
+"city": "Turin",
+"country": "Italy",
+"cc": "IT",
+"lat": 45.2008,
+"lon": 7.64963,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TRS",
+"name": "Trieste",
+"city": "Trieste",
+"country": "Italy",
+"cc": "IT",
+"lat": 45.8275,
+"lon": 13.4722,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TSF",
+"name": "Venice Treviso",
+"city": "Venice",
+"country": "Italy",
+"cc": "IT",
+"lat": 45.6484,
+"lon": 12.1944,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TTU",
+"name": "Tétouan",
+"city": "Tétouan",
+"country": "Morocco",
+"cc": "MA",
+"lat": 35.5944,
+"lon": -5.32,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TUF",
+"name": "Tours Loire Valley",
+"city": "Tours",
+"country": "France",
+"cc": "FR",
+"lat": 47.4322,
+"lon": 0.727606,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "TXL",
+"name": "Berlin Tegel",
+"city": "Berlin",
+"country": "Germany",
+"cc": "DE",
+"lat": 52.559,
+"lon": 13.288,
+"carriers": []
+},
+{
+"code": "VAR",
+"name": "Varna",
+"city": "Varna",
+"country": "Bulgaria",
+"cc": "BG",
+"lat": 43.13,
+"lon": 27.55,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "VCE",
+"name": "Venice M.Polo",
+"city": "Venice",
+"country": "Italy",
+"cc": "IT",
+"lat": 45.5053,
+"lon": 12.3519,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "VIE",
+"name": "Vienna",
+"city": "Wien",
+"country": "Oesterreich",
+"cc": "AT",
+"lat": 48.123,
+"lon": 16.2221,
+"carriers": [
+"FR",
+"OS",
+"W6"
+]
+},
+{
+"code": "VIL",
+"name": "Dakhla ",
+"city": "Dakhla",
+"country": "Morocco",
+"cc": "MA",
+"lat": 23.7182999,
+"lon": -15.9320002,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "VIT",
+"name": "Vitoria (Basque Country)",
+"city": "Vitoria-Gasteiz",
+"country": "Spain",
+"cc": "ES",
+"lat": 42.8828,
+"lon": -2.7244,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "VLC",
+"name": "Valencia",
+"city": "Valencia",
+"country": "Spain",
+"cc": "ES",
+"lat": 39.4893,
+"lon": -0.481625,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "VNO",
+"name": "Vilnius",
+"city": "Vilnius",
+"country": "Lithuania",
+"cc": "LT",
+"lat": 54.6341,
+"lon": 25.2858,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "VOL",
+"name": "Volos",
+"city": "Volos",
+"country": "Greece",
+"cc": "GR",
+"lat": 39.2196,
+"lon": 22.7943,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "VRN",
+"name": "Verona",
+"city": "Verona",
+"country": "Italy",
+"cc": "IT",
+"lat": 45.3957,
+"lon": 10.8885,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "VST",
+"name": "Stockholm Västerås",
+"city": "Stockholm",
+"country": "Sweden",
+"cc": "SE",
+"lat": 59.5894,
+"lon": 16.6336,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "VXO",
+"name": "Växjö Småland",
+"city": "Växjö",
+"country": "Sweden",
+"cc": "SE",
+"lat": 56.9291,
+"lon": 14.728,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "WAW",
+"name": "Warsaw Chopin",
+"city": "Warsaw",
+"country": "Poland",
+"cc": "PL",
+"lat": 52.1657,
+"lon": 20.9671,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "WMI",
+"name": "Warsaw Modlin",
+"city": "Warsaw",
+"country": "Poland",
+"cc": "PL",
+"lat": 52.4511,
+"lon": 20.6517,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "WRO",
+"name": "Wroclaw",
+"city": "Wroclaw",
+"country": "Poland",
+"cc": "PL",
+"lat": 51.1027,
+"lon": 16.8858,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "XCR",
+"name": "Paris Vatry",
+"city": "Paris",
+"country": "France",
+"cc": "FR",
+"lat": 48.7761,
+"lon": 4.18449,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ZAD",
+"name": "Zadar",
+"city": "Zadar",
+"country": "Croatia",
+"cc": "HR",
+"lat": 44.1083,
+"lon": 15.3467,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ZAG",
+"name": "Zagreb",
+"city": "Zagreb",
+"country": "Croatia",
+"cc": "HR",
+"lat": 45.7431,
+"lon": 16.0689,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ZAZ",
+"name": "Zaragoza",
+"city": "Zaragoza",
+"country": "Spain",
+"cc": "ES",
+"lat": 41.6662,
+"lon": -1.04155,
+"carriers": [
+"FR"
+]
+},
+{
+"code": "ZRH",
+"name": "Zuerich",
+"city": "Zuerich",
+"country": "Schweiz",
+"cc": "CH",
+"lat": 47.458,
+"lon": 8.548,
+"carriers": [
+"LX"
+]
+},
+{
+"code": "ZTH",
+"name": "Zakynthos",
+"city": "Zakynthos",
+"country": "Greece",
+"cc": "GR",
+"lat": 37.7509,
+"lon": 20.8843,
+"carriers": [
+"FR"
+]
+}
+]

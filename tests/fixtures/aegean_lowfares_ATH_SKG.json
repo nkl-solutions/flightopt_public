@@ -1,0 +1,308 @@
+{
+ "Inbound": null,
+ "Outbound": [
+  {
+   "Date": "\"\\/Date(1793491200000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1793577600000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1793664000000)\\/\"",
+   "FullPrice": 58.62,
+   "Price": 58.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1793750400000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1793836800000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1793923200000)\\/\"",
+   "FullPrice": 74.62,
+   "Price": 74.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794009600000)\\/\"",
+   "FullPrice": 58.62,
+   "Price": 58.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794096000000)\\/\"",
+   "FullPrice": 74.62,
+   "Price": 74.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794182400000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794268800000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794355200000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794441600000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794528000000)\\/\"",
+   "FullPrice": 74.62,
+   "Price": 74.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794614400000)\\/\"",
+   "FullPrice": 58.62,
+   "Price": 58.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794700800000)\\/\"",
+   "FullPrice": 74.62,
+   "Price": 74.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794787200000)\\/\"",
+   "FullPrice": 58.62,
+   "Price": 58.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794873600000)\\/\"",
+   "FullPrice": 58.62,
+   "Price": 58.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1794960000000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795046400000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795132800000)\\/\"",
+   "FullPrice": 74.62,
+   "Price": 74.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795219200000)\\/\"",
+   "FullPrice": 58.62,
+   "Price": 58.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795305600000)\\/\"",
+   "FullPrice": 74.62,
+   "Price": 74.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795392000000)\\/\"",
+   "FullPrice": 58.62,
+   "Price": 58.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795478400000)\\/\"",
+   "FullPrice": 58.62,
+   "Price": 58.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795564800000)\\/\"",
+   "FullPrice": 58.62,
+   "Price": 58.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795651200000)\\/\"",
+   "FullPrice": 66.62,
+   "Price": 66.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795737600000)\\/\"",
+   "FullPrice": 74.62,
+   "Price": 74.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795824000000)\\/\"",
+   "FullPrice": 58.62,
+   "Price": 58.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788480000000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795910400000)\\/\"",
+   "FullPrice": 74.62,
+   "Price": 74.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788393600000)\\/\"",
+   "ServiceFee": 0.0
+  },
+  {
+   "Date": "\"\\/Date(1795996800000)\\/\"",
+   "FullPrice": 65.62,
+   "Price": 65.62,
+   "Class": "Economy",
+   "Difference": null,
+   "Error": null,
+   "Updated": "\"\\/Date(1788307200000)\\/\"",
+   "ServiceFee": 0.0
+  }
+ ],
+ "InboundLowestPrice": null,
+ "OutboundLowestPrice": 58.62,
+ "CurrencySymbol": "€"
+}

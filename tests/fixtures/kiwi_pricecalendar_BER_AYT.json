@@ -1,0 +1,372 @@
+{
+  "data": {
+    "itineraryPricesCalendar": {
+      "__typename": "ItineraryPricesCalendar",
+      "calendar": [
+        {
+          "date": "2026-10-01T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "84",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "CHEAP"
+          }
+        },
+        {
+          "date": "2026-10-02T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "110",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-03T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "103",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-04T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "100",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-05T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "108",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-06T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "90",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-07T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "79",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "CHEAP"
+          }
+        },
+        {
+          "date": "2026-10-08T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "113",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-09T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "135",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-10T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "120",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-11T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "151",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "EXPENSIVE"
+          }
+        },
+        {
+          "date": "2026-10-12T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "127",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-13T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "85",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-14T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "81",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "CHEAP"
+          }
+        },
+        {
+          "date": "2026-10-15T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "105",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-16T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "144",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "EXPENSIVE"
+          }
+        },
+        {
+          "date": "2026-10-17T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "130",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-18T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "135",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-19T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "137",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "EXPENSIVE"
+          }
+        },
+        {
+          "date": "2026-10-20T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "172",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "EXPENSIVE"
+          }
+        },
+        {
+          "date": "2026-10-21T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "110",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-22T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "124",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-23T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "131",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-24T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "107",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "AVERAGE"
+          }
+        },
+        {
+          "date": "2026-10-25T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "75",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "CHEAP"
+          }
+        },
+        {
+          "date": "2026-10-26T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "67",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "CHEAP"
+          }
+        },
+        {
+          "date": "2026-10-27T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "53",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "CHEAP"
+          }
+        },
+        {
+          "date": "2026-10-28T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "42",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "CHEAP"
+          }
+        },
+        {
+          "date": "2026-10-29T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "42",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "CHEAP"
+          }
+        },
+        {
+          "date": "2026-10-30T00:00:00",
+          "ratedPrice": {
+            "price": {
+              "amount": "42",
+              "currency": {
+                "code": "EUR"
+              }
+            },
+            "rating": "CHEAP"
+          }
+        }
+      ],
+      "currency": {
+        "code": "EUR"
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+/data/
+spike/*_results.json
+.pytest_cache/
+.cache/
+.claude/
+work/
+spike/
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+google_consent.json
