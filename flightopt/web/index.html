@@ -150,6 +150,10 @@ input[type=date]:focus,input[type=number]:focus,select:focus{outline:2px solid v
 .scanbar button{padding:6px 10px;background:var(--bg-elevated);border:1px solid var(--rule-strong);
   border-radius:3px;color:var(--ink-muted);cursor:pointer}
 .scanbar button:hover{border-color:var(--ink);color:var(--ink)}
+.routeglance{margin:-4px 0 18px;padding:10px 12px;border:1px solid var(--rule);
+  background:var(--bg-elevated);border-radius:4px;font-size:13px;color:var(--ink-muted)}
+.routeglance b{color:var(--ink);font-weight:600}
+.routeglance i{font-style:normal;color:var(--ink-subtle)}
 
 /* --- progress ------------------------------------------------------------ */
 .log{display:none;padding:16px 0 18px;border-top:1px solid var(--rule)}
@@ -250,7 +254,11 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--rule);font-si
   color:var(--ink-subtle)}
 @media(prefers-reduced-motion:no-preference){
   li.opt{animation:in .24s ease both}
+  .log.on .progressbar i{animation:flow 1.4s ease-in-out infinite}
+  .go.busy{animation:pressing 1.1s ease-in-out infinite}
   @keyframes in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  @keyframes flow{0%,100%{filter:saturate(1)}50%{filter:saturate(1.35) brightness(1.04)}}
+  @keyframes pressing{0%,100%{transform:none}50%{transform:translateY(1px)}}
 }
 </style>
 </head>
@@ -314,6 +322,7 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--rule);font-si
     <span id="scanstate">Scanner wird geprüft</span>
     <button id="runScanner" type="button">Fällige Scans starten</button>
   </div>
+  <div class="routeglance" id="routeglance"></div>
 </form>
 
 <section class="log" id="log" aria-live="polite">
@@ -419,6 +428,25 @@ function setTrip(id){
   drawTabs(); drawRoute(); syncStayControls(); size(); saveForm();
 }
 
+function bagLabel(count){
+  if (!count) return "ohne Aufgabegepäck";
+  return count === 1 ? "1 Aufgabegepäckstück" : `${count} Aufgabegepäckstücke`;
+}
+function routeGlance(){
+  const route = active().map(h => h.label || h.code).filter(Boolean).join(" → ");
+  const from = $("#from").value || "offenes Startdatum";
+  const to = $("#to").value || "offenes Enddatum";
+  const carriers = picked.size ? [...picked].join(", ") : "alle verfügbaren Airlines";
+  const bag = bagLabel(Number($("#checkedBags").value || 0));
+  return {route, from, to, carriers, bag};
+}
+function updateRouteGlance(){
+  const g = routeGlance();
+  $("#routeglance").innerHTML =
+    `<b>${esc(g.route || "Route wählen")}</b> `+
+    `<i>${esc(g.from)} bis ${esc(g.to)} · ${esc(g.bag)} · ${esc(g.carriers)}</i>`;
+}
+
 /* ---------------- stay ranges ---------------- */
 function stayCount(){
   if (trip === "one_way") return 0;
@@ -516,12 +544,12 @@ function drawRoute(){
     };
     const choose = a => {
       hops[i] = {code:a.code, label:a.city};
-      inp.value = a.city; badge.textContent = a.code; close(); size(); saveForm();
+      inp.value = a.city; badge.textContent = a.code; close(); size(); updateRouteGlance(); saveForm();
       const all = $("#route").querySelectorAll("input");
       if (all[i+1] && !(hops[i+1]||{}).code) all[i+1].focus();
     };
     inp.oninput = () => {
-      hops[i] = {code:"", label:inp.value}; badge.textContent=""; size();
+      hops[i] = {code:"", label:inp.value}; badge.textContent=""; size(); updateRouteGlance();
       clearTimeout(timer);
       const q = inp.value.trim();
       if (q.length < 2){ close(); return; }
@@ -554,7 +582,7 @@ function drawRoute(){
         const r = await fetch(`/api/airports?q=${encodeURIComponent(typed)}&limit=1`);
         const top = ((await r.json()).results || [])[0];
         if (top){ hops[i] = {code:top.code, label:top.city};
-                  inp.value = top.city; badge.textContent = top.code; size(); }
+                  inp.value = top.city; badge.textContent = top.code; size(); updateRouteGlance(); }
       } catch { /* leave it as typed; the form will say what is missing */ }
     }, 140);
 
@@ -562,7 +590,7 @@ function drawRoute(){
       const x = document.createElement("button");
       x.type="button"; x.className="kill"; x.textContent="×";
       x.setAttribute("aria-label", `${hop.label||"Feld"} entfernen`);
-      x.onclick = () => { hops.splice(i,1); drawRoute(); size(); };
+      x.onclick = () => { hops.splice(i,1); drawRoute(); size(); updateRouteGlance(); };
       cell.append(x);
     }
     box.append(cell);
@@ -572,7 +600,7 @@ function drawRoute(){
     const add = document.createElement("button");
     add.type="button"; add.className="addhop"; add.textContent="+ Stopp";
     add.onclick = () => { hops.splice(hops.length-1,0,{code:"",label:""}); drawRoute();
-      $("#route").querySelectorAll("input")[hops.length-2].focus(); };
+      updateRouteGlance(); $("#route").querySelectorAll("input")[hops.length-2].focus(); };
     box.append(add);
   }
   wireDrag(box);
@@ -605,7 +633,7 @@ function wireDrag(box){
       if (from === null || to === from) return;
       const [moved] = hops.splice(from,1);
       hops.splice(to,0,moved);
-      from = null; drawRoute(); size(); saveForm();
+      from = null; drawRoute(); size(); updateRouteGlance(); saveForm();
     };
   });
 }
@@ -626,7 +654,7 @@ async function loadAirlines(){
     const on = c.getAttribute("aria-pressed")==="true";
     c.setAttribute("aria-pressed", String(!on));
     if (on) picked.delete(c.dataset.code); else picked.add(c.dataset.code);
-    airHint(); saveForm();
+    airHint(); updateRouteGlance(); saveForm();
   });
   airHint();
 }
@@ -956,6 +984,12 @@ function setProgress(p){
   const done = Number(p && p.done) || 0;
   $("#progresscount").textContent = total > 0 ? `${done} / ${total}` : "";
 }
+function setSearching(on){
+  const button = $("#go");
+  button.disabled = on;
+  button.classList.toggle("busy", on);
+  button.textContent = on ? "Suche läuft" : "Suchen";
+}
 $("#f").onsubmit = async e => {
   e.preventDefault();
   if (es){ es.close(); es=null; }
@@ -964,7 +998,7 @@ $("#f").onsubmit = async e => {
     setProgress({phase:"failed"});
     $("#note").textContent="Bitte alle Flughäfen aus der Vorschlagsliste wählen."; return;
   }
-  $("#go").disabled=true; $("#out").classList.remove("on");
+  setSearching(true); $("#out").classList.remove("on");
   $("#list").innerHTML=""; $("#legs").innerHTML="";
   $("#log").classList.add("on"); $("#note").className="note";
   $("#note").textContent="Suche startet"; drawSteps("planning"); setProgress({phase:"planning"});
@@ -978,7 +1012,7 @@ $("#f").onsubmit = async e => {
     job = d.job_id;
   } catch(err){
     $("#note").className="note err"; $("#note").textContent=err.message;
-    $("#go").disabled=false; return;
+    setSearching(false); return;
   }
 
   es = new EventSource(`/api/jobs/${job}/events`);
@@ -994,14 +1028,14 @@ $("#f").onsubmit = async e => {
         `<span class="${l.dates?"":"zero"}">${esc(l.origin)}–${esc(l.destination)}
            <b>${Number(l.dates)||0}</b> Tage</span>`).join("");
     }
-    if (p.phase==="done"){ render((p.detail&&p.detail.results)||[]); es.close(); es=null; $("#go").disabled=false; }
-    if (p.phase==="failed"){ es.close(); es=null; $("#go").disabled=false; }
+    if (p.phase==="done"){ render((p.detail&&p.detail.results)||[]); es.close(); es=null; setSearching(false); }
+    if (p.phase==="failed"){ es.close(); es=null; setSearching(false); }
   };
   es.onerror = () => {
     if (!es) return;
     setProgress({phase:"failed"});
     $("#note").className="note err"; $("#note").textContent="Verbindung zum Server verloren";
-    es.close(); es=null; $("#go").disabled=false;
+    es.close(); es=null; setSearching(false);
   };
 };
 
@@ -1048,7 +1082,7 @@ $("#from").value = new Date(Date.now()+30*864e5).toISOString().slice(0,10);
 $("#to").value   = new Date(Date.now()+87*864e5).toISOString().slice(0,10);
 const restored = loadForm();
 $("#stayrow").classList.toggle("off", !TRIPS.find(t=>t.id===trip).stays);
-["#from","#to","#checkedBags"].forEach(s => $(s).oninput = () => { size(); saveForm(); });
+["#from","#to","#checkedBags"].forEach(s => $(s).oninput = () => { size(); updateRouteGlance(); saveForm(); });
 $("#sort").onchange = () => { saveForm(); if (lastResults.length) render(lastResults); };
 drawTabs(); drawRoute(); loadAirlines().then(() => {
   // Restore the chips only after the registry has rendered them.
@@ -1061,6 +1095,7 @@ drawTabs(); drawRoute(); loadAirlines().then(() => {
 });
 size();
 loadScanner();
+updateRouteGlance();
 </script>
 </body>
 </html>

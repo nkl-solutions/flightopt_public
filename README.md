@@ -21,6 +21,7 @@ keine lokale Datenbank.
 - gespeicherte Suchprofile als Basis für tägliche Scans
 - Preisbaseline mit einfachem Ausreißer-Signal
 - transparente Aufgabegepäck-Annahmen je Airline
+- Portainer-/VPS-Start mit optionaler Basic Auth
 
 ## Warum das spannend ist
 
@@ -49,6 +50,11 @@ Danach:
 ```text
 http://127.0.0.1:8000
 ```
+
+## VPS
+
+Der erste Container-Start für Portainer liegt in `docker-compose.portainer.yml`.
+Details stehen in `docs/DEPLOYMENT.md`.
 
 CLI:
 

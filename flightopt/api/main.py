@@ -10,17 +10,20 @@ minutes.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from itertools import product
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from flightopt.domain import airlines as airline_registry
@@ -35,6 +38,7 @@ from flightopt.sources.ryanair import RyanairSource
 logger = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+AUTH_REALM = "flightopt"
 
 runner = JobRunner()
 daily_scheduler = DailyScanScheduler(
@@ -46,6 +50,38 @@ daily_scheduler = DailyScanScheduler(
 def scheduler_autostart_enabled() -> bool:
     value = os.getenv("FLIGHTOPT_DAILY_SCANS", "1").strip().lower()
     return value not in {"0", "false", "no", "off"}
+
+
+def basic_auth_config() -> tuple[str, str] | None:
+    user = os.getenv("FLIGHTOPT_BASIC_USER", "").strip()
+    password = os.getenv("FLIGHTOPT_BASIC_PASSWORD", "")
+    if not user and not password:
+        return None
+    if not user or not password:
+        raise RuntimeError(
+            "FLIGHTOPT_BASIC_USER and FLIGHTOPT_BASIC_PASSWORD must be set together"
+        )
+    return user, password
+
+
+def basic_auth_valid(header: str | None) -> bool:
+    config = basic_auth_config()
+    if config is None:
+        return True
+    if not header or not header.lower().startswith("basic "):
+        return False
+    try:
+        raw = base64.b64decode(header.split(" ", 1)[1], validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError):
+        return False
+    supplied_user, sep, supplied_password = raw.partition(":")
+    if not sep:
+        return False
+    expected_user, expected_password = config
+    return secrets.compare_digest(supplied_user, expected_user) and secrets.compare_digest(
+        supplied_password,
+        expected_password,
+    )
 
 
 async def start_daily_scheduler() -> None:
@@ -67,6 +103,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="flightopt", docs_url="/api/docs", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def require_basic_auth(request: Request, call_next):
+    if request.url.path == "/api/health" or basic_auth_valid(
+        request.headers.get("authorization")
+    ):
+        return await call_next(request)
+    return PlainTextResponse(
+        "Authentication required",
+        status_code=401,
+        headers={"WWW-Authenticate": f'Basic realm="{AUTH_REALM}"'},
+    )
 
 
 class SearchRequest(BaseModel):

@@ -185,3 +185,40 @@ assert.ok(summary.html.includes("Sehr großer Suchraum"));
     )
 
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_route_glance_summarises_current_choices():
+    result = run_ui_assertion(
+        r"""
+trip = "return";
+hops = [{code:"BER", label:"Berlin"}, {code:"ATH", label:"Athen"}];
+$("#from").value = "2026-10-01";
+$("#to").value = "2026-11-30";
+$("#checkedBags").value = "2";
+picked = new Set(["FR", "A3"]);
+
+const g = routeGlance();
+
+assert.strictEqual(g.route, "Berlin → Athen");
+assert.strictEqual(g.bag, "2 Aufgabegepäckstücke");
+assert.strictEqual(g.carriers, "FR, A3");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_search_button_names_running_state():
+    result = run_ui_assertion(
+        r"""
+setSearching(true);
+assert.strictEqual($("#go").disabled, true);
+assert.strictEqual($("#go").textContent, "Suche läuft");
+
+setSearching(false);
+assert.strictEqual($("#go").disabled, false);
+assert.strictEqual($("#go").textContent, "Suchen");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout

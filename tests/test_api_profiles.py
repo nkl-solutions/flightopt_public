@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import date
 
 import pytest
@@ -69,6 +70,31 @@ def test_scheduler_autostart_is_enabled_by_default(monkeypatch):
     monkeypatch.delenv("FLIGHTOPT_DAILY_SCANS", raising=False)
 
     assert main.scheduler_autostart_enabled() is True
+
+
+def test_basic_auth_is_off_until_credentials_are_set(monkeypatch):
+    monkeypatch.delenv("FLIGHTOPT_BASIC_USER", raising=False)
+    monkeypatch.delenv("FLIGHTOPT_BASIC_PASSWORD", raising=False)
+
+    assert main.basic_auth_config() is None
+    assert main.basic_auth_valid(None) is True
+
+
+def test_basic_auth_accepts_matching_header(monkeypatch):
+    monkeypatch.setenv("FLIGHTOPT_BASIC_USER", "dev")
+    monkeypatch.setenv("FLIGHTOPT_BASIC_PASSWORD", "secret")
+    encoded = base64.b64encode(b"dev:secret").decode("ascii")
+
+    assert main.basic_auth_valid(f"Basic {encoded}") is True
+    assert main.basic_auth_valid("Basic nope") is False
+
+
+def test_basic_auth_requires_complete_configuration(monkeypatch):
+    monkeypatch.setenv("FLIGHTOPT_BASIC_USER", "dev")
+    monkeypatch.delenv("FLIGHTOPT_BASIC_PASSWORD", raising=False)
+
+    with pytest.raises(RuntimeError, match="must be set together"):
+        main.basic_auth_config()
 
 
 @pytest.mark.asyncio
