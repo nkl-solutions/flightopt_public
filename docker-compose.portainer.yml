@@ -4,8 +4,6 @@ services:
       context: .
     container_name: flightopt
     restart: unless-stopped
-    ports:
-      - "8010:8000"
     environment:
       FLIGHTOPT_BASIC_USER: ${FLIGHTOPT_BASIC_USER:?set in Portainer stack variables}
       FLIGHTOPT_BASIC_PASSWORD: ${FLIGHTOPT_BASIC_PASSWORD:?set in Portainer stack variables}
@@ -15,6 +13,8 @@ services:
       MALLOC_ARENA_MAX: "2"
     volumes:
       - flightopt-data:/app/data
+    networks:
+      - proxy-network
     mem_limit: 512m
     cpus: "1.0"
     healthcheck:
@@ -26,3 +26,7 @@ services:
 
 volumes:
   flightopt-data:
+
+networks:
+  proxy-network:
+    external: true
