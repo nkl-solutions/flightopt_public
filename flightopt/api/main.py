@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 from flightopt.domain import airlines as airline_registry
 from flightopt.domain import airports as airport_registry
 from flightopt.domain.models import Cabin, LegSpec, Pax, SearchSpec, StayRange
+from flightopt.domain.natural_search import parse_search_text
 from flightopt.jobs.daily import dispatch_due_profiles, due_profiles, save_profile
 from flightopt.jobs.runner import JobRunner
 from flightopt.jobs.scheduler import DailyScanScheduler
@@ -207,6 +208,10 @@ class ProfileRequest(SearchRequest):
     cadence_days: int = Field(default=1, ge=1, le=30)
 
 
+class NaturalSearchRequest(BaseModel):
+    text: str = Field(min_length=3, max_length=1000)
+
+
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html")
@@ -227,6 +232,15 @@ async def airports(q: str = "", limit: int = 8) -> dict[str, Any]:
 async def airlines() -> dict[str, Any]:
     """Every carrier we know, and whether we can price it yet."""
     return {"airlines": airline_registry.as_dicts()}
+
+
+@app.post("/api/parse-search")
+async def parse_search_text_endpoint(req: NaturalSearchRequest) -> dict[str, Any]:
+    """Turn a short route sentence into form values, not into prices."""
+    try:
+        return parse_search_text(req.text).as_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/estimate")

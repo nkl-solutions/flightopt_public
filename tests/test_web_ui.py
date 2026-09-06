@@ -255,3 +255,26 @@ assert.strictEqual(resultFilterSummary(4, 4), "4 Varianten sichtbar");
     )
 
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_apply_natural_search_prefills_route_without_running_search():
+    result = run_ui_assertion(
+        r"""
+applyNaturalSearch({
+  trip: "multi",
+  hops: [
+    {code:"BER", label:"Berlin"},
+    {code:"IST", label:"Istanbul"},
+    {code:"ATH", label:"Athen"},
+    {code:"BER", label:"Berlin"},
+  ],
+  warnings: [],
+});
+
+assert.strictEqual(trip, "multi");
+assert.deepStrictEqual(hops.map(h => h.code), ["BER", "IST", "ATH", "BER"]);
+assert.strictEqual($("#aiStatus").textContent, "Route übernommen.");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout

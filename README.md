@@ -22,6 +22,7 @@ keine lokale Datenbank.
 - Preisbaseline mit einfachem Ausreißer-Signal
 - transparente Aufgabegepäck-Annahmen je Airline
 - Portainer-/VPS-Start mit optionaler Basic Auth
+- schnelle Satz-Eingabe als Vorstufe für den KI-Modus
 
 ## Warum das spannend ist
 

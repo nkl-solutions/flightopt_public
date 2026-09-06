@@ -48,6 +48,20 @@ button,input{font:inherit;color:inherit}
 .lab{display:block;font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
   color:var(--ink-subtle);margin-bottom:7px}
 
+.quickroute{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:8px;margin:0 0 22px}
+.quickroute textarea{min-height:44px;resize:vertical;padding:10px 11px;background:var(--bg-elevated);
+  border:1px solid var(--rule-interactive);border-radius:3px;font:inherit;font-size:14px;color:var(--ink)}
+.quickroute textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.quickroute button{padding:0 14px;background:var(--ink);color:var(--bg);border:0;border-radius:3px;
+  font-size:13px;font-weight:600;cursor:pointer}
+.quickroute button:hover{background:var(--accent-hover)}
+.quickroute button:disabled{background:var(--rule-strong);cursor:not-allowed}
+.quickhint{grid-column:1/-1;min-height:18px;font-size:12.5px;color:var(--ink-subtle)}
+.quickhint.err{color:var(--error)}
+@media(max-width:700px){
+  .quickroute{grid-template-columns:1fr}
+  .quickroute button{height:38px}
+}
 .route{display:flex;align-items:flex-start;gap:7px;flex-wrap:wrap}
 .hop{position:relative}
 .hop>input{width:186px;padding:9px 11px;background:var(--bg-elevated);color:var(--ink);
@@ -277,6 +291,12 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--rule);font-si
 <form id="f">
   <div class="panel">
     <div>
+      <div class="quickroute">
+        <textarea id="aiText" rows="2"
+          placeholder="Berlin nach Istanbul, weiter nach Athen, zurück nach Berlin"></textarea>
+        <button id="aiApply" type="button">Route übernehmen</button>
+        <span class="quickhint" id="aiStatus"></span>
+      </div>
       <span class="lab" id="routelbl">Route</span>
       <div class="route" id="route" role="group" aria-labelledby="routelbl"></div>
     </div>
@@ -459,6 +479,42 @@ function updateRouteGlance(){
   $("#routeglance").innerHTML =
     `<b>${esc(g.route || "Route wählen")}</b> `+
     `<i>${esc(g.from)} bis ${esc(g.to)} · ${esc(g.bag)} · ${esc(g.carriers)}</i>`;
+}
+function applyNaturalSearch(data){
+  trip = data.trip || ((data.hops || []).length > 2 ? "multi" : "one_way");
+  hops = (data.hops || []).map(h => ({code:h.code || "", label:h.label || h.code || ""}));
+  while (hops.length < TRIPS.find(t=>t.id===trip).min) hops.push({code:"",label:""});
+  $("#aiStatus").className = "quickhint";
+  $("#aiStatus").textContent = (data.warnings || []).length
+    ? `Route übernommen. Nicht erkannt: ${data.warnings.join(", ")}`
+    : "Route übernommen.";
+  drawTabs(); drawRoute(); syncStayControls(); size(); updateRouteGlance(); saveForm();
+}
+async function parseNaturalSearch(){
+  const text = $("#aiText").value.trim();
+  if (text.length < 3){
+    $("#aiStatus").className = "quickhint err";
+    $("#aiStatus").textContent = "Bitte eine Route eingeben.";
+    return;
+  }
+  $("#aiApply").disabled = true;
+  $("#aiStatus").className = "quickhint";
+  $("#aiStatus").textContent = "Route wird gelesen.";
+  try {
+    const r = await fetch("/api/parse-search", {
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({text}),
+    });
+    const d = await r.json();
+    if (!r.ok) throw Error(detail(d.detail) || "Route nicht erkannt.");
+    applyNaturalSearch(d);
+  } catch(err) {
+    $("#aiStatus").className = "quickhint err";
+    $("#aiStatus").textContent = err.message;
+  } finally {
+    $("#aiApply").disabled = false;
+  }
 }
 
 /* ---------------- stay ranges ---------------- */
@@ -1144,6 +1200,7 @@ $("#stayrow").classList.toggle("off", !TRIPS.find(t=>t.id===trip).stays);
 ["#sort","#resultCarrier","#resultQuality"].forEach(s => $(s).onchange = () => {
   saveForm(); if (lastResults.length) render(lastResults);
 });
+$("#aiApply").onclick = parseNaturalSearch;
 drawTabs(); drawRoute(); loadAirlines().then(() => {
   // Restore the chips only after the registry has rendered them.
   if (restored) {
