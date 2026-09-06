@@ -283,7 +283,7 @@ class JobRunner:
 
     async def _run_variant_payloads(self, job_id: int, conn, spec: SearchSpec, *,
                                     airlines: list[str] | None = None,
-                                    verify_limit: int = 10) -> list[dict[str, Any]]:
+                                    verify_limit: int = 20) -> list[dict[str, Any]]:
         combos = count_combinations(spec)
         allowed = feasible_dates(spec)
         cells = sum(len(a) for a in allowed)
@@ -454,7 +454,7 @@ class JobRunner:
 
     async def _run_many(self, job_id: int, specs: Sequence[SearchSpec], *,
                         airlines: list[str] | None = None,
-                        verify_limit: int = 10) -> None:
+                        verify_limit: int = 20) -> None:
         conn = self._conn()
         conn.execute(
             "UPDATE search_job SET status='running', started_at=? WHERE id=?",
@@ -533,7 +533,7 @@ class JobRunner:
             conn.close()
 
     async def _run(self, job_id: int, spec: SearchSpec, *,
-                   airlines: list[str] | None = None, verify_limit: int = 10) -> None:
+                   airlines: list[str] | None = None, verify_limit: int = 20) -> None:
         conn = self._conn()
         conn.execute(
             "UPDATE search_job SET status='running', started_at=? WHERE id=?",
@@ -607,7 +607,22 @@ class JobRunner:
                 job_id,
                 Progress("fetching", "Hole Preiskalender", total=len(spec.legs)),
             )
-            grid, report = await build_grid(spec, sources, cache=cache, history=history)
+
+            def report_source(done: int, total: int) -> None:
+                self._emit(
+                    job_id,
+                    Progress(
+                        "fetching",
+                        f"Preiskalender {done}/{total}",
+                        done=done,
+                        total=total,
+                    ),
+                )
+
+            grid, report = await build_grid(
+                spec, sources, cache=cache, history=history,
+                on_progress=report_source,
+            )
 
             coverage = report.coverage(spec)
             self._emit(

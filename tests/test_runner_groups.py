@@ -102,8 +102,10 @@ async def test_run_many_persists_merged_variant_results(tmp_path, monkeypatch):
     runner = JobRunner(str(tmp_path / "jobs.db"))
     specs = [spec("BER"), spec("LEJ")]
     job_id = runner.create(specs)
+    seen_verify_limits = []
 
     async def fake_variant(job_id, conn, variant, *, airlines, verify_limit):
+        seen_verify_limits.append(verify_limit)
         prices = {"BER-ATH": 140.0, "LEJ-ATH": 99.0}
         return [result(variant.route, prices[variant.route], ["2026-10-01"])]
 
@@ -119,6 +121,7 @@ async def test_run_many_persists_merged_variant_results(tmp_path, monkeypatch):
     )[0]["route"] == "LEJ-ATH"
     assert runner._history[job_id][-1].phase == "done"
     assert runner._history[job_id][-1].detail["results"][0]["route"] == "LEJ-ATH"
+    assert seen_verify_limits == [20, 20]
 
 
 @pytest.mark.asyncio

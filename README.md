@@ -23,6 +23,7 @@ keine lokale Datenbank.
 - transparente Aufgabegepäck-Annahmen je Airline
 - Portainer-/VPS-Start mit optionaler Basic Auth
 - schnelle Satz-Eingabe als Vorstufe für den KI-Modus
+- parallele Kalender- und Live-Prüfungen für schnellere Suchen
 
 ## Warum das spannend ist
 

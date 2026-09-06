@@ -5,9 +5,9 @@ it. This pass asks each source for the actual departures on the dates that
 survived the optimizer, so every result ends up with times, flight numbers and
 a link to the airline's own booking page.
 
-Only the shortlist is verified. Pricing all 2,800 combinations live would be
-both slow and a good way to get blocked; pricing the best 10 costs a couple of
-dozen requests because most of them share leg-date pairs.
+Only the displayed shortlist is verified. Pricing all 2,800 combinations live
+would be both slow and a good way to get blocked; pricing the visible candidate
+pool stays manageable because most rows share leg-date pairs.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ async def verify(
     if on_progress:
         on_progress(0, total)
 
-    for index, day in sorted(wanted, key=lambda p: (p[0], p[1])):
+    async def resolve_one(index: int, day: date) -> tuple[tuple[int, date], Offer | None]:
         leg = spec.legs[index]
         best: Offer | None = None
 
@@ -139,10 +139,18 @@ async def verify(
                 if best is None or offer.price.minor < best.price.minor:
                     best = offer
 
-        resolved[(index, day)] = best
+        return (index, day), best
+
+    async def tracked_resolve(index: int, day: date) -> None:
+        nonlocal done
+        key, offer = await resolve_one(index, day)
+        resolved[key] = offer
         done += 1
         if on_progress:
             on_progress(done, total)
+
+    ordered = sorted(wanted, key=lambda p: (p[0], p[1]))
+    await asyncio.gather(*(tracked_resolve(index, day) for index, day in ordered))
 
     out: list[VerifiedItinerary] = []
     for combo in shortlist:

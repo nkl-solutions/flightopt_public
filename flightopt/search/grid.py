@@ -12,6 +12,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Callable
 
 from flightopt.domain.models import Money, SearchSpec
 from flightopt.search.dp import PriceGrid, feasible_dates
@@ -53,6 +54,7 @@ async def build_grid(
     *,
     cache: SqliteCache | None = None,
     history: SqliteHistory | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[PriceGrid, GridReport]:
     """Query every source for every leg, keeping the cheapest price per date.
 
@@ -62,14 +64,11 @@ async def build_grid(
     allowed = feasible_dates(spec)
     report = GridReport()
     grid: PriceGrid = {i: {} for i in range(len(spec.legs))}
-
-    async def fill_leg(index: int) -> None:
-        leg = spec.legs[index]
+    tasks = []
+    for index, leg in enumerate(spec.legs):
         window = allowed[index]
         if not window:
-            return
-        lo, hi = min(window), max(window)
-
+            continue
         for source in sources:
             if not getattr(source, "supports_calendar", False):
                 continue
@@ -79,7 +78,22 @@ async def build_grid(
                     source.name, leg.origin, leg.destination,
                 )
                 continue
+            tasks.append((index, source))
 
+    done = 0
+    total = len(tasks)
+    if on_progress:
+        on_progress(done, total)
+
+    async def fill_source(index: int, source) -> None:
+        nonlocal done
+        leg = spec.legs[index]
+        window = allowed[index]
+        if not window:
+            return
+        lo, hi = min(window), max(window)
+
+        try:
             key = cache_key(
                 source.name, "calendar", leg.origin, leg.destination, lo,
                 pax=spec.pax.total, cabin=spec.cabin.value, currency=spec.currency,
@@ -104,13 +118,13 @@ async def build_grid(
                 except SourceError as exc:
                     report.errors.append(f"{source.name} {leg.origin}-{leg.destination}: {exc}")
                     logger.warning("%s failed on leg %d: %s", source.name, index, exc)
-                    continue
+                    return
                 except Exception as exc:  # noqa: BLE001 - one source must not kill the search
                     report.errors.append(
                         f"{source.name} {leg.origin}-{leg.destination}: {type(exc).__name__}: {exc}"
                     )
                     logger.exception("%s crashed on leg %d", source.name, index)
-                    continue
+                    return
 
                 if cache is not None and prices:
                     await cache.put(
@@ -122,7 +136,7 @@ async def build_grid(
 
             usable = {d: m for d, m in prices.items() if d in window}
             if not usable:
-                continue
+                return
 
             report.per_source[source.name] = report.per_source.get(source.name, 0) + len(usable)
             for day, money in usable.items():
@@ -151,8 +165,12 @@ async def build_grid(
                         party_size=spec.pax.total,
                         is_estimate=True,
                     )
+        finally:
+            done += 1
+            if on_progress:
+                on_progress(done, total)
 
+    await asyncio.gather(*(fill_source(index, source) for index, source in tasks))
+    for index in range(len(spec.legs)):
         report.filled[index] = len(grid[index])
-
-    await asyncio.gather(*(fill_leg(i) for i in range(len(spec.legs))))
     return grid, report
