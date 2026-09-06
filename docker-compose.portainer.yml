@@ -5,7 +5,7 @@ services:
     container_name: flightopt
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     environment:
       FLIGHTOPT_BASIC_USER: ${FLIGHTOPT_BASIC_USER:?set in Portainer stack variables}
       FLIGHTOPT_BASIC_PASSWORD: ${FLIGHTOPT_BASIC_PASSWORD:?set in Portainer stack variables}

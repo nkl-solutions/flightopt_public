@@ -17,14 +17,22 @@ liegt.
 4. Einen HTTPS-Reverse-Proxy davor setzen, z.B. Nginx Proxy Manager, Caddy oder
    Traefik.
 
-Die Compose-Datei bindet den App-Port bewusst nur an `127.0.0.1:8000`. Damit
-ist die App auf dem VPS selbst erreichbar, aber nicht direkt offen im Internet.
-Der Reverse-Proxy reicht die Domain dann intern an `http://127.0.0.1:8000`
-weiter.
+Die Compose-Datei veroeffentlicht `8000:8000`, damit Nginx Proxy Manager auf
+demselben VPS den Dienst ohne gemeinsames Docker-Netz erreichen kann. Bis eine
+Domain eingerichtet ist, sollte der Zugriff mindestens durch Basic Auth
+geschuetzt bleiben.
 
-Fuer einen schnellen Test ohne Proxy kann die Port-Zeile auf `"8000:8000"`
-geaendert werden. Das sollte nur kurzfristig passieren, weil Basic Auth ohne
-HTTPS den Header nur base64-kodiert, nicht verschluesselt.
+Sobald eine Domain existiert, eignet sich in Nginx Proxy Manager:
+
+- Domain: `flightopt.nkl-solutions.de`
+- Scheme: `http`
+- Forward Hostname / IP: VPS-IP oder Host-Gateway
+- Forward Port: `8000`
+- SSL: Let's Encrypt, Force SSL aktivieren
+
+Langfristig kann Flightopt spaeter unter einer Deal-Seite als `/flights` oder
+eigener Subdomain laufen. Fuer den ersten privaten Handy-Zugriff ist
+`flightopt.nkl-solutions.de` am klarsten.
 
 ## Ressourcen
 
