@@ -103,6 +103,22 @@ def checked_bag_fee_minor(carriers: Sequence[str], checked_bags: int) -> int:
     return checked_bags * airline_registry.checked_bag_minor(carriers[0])
 
 
+async def preload_routes(sources: Sequence[Any], legs: Sequence[Any]) -> None:
+    tasks = []
+    for source in sources:
+        loader = getattr(source, "load_routes", None)
+        if loader is None:
+            continue
+        seen: set[str] = set()
+        for leg in legs:
+            if leg.origin in seen:
+                continue
+            seen.add(leg.origin)
+            tasks.append(loader(leg.origin))
+    if tasks:
+        await asyncio.gather(*tasks)
+
+
 class JobRunner:
     """Owns running searches and their progress streams."""
 
@@ -329,15 +345,7 @@ class JobRunner:
             )
 
         self._emit(job_id, Progress("routes", f"{spec.route}: Prüfe bediente Strecken"))
-        for source in sources:
-            loader = getattr(source, "load_routes", None)
-            if loader is None:
-                continue
-            seen: set[str] = set()
-            for leg in spec.legs:
-                if leg.origin not in seen:
-                    await loader(leg.origin)
-                    seen.add(leg.origin)
+        await preload_routes(sources, spec.legs)
 
         self._emit(
             job_id,
@@ -593,15 +601,7 @@ class JobRunner:
                 )
 
             self._emit(job_id, Progress("routes", "Prüfe, welche Strecken bedient werden"))
-            for source in sources:
-                loader = getattr(source, "load_routes", None)
-                if loader is None:
-                    continue
-                seen: set[str] = set()
-                for leg in spec.legs:
-                    if leg.origin not in seen:
-                        await loader(leg.origin)
-                        seen.add(leg.origin)
+            await preload_routes(sources, spec.legs)
 
             self._emit(
                 job_id,

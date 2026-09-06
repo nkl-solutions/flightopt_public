@@ -8,6 +8,7 @@ from datetime import date, datetime
 import pytest
 
 from flightopt.domain.models import Cabin, LegSpec, Money, Offer, Pax, SearchSpec, StayRange
+from flightopt.jobs.runner import preload_routes
 from flightopt.search.dp import Combination
 from flightopt.search.grid import build_grid
 from flightopt.search.verify import verify
@@ -76,6 +77,19 @@ class SearchSource:
         ]
 
 
+class RouteSource:
+    def __init__(self, ready: asyncio.Event, both_started: asyncio.Event):
+        self.ready = ready
+        self.both_started = both_started
+        self.seen = []
+
+    async def load_routes(self, origin: str):
+        self.seen.append(origin)
+        self.ready.set()
+        await self.both_started.wait()
+        return {"ATH"}
+
+
 def one_leg_spec() -> SearchSpec:
     return SearchSpec(
         legs=(LegSpec("BER", "ATH"),),
@@ -128,6 +142,32 @@ async def test_build_grid_queries_sources_for_same_leg_concurrently():
         )
     finally:
         releaser.cancel()
+
+
+@pytest.mark.asyncio
+async def test_preload_routes_queries_sources_concurrently():
+    first_ready = asyncio.Event()
+    second_ready = asyncio.Event()
+    both_started = asyncio.Event()
+    first = RouteSource(first_ready, both_started)
+    second = RouteSource(second_ready, both_started)
+
+    async def release_when_both_started():
+        await first_ready.wait()
+        await second_ready.wait()
+        both_started.set()
+
+    releaser = asyncio.create_task(release_when_both_started())
+    try:
+        await asyncio.wait_for(
+            preload_routes([first, second], one_leg_spec().legs),
+            timeout=0.2,
+        )
+    finally:
+        releaser.cancel()
+
+    assert first.seen == ["BER"]
+    assert second.seen == ["BER"]
 
 
 @pytest.mark.asyncio
