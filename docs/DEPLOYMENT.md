@@ -17,7 +17,7 @@ liegt.
 4. Einen HTTPS-Reverse-Proxy davor setzen, z.B. Nginx Proxy Manager, Caddy oder
    Traefik.
 
-Die Compose-Datei veroeffentlicht `8000:8000`, damit Nginx Proxy Manager auf
+Die Compose-Datei veroeffentlicht `8010:8000`, damit Nginx Proxy Manager auf
 demselben VPS den Dienst ohne gemeinsames Docker-Netz erreichen kann. Bis eine
 Domain eingerichtet ist, sollte der Zugriff mindestens durch Basic Auth
 geschuetzt bleiben.
@@ -27,7 +27,7 @@ Sobald eine Domain existiert, eignet sich in Nginx Proxy Manager:
 - Domain: `flightopt.nkl-solutions.de`
 - Scheme: `http`
 - Forward Hostname / IP: VPS-IP oder Host-Gateway
-- Forward Port: `8000`
+- Forward Port: `8010`
 - SSL: Let's Encrypt, Force SSL aktivieren
 
 Langfristig kann Flightopt spaeter unter einer Deal-Seite als `/flights` oder
