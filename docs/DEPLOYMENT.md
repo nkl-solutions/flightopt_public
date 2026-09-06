@@ -11,6 +11,8 @@ liegt.
 2. Unter Environment variables setzen:
    - `FLIGHTOPT_BASIC_USER`
    - `FLIGHTOPT_BASIC_PASSWORD`
+   - `OPENAI_API_KEY` optional leer lassen, bis der KI-Modus echte
+     Modellaufrufe nutzt.
 3. Stack starten.
 4. Einen HTTPS-Reverse-Proxy davor setzen, z.B. Nginx Proxy Manager, Caddy oder
    Traefik.
@@ -41,4 +43,3 @@ Prozess bleibt bewusst schlicht.
 `/api/health` bleibt ohne Basic Auth erreichbar, damit Docker den Container
 einfach pruefen kann. Die Oberflaeche und alle Such-Endpunkte sind geschuetzt,
 sobald User und Passwort gesetzt sind.
-

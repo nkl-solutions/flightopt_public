@@ -11,6 +11,7 @@ services:
       FLIGHTOPT_BASIC_PASSWORD: ${FLIGHTOPT_BASIC_PASSWORD:?set in Portainer stack variables}
       FLIGHTOPT_DAILY_SCANS: "1"
       FLIGHTOPT_SCAN_INTERVAL_SECONDS: "600"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MALLOC_ARENA_MAX: "2"
     volumes:
       - flightopt-data:/app/data
@@ -25,4 +26,3 @@ services:
 
 volumes:
   flightopt-data:
-
