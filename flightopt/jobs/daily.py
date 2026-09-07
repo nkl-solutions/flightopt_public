@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Sequence
+from datetime import date, datetime, timedelta
+from typing import Any, Sequence
 
 from flightopt.domain.models import Cabin, LegSpec, Pax, SearchSpec, StayRange
 from flightopt.jobs.runner import specs_to_dict
+from flightopt.storage.baseline import detect_price_signal
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +36,7 @@ def _spec_from_dict(row: dict) -> SearchSpec:
         cabin=Cabin(row.get("cabin", "economy")),
         currency=row.get("currency", "EUR"),
         checked_bags=int(row.get("checked_bags", 0)),
+        max_stops=row.get("max_stops"),
     )
 
 
@@ -123,3 +125,70 @@ def dispatch_due_profiles(conn: sqlite3.Connection, runner, *,
         )
         jobs.append({"profile_id": profile.id, "job_id": job_id, "name": profile.name})
     return jobs
+
+
+def collect_deals(conn: sqlite3.Connection, *, limit: int = 50,
+                  now: datetime | None = None) -> list[dict[str, Any]]:
+    """Der beste Treffer je abgeschlossenem Profil-Scan, mit Abstand zur Baseline.
+
+    `search_job` traegt keine Profilspalte. Die Verbindung laeuft ueber die
+    Spec-Zeichenkette: `save_profile` und `JobRunner.create` schreiben beide
+    `json.dumps(specs_to_dict(specs))`, die Strings sind also zeichengleich.
+    """
+    rows = conn.execute(
+        "SELECT j.id AS job_id, j.finished_at AS scanned_at, p.id AS profile_id, "
+        "p.name AS profile_name, r.dates AS dates, r.price_total_minor AS price_minor, "
+        "r.currency AS currency, r.is_estimate AS is_estimate, r.detail AS detail "
+        "FROM itinerary_result r "
+        "JOIN search_job j ON j.id = r.job_id "
+        "JOIN search_profile p ON p.spec = j.spec "
+        "WHERE r.rank = 1 AND j.status = 'done' "
+        "ORDER BY j.finished_at DESC, j.id DESC "
+        "LIMIT ?",
+        (limit,),
+    ).fetchall()
+
+    observed = now or datetime.now()
+    deals: list[dict[str, Any]] = []
+    for row in rows:
+        legs = [leg for leg in json.loads(row["detail"] or "[]") if isinstance(leg, dict)]
+        dates = json.loads(row["dates"])
+        if not legs or not dates:
+            continue
+        route = legs[0].get("route") or "-".join(
+            [legs[0].get("origin", "")] + [leg.get("destination", "") for leg in legs]
+        )
+        # Eine Baseline gilt je Strecke, nicht je Kette. Die erste Teilstrecke ist
+        # der einzige Schluessel, den beide Seiten sicher teilen.
+        entity_key = f"{legs[0].get('origin', '')}|{legs[0].get('destination', '')}"
+        price_minor = int(row["price_minor"])
+        signal = detect_price_signal(
+            conn,
+            entity_key,
+            date.fromisoformat(dates[0]),
+            price_minor,
+            observed_at=observed,
+            currency=row["currency"],
+        )
+        median_minor = signal.get("median_minor")
+        deals.append(
+            {
+                "job_id": int(row["job_id"]),
+                "profile_id": int(row["profile_id"]),
+                "profile": row["profile_name"],
+                "route": route,
+                "scanned_at": row["scanned_at"],
+                "dates": dates,
+                "price": price_minor / 100,
+                "currency": row["currency"],
+                "verified": not bool(row["is_estimate"]),
+                "median": median_minor / 100 if median_minor else None,
+                "deviation_pct": (
+                    round((price_minor - median_minor) / median_minor * 100, 1)
+                    if median_minor
+                    else None
+                ),
+                "signal": signal["status"],
+            }
+        )
+    return deals

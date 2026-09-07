@@ -52,7 +52,7 @@ AIRLINES: dict[str, Airline] = {
 
         Airline("W6", "Wizz Air", "#c6007e", "live", "wizz",
                 "Tagespreise aus dem Flugplan. Preise folgen der Währung des "
-                "Abflugmarkts, abweichende Währungen werden übersprungen.",
+                "Abflugmarkts und werden zum EZB-Kurs umgerechnet.",
                 checked_bag_minor=4500),
         Airline("A3", "Aegean", "#00594f", "live", "aegean",
                 "Monatskalender mit günstigsten Preisen. Liefert keine "
@@ -76,6 +76,14 @@ AIRLINES: dict[str, Airline] = {
         Airline("FI", "Icelandair", "#003366", "live", "icelandair",
                 "Tagespreise mit rund einem Jahr Vorlauf in einem Aufruf.",
                 checked_bag_minor=4000),
+        Airline("BT", "airBaltic", "#8ac53f", "live", "airbaltic",
+                "Tagespreise für rund ein Jahr in einem einzigen Aufruf. "
+                "Antwortet nur in EUR, ohne Währungsfeld.",
+                checked_bag_minor=4000),
+        Airline("B6", "JetBlue", "#003876", "live", "jetblue",
+                "Monatskalender mit günstigstem Tagespreis, Antwort in USD und "
+                "zum EZB-Kurs umgerechnet. Keine Flugzeiten.",
+                checked_bag_minor=4000),
         Airline("TK", "Turkish Airlines", "#c70a0c", "planned", "turkish",
                 "Offizielles Entwicklerportal, Registrierung nötig."),
 
@@ -90,6 +98,39 @@ AIRLINES: dict[str, Airline] = {
         Airline("LH", "Lufthansa", "#05164d", "blocked", None,
                 "Offene Schnittstelle führt keine Preise."),
         Airline("VF", "AJet", "#e4002b", "blocked", None, "Bot-Schutz."),
+        Airline("HV", "Transavia", "#00a94f", "blocked", None,
+                "Probe am 07.09.2026: kein offener Tagespreis-Endpunkt "
+                "gefunden. Beleg in docs/AIRLINE_PLAN.md.",
+                checked_bag_minor=4000),
+        Airline("V7", "Volotea", "#a51890", "blocked", None,
+                "Probe am 07.09.2026: kein offener Tagespreis-Endpunkt "
+                "gefunden. Beleg in docs/AIRLINE_PLAN.md.",
+                checked_bag_minor=4500),
+        Airline("VY", "Vueling", "#ffcc00", "blocked", None,
+                "Probe am 07.09.2026: kein offener Tagespreis-Endpunkt "
+                "gefunden. Beleg in docs/AIRLINE_PLAN.md.",
+                checked_bag_minor=4000),
+        Airline("X3", "TUIfly", "#009cdc", "blocked", None,
+                "Probe am 07.09.2026: kein offener Tagespreis-Endpunkt "
+                "gefunden. Beleg in docs/AIRLINE_PLAN.md.",
+                checked_bag_minor=3500),
+        Airline("XC", "Corendon", "#004b93", "blocked", None,
+                "Probe am 07.09.2026: kein offener Tagespreis-Endpunkt "
+                "gefunden. Beleg in docs/AIRLINE_PLAN.md.",
+                checked_bag_minor=3500),
+        Airline("DY", "Norwegian", "#d81939", "blocked", None,
+                "Kalender-Endpunkt hinter Cloudflare-Challenge, auch im Browser."),
+        Airline("LO", "LOT", "#0f2c7d", "blocked", None, "Akamai, 403 auf allen Pfaden."),
+        Airline("AY", "Finnair", "#0b1560", "blocked", None, "Akamai, API-Gateway mit Key."),
+        Airline("EI", "Aer Lingus", "#00a65a", "blocked", None,
+                "Imperva mit CAPTCHA, auch im Browser."),
+        Airline("TP", "TAP", "#00a19a", "blocked", None,
+                "Buchungs-Session 403, Kalender nur mit Session."),
+        Airline("ZG", "ZIPAIR", "#6cbe45", "blocked", None, "Cloudflare-Sperre."),
+        Airline("N0", "Norse Atlantic", "#d0021b", "blocked", None,
+                "Cloudflare Turnstile vor dem Lowfare-Endpunkt."),
+        Airline("4Y", "Discover", "#0a2a5e", "blocked", None,
+                "Nur ueber die partner-gebundene Lufthansa-API."),
     ]
 }
 
@@ -108,7 +149,9 @@ def name_of(code: str) -> str:
 
 def color_of(code: str) -> str:
     airline = get(code)
-    return airline.color if airline else "#585f73"
+    # Dieselbe neutrale Flaeche wie `tailMark` im Frontend, damit ein
+    # unbekannter Code auf beiden Wegen gleich aussieht.
+    return airline.color if airline else "#69625d"
 
 
 def checked_bag_minor(code: str) -> int:

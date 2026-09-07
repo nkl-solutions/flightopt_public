@@ -135,7 +135,9 @@ class WizzSource(HttpSource):
         """Cheapest fare per day, walking the window in allowed-size chunks.
 
         Wizz prices in the departure market's currency and ignores any currency
-        parameter, so a mismatch is reported rather than silently converted.
+        parameter. The price is returned as it arrives; converting it is the
+        grid's job, so every source states one currency and only one place in
+        the code multiplies by a rate.
         """
         out: dict[date, Money] = {}
         cursor = start
@@ -155,16 +157,16 @@ class WizzSource(HttpSource):
                 raw_date = f.get("departureDate")
                 if amount is None or not raw_date:
                     continue
-                got = price.get("currencyCode", currency)
-                if got != currency:
-                    logger.info(
-                        "wizz: %s-%s prices in %s, not %s; skipping",
-                        origin, destination, got, currency,
-                    )
-                    continue
+                got = price.get("currencyCode") or currency
                 day = datetime.fromisoformat(raw_date).date()
                 money = Money.from_major(float(amount), got)
-                if day not in out or money.minor < out[day].minor:
+                current = out.get(day)
+                # One route is priced in one market currency, so comparing minor
+                # units is safe. A mixed answer keeps the first price instead of
+                # comparing numbers that mean different things.
+                if current is None or (
+                    current.currency == money.currency and money.minor < current.minor
+                ):
                     out[day] = money
             cursor = chunk_end + timedelta(days=1)
         return {d: m for d, m in out.items() if start <= d <= end}
@@ -200,9 +202,7 @@ class WizzSource(HttpSource):
             amount = price.get("amount")
             if amount is None:
                 continue
-            got = price.get("currencyCode", currency)
-            if got != currency:
-                continue
+            got = price.get("currencyCode") or currency
             raw_date = f.get("departureDate")
             if not raw_date or datetime.fromisoformat(raw_date).date() != day:
                 continue
@@ -238,5 +238,7 @@ class WizzSource(HttpSource):
                     is_estimate=False,
                 )
             )
-        offers.sort(key=lambda o: o.price.minor)
+        # Group by currency first, exactly as `calendar_range` does: comparing
+        # minor units across currencies would call 20 PLN cheaper than 12 EUR.
+        offers.sort(key=lambda o: (o.price.currency, o.price.minor))
         return offers

@@ -104,6 +104,9 @@ class HttpSource:
     supports_search: bool = False
     indicative: bool = False
     """True when this source's prices are a guide rather than a bookable fare."""
+    accepts_max_stops: bool = False
+    """True when `calendar_range` takes a `max_stops` keyword. Only the
+    collectors do; an airline calendar has no such knob."""
     per_minute: int = 20
     impersonate: str = "chrome"
 

@@ -1,0 +1,2154 @@
+{
+  "success": true,
+  "data": [
+    {
+      "price": null,
+      "updatedPrice": null,
+      "date": "2026-09-07",
+      "isDirect": true
+    },
+    {
+      "price": 249.99,
+      "updatedPrice": null,
+      "date": "2026-09-08",
+      "isDirect": true
+    },
+    {
+      "price": 163.99,
+      "updatedPrice": null,
+      "date": "2026-09-09",
+      "isDirect": true
+    },
+    {
+      "price": 163.99,
+      "updatedPrice": null,
+      "date": "2026-09-10",
+      "isDirect": true
+    },
+    {
+      "price": 221.99,
+      "updatedPrice": null,
+      "date": "2026-09-11",
+      "isDirect": true
+    },
+    {
+      "price": 148.99,
+      "updatedPrice": null,
+      "date": "2026-09-12",
+      "isDirect": true
+    },
+    {
+      "price": 151.99,
+      "updatedPrice": null,
+      "date": "2026-09-13",
+      "isDirect": true
+    },
+    {
+      "price": 148.99,
+      "updatedPrice": null,
+      "date": "2026-09-14",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2026-09-15",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2026-09-16",
+      "isDirect": true
+    },
+    {
+      "price": 249.99,
+      "updatedPrice": null,
+      "date": "2026-09-17",
+      "isDirect": true
+    },
+    {
+      "price": 221.99,
+      "updatedPrice": null,
+      "date": "2026-09-18",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2026-09-19",
+      "isDirect": true
+    },
+    {
+      "price": 118.99,
+      "updatedPrice": null,
+      "date": "2026-09-20",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2026-09-21",
+      "isDirect": true
+    },
+    {
+      "price": 105.99,
+      "updatedPrice": null,
+      "date": "2026-09-22",
+      "isDirect": true
+    },
+    {
+      "price": 105.99,
+      "updatedPrice": null,
+      "date": "2026-09-23",
+      "isDirect": true
+    },
+    {
+      "price": 132.99,
+      "updatedPrice": null,
+      "date": "2026-09-24",
+      "isDirect": true
+    },
+    {
+      "price": 191.99,
+      "updatedPrice": null,
+      "date": "2026-09-25",
+      "isDirect": true
+    },
+    {
+      "price": 148.99,
+      "updatedPrice": null,
+      "date": "2026-09-26",
+      "isDirect": true
+    },
+    {
+      "price": 118.99,
+      "updatedPrice": null,
+      "date": "2026-09-27",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2026-09-28",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-09-29",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-09-30",
+      "isDirect": true
+    },
+    {
+      "price": 118.99,
+      "updatedPrice": null,
+      "date": "2026-10-01",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2026-10-02",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-03",
+      "isDirect": true
+    },
+    {
+      "price": 118.99,
+      "updatedPrice": null,
+      "date": "2026-10-04",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-05",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-06",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-07",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-08",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2026-10-09",
+      "isDirect": true
+    },
+    {
+      "price": 105.99,
+      "updatedPrice": null,
+      "date": "2026-10-10",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2026-10-11",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-12",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-13",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-14",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-15",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2026-10-16",
+      "isDirect": true
+    },
+    {
+      "price": 184.99,
+      "updatedPrice": null,
+      "date": "2026-10-17",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2026-10-18",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-19",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-20",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-21",
+      "isDirect": true
+    },
+    {
+      "price": 105.99,
+      "updatedPrice": null,
+      "date": "2026-10-22",
+      "isDirect": true
+    },
+    {
+      "price": 184.99,
+      "updatedPrice": null,
+      "date": "2026-10-23",
+      "isDirect": true
+    },
+    {
+      "price": 148.99,
+      "updatedPrice": null,
+      "date": "2026-10-24",
+      "isDirect": true
+    },
+    {
+      "price": 163.99,
+      "updatedPrice": null,
+      "date": "2026-10-25",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-26",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-27",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-28",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-29",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-30",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-10-31",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-01",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-02",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-03",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-04",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-05",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-06",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-07",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-08",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-09",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-10",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-11",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-12",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-13",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-14",
+      "isDirect": true
+    },
+    {
+      "price": 105.99,
+      "updatedPrice": null,
+      "date": "2026-11-15",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-16",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-17",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-18",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-19",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-20",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-21",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-22",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-23",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-24",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-25",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-26",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-27",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-28",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-29",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-11-30",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-01",
+      "isDirect": true
+    },
+    {
+      "price": 105.99,
+      "updatedPrice": null,
+      "date": "2026-12-02",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-03",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-04",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-05",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-06",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-07",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-08",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-09",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-10",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-11",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-12",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-13",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-14",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-15",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-16",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-17",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-18",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2026-12-19",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2026-12-20",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-21",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-22",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2026-12-23",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-24",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-25",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2026-12-26",
+      "isDirect": true
+    },
+    {
+      "price": 163.99,
+      "updatedPrice": null,
+      "date": "2026-12-27",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2026-12-28",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2026-12-29",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2026-12-30",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2026-12-31",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-01",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-02",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-03",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-04",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-05",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-06",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-07",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-08",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-09",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-10",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-11",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-12",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-13",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-14",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-15",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-16",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-17",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-18",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-19",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-20",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-21",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-22",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-23",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-24",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-25",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-26",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-27",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-28",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-29",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-30",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-01-31",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-01",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-02",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-03",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-04",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-05",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-06",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-07",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-08",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-09",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-10",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-11",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-12",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-13",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-14",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-15",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-16",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-17",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-18",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-19",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-20",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-21",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-22",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-23",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-24",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-25",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-26",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-27",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-02-28",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-01",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-02",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-03",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-04",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-03-05",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-03-06",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-07",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-08",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-09",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-10",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-11",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-12",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-13",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-14",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-15",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-16",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-17",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-18",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-19",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-03-20",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-03-21",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-03-22",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-03-23",
+      "isDirect": true
+    },
+    {
+      "price": 148.99,
+      "updatedPrice": null,
+      "date": "2027-03-24",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-03-25",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-03-26",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-03-27",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-03-28",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-03-29",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-03-30",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-03-31",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-01",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-02",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-03",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-04-04",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-05",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-06",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-07",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-08",
+      "isDirect": true
+    },
+    {
+      "price": 105.99,
+      "updatedPrice": null,
+      "date": "2027-04-09",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-10",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-04-11",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-12",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-13",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-14",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-15",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-16",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-17",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-04-18",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-19",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-20",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-21",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-22",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-23",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-24",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-04-25",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-26",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-27",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-28",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-04-29",
+      "isDirect": true
+    },
+    {
+      "price": 105.99,
+      "updatedPrice": null,
+      "date": "2027-04-30",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-01",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-05-02",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-03",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-05-04",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-05-05",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-05-06",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-05-07",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-08",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-05-09",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-10",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-11",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-12",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-05-13",
+      "isDirect": true
+    },
+    {
+      "price": 135.99,
+      "updatedPrice": null,
+      "date": "2027-05-14",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-05-15",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-05-16",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-05-17",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-18",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-19",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-05-20",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-05-21",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-22",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-05-23",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-24",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-25",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-26",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-27",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-28",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-29",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-05-30",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-05-31",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-06-01",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-06-02",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-06-03",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-04",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-06-05",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-06",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-06-07",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-06-08",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-06-09",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-06-10",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-11",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-06-12",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-13",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-06-14",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-06-15",
+      "isDirect": true
+    },
+    {
+      "price": 105.99,
+      "updatedPrice": null,
+      "date": "2027-06-16",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-17",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-18",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-19",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-20",
+      "isDirect": true
+    },
+    {
+      "price": 105.99,
+      "updatedPrice": null,
+      "date": "2027-06-21",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-06-22",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-06-23",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-24",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-25",
+      "isDirect": true
+    },
+    {
+      "price": 166.99,
+      "updatedPrice": null,
+      "date": "2027-06-26",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-27",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-28",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-06-29",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-06-30",
+      "isDirect": true
+    },
+    {
+      "price": 148.99,
+      "updatedPrice": null,
+      "date": "2027-07-01",
+      "isDirect": true
+    },
+    {
+      "price": 135.99,
+      "updatedPrice": null,
+      "date": "2027-07-02",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2027-07-03",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-04",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-05",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-06",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-07-07",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-08",
+      "isDirect": true
+    },
+    {
+      "price": 135.99,
+      "updatedPrice": null,
+      "date": "2027-07-09",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2027-07-10",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-11",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-07-12",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-13",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-07-14",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2027-07-15",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2027-07-16",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-17",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-18",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-07-19",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2027-07-20",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-07-21",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2027-07-22",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-23",
+      "isDirect": true
+    },
+    {
+      "price": 148.99,
+      "updatedPrice": null,
+      "date": "2027-07-24",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-25",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-07-26",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-27",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-07-28",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-29",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-07-30",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2027-07-31",
+      "isDirect": true
+    },
+    {
+      "price": 134.99,
+      "updatedPrice": null,
+      "date": "2027-08-01",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-08-02",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-08-03",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-08-04",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-08-05",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-08-06",
+      "isDirect": true
+    },
+    {
+      "price": 121.99,
+      "updatedPrice": null,
+      "date": "2027-08-07",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-08-08",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-09",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-10",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-11",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-12",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-13",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-14",
+      "isDirect": true
+    },
+    {
+      "price": 113.99,
+      "updatedPrice": null,
+      "date": "2027-08-15",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-16",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-17",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-18",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-19",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-20",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-21",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-22",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-23",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-24",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-25",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-26",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-27",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-28",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-29",
+      "isDirect": true
+    },
+    {
+      "price": 96.99,
+      "updatedPrice": null,
+      "date": "2027-08-30",
+      "isDirect": true
+    }
+  ],
+  "error": ""
+}

@@ -14,6 +14,7 @@ import base64
 import binascii
 import json
 import logging
+import mimetypes
 import os
 import secrets
 from contextlib import asynccontextmanager
@@ -24,17 +25,23 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from flightopt.domain import airlines as airline_registry
 from flightopt.domain import airports as airport_registry
 from flightopt.domain.models import Cabin, LegSpec, Pax, SearchSpec, StayRange
 from flightopt.domain.natural_search import parse_search_text
-from flightopt.jobs.daily import dispatch_due_profiles, due_profiles, save_profile
+from flightopt.jobs.daily import (
+    collect_deals,
+    dispatch_due_profiles,
+    due_profiles,
+    save_profile,
+)
 from flightopt.jobs.runner import JobRunner
 from flightopt.jobs.scheduler import DailyScanScheduler
 from flightopt.search.dp import count_combinations, feasible_dates
-from flightopt.sources.ryanair import RyanairSource
+from flightopt.sources.registry import build_sources
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +126,17 @@ async def require_basic_auth(request: Request, call_next):
     )
 
 
+# Die Systemtabelle fuer MIME-Typen ist je nach Plattform anders bestueckt: Linux meldet
+# fuer .js gern application/javascript und .woff2 kennt Python gar nicht. Beides hier
+# festnageln, damit der Mount ueberall dieselben Content-Types liefert.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("font/woff2", ".woff2")
+
+# Die HTTP-Middleware umschliesst auch Mounts, CSS, JS und Fonts gehen daher nur mit
+# gueltigem Basic-Auth heraus.
+app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+
+
 class SearchRequest(BaseModel):
     airports: list[str] = Field(min_length=1)
     window_start: date
@@ -130,6 +148,8 @@ class SearchRequest(BaseModel):
     cabin: str = "economy"
     currency: str = "EUR"
     checked_bags: int = Field(default=0, ge=0, le=2)
+    max_stops: int | None = Field(default=None, ge=0, le=2)
+    """None = automatisch aus der Streckenlaenge."""
     airlines: list[str] = Field(default_factory=list)
     """Restrict to these carrier codes. Empty means every source we have."""
 
@@ -155,9 +175,8 @@ class SearchRequest(BaseModel):
 
     def to_specs(self) -> list[SearchSpec]:
         stops = self._stops()
+        airport_registry.check_variant_budget(stops)
         variants = list(product(*(airport_registry.expand_code(code) for code in stops)))
-        if len(variants) > 100:
-            raise ValueError("Flughafen-Gruppen ergeben zu viele Routenvarianten.")
 
         specs: list[SearchSpec] = []
         for concrete in variants:
@@ -192,6 +211,7 @@ class SearchRequest(BaseModel):
             cabin=Cabin(self.cabin),
             currency=self.currency,
             checked_bags=self.checked_bags,
+            max_stops=self.max_stops,
         )
 
     def to_spec(self) -> SearchSpec:
@@ -248,6 +268,8 @@ async def estimate(req: SearchRequest) -> dict[str, Any]:
     """Size the search before running it, so the form can warn about a huge window."""
     try:
         specs = req.to_specs()
+    except airport_registry.TooManyVariants as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     allowed_by_spec = [feasible_dates(spec) for spec in specs]
@@ -262,16 +284,32 @@ async def estimate(req: SearchRequest) -> dict[str, Any]:
 
 @app.get("/api/routes/{origin}")
 async def routes(origin: str) -> dict[str, Any]:
-    """Destinations the sources can actually price from this airport."""
-    source = RyanairSource()
-    dests = await source.load_routes(origin.upper())
-    return {"origin": origin.upper(), "destinations": sorted(dests)}
+    """Destinations the sources can actually price from this airport.
+
+    Jede Quelle, die ihr Streckennetz veroeffentlicht, traegt bei; eine, die
+    scheitert, faellt weg, statt die Liste fuer alle anderen zu leeren.
+    """
+    code = origin.upper()
+    loaders = [
+        source.load_routes(code)
+        for source in build_sources(None, env=os.environ)
+        if hasattr(source, "load_routes")
+    ]
+    destinations: set[str] = set()
+    for result in await asyncio.gather(*loaders, return_exceptions=True):
+        if isinstance(result, BaseException):
+            logger.warning("routes: eine Quelle scheiterte fuer %s: %s", code, result)
+            continue
+        destinations |= set(result)
+    return {"origin": code, "destinations": sorted(destinations)}
 
 
 @app.post("/api/search")
 async def start_search(req: SearchRequest) -> dict[str, Any]:
     try:
         specs = req.to_specs()
+    except airport_registry.TooManyVariants as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     job_id = runner.create(specs)
@@ -284,6 +322,8 @@ async def start_search(req: SearchRequest) -> dict[str, Any]:
 async def save_profile_endpoint(req: ProfileRequest) -> dict[str, Any]:
     try:
         specs = req.to_specs()
+    except airport_registry.TooManyVariants as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     conn = runner._conn()
@@ -337,6 +377,16 @@ async def dispatch_profiles_endpoint() -> dict[str, Any]:
         conn.close()
 
 
+@app.get("/api/deals")
+async def deals(limit: int = 50) -> dict[str, Any]:
+    """Die juengsten Profil-Treffer mit Abstand zur Baseline."""
+    conn = runner._conn()
+    try:
+        return {"deals": collect_deals(conn, limit=max(1, min(200, limit)))}
+    finally:
+        conn.close()
+
+
 @app.get("/api/scanner")
 async def scheduler_status_endpoint() -> dict[str, Any]:
     return {
@@ -358,6 +408,14 @@ async def job(job_id: int) -> dict[str, Any]:
     return result
 
 
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: int) -> dict[str, Any]:
+    """Bricht eine laufende Suche ab. Der Runner prueft das Flag zwischen den Phasen."""
+    if runner.status(job_id) is None:
+        raise HTTPException(status_code=404, detail="Unbekannter Job")
+    return {"job_id": job_id, "status": runner.cancel(job_id)}
+
+
 @app.get("/api/jobs/{job_id}/events")
 async def events(job_id: int) -> StreamingResponse:
     if runner.status(job_id) is None:
@@ -370,10 +428,14 @@ async def events(job_id: int) -> StreamingResponse:
             # its stored outcome instead of waiting for events that never come.
             if not runner.has_history(job_id):
                 done = runner.result(job_id)
-                if done and done["status"] in ("done", "failed"):
+                if done and done["status"] in ("done", "failed", "cancelled"):
+                    if done["status"] == "cancelled":
+                        message = "Suche abgebrochen"
+                    else:
+                        message = done.get("error") or "fertig"
                     payload = {
                         "phase": done["status"],
-                        "message": done.get("error") or "fertig",
+                        "message": message,
                         "detail": {"results": done["results"]},
                     }
                     yield f"data: {json.dumps(payload)}\n\n"
@@ -385,7 +447,7 @@ async def events(job_id: int) -> StreamingResponse:
                     yield ": keepalive\n\n"
                     continue
                 yield f"data: {progress.to_json()}\n\n"
-                if progress.phase in ("done", "failed"):
+                if progress.phase in ("done", "failed", "cancelled"):
                     return
         finally:
             runner.unsubscribe(job_id, queue)

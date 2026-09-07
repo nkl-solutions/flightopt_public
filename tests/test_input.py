@@ -220,7 +220,7 @@ def test_aliases_point_at_real_airports():
 
 def test_live_airlines_are_the_ones_with_adapters():
     live = {a.code for a in airlines.LIVE if a.kind == "airline"}
-    assert live == {"FR", "W6", "A3", "EW", "DE", "DI", "BA", "FI"}
+    assert live == {"FR", "W6", "A3", "EW", "DE", "DI", "BA", "FI", "BT", "B6"}
 
 
 def test_comparison_source_is_not_an_airline():
@@ -277,17 +277,10 @@ def test_condor_adapter_also_covers_marabu():
 
 def test_every_live_airline_is_reachable_by_a_filter():
     """No airline may be offered in the UI that a filter cannot select."""
-    from flightopt.sources.aegean import AegeanSource
-    from flightopt.sources.britishairways import BritishAirwaysSource
-    from flightopt.sources.condor import CondorSource
-    from flightopt.sources.eurowings import EurowingsSource
-    from flightopt.sources.icelandair import IcelandairSource
-    from flightopt.sources.ryanair import RyanairSource
-    from flightopt.sources.wizz import WizzSource
+    from flightopt.sources.registry import build_sources
 
     covered: set[str] = set()
-    for src in (RyanairSource(), WizzSource(), AegeanSource(), CondorSource(),
-                EurowingsSource(), BritishAirwaysSource(), IcelandairSource()):
+    for src in build_sources():
         covered |= set(src.carriers)
 
     offered = {a.code for a in airlines.LIVE if a.kind == "airline"}

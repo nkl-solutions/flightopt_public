@@ -1,0 +1,421 @@
+/* Selbst gehostet, OFL. Kein externer Request, das ist eine Projektregel.
+   Subset latin + latin-ext in je einer Datei pro Gewicht. */
+@font-face{
+  font-family:"Archivo Narrow";font-style:normal;font-weight:400;font-display:swap;
+  src:url("/static/fonts/archivo-narrow-400.woff2") format("woff2");
+}
+@font-face{
+  font-family:"Archivo Narrow";font-style:normal;font-weight:500;font-display:swap;
+  src:url("/static/fonts/archivo-narrow-500.woff2") format("woff2");
+}
+@font-face{
+  font-family:"Archivo Narrow";font-style:normal;font-weight:700;font-display:swap;
+  src:url("/static/fonts/archivo-narrow-700.woff2") format("woff2");
+}
+@font-face{
+  font-family:"Sometype Mono";font-style:normal;font-weight:400;font-display:swap;
+  src:url("/static/fonts/sometype-mono-400.woff2") format("woff2");
+}
+@font-face{
+  font-family:"Sometype Mono";font-style:normal;font-weight:500;font-display:swap;
+  src:url("/static/fonts/sometype-mono-500.woff2") format("woff2");
+}
+/* flightopt: Kursbuch.
+   Papier, drei Linienstaerken, eine Signalfarbe, Zahlen in Mono mit tabular-nums,
+   damit Preisspalten untereinander stehen wie in einem Fahrplan.
+   Autorenwert ist OKLCH, der Hex daneben ist der Fallback fuer die Lesbarkeit
+   dieses Codes und der gerechnete Kontrast gegen --bg. */
+:root{
+  /* Flaechen */
+  --bg:oklch(97.5% 0.006 90);          /* #f8f7f2  Papier */
+  --paper:oklch(99.5% 0.004 90);       /* #fefdfa  erhoehte Flaeche, Dropdown, Sticky-Kopf */
+  --wash:oklch(95.5% 0.006 90);        /* #f2f0ec  Hover, offene Zeile */
+
+  /* Schrift */
+  --ink:oklch(22% 0.010 60);           /* #1e1a16  16.13:1 auf --bg */
+  --ink-muted:oklch(42% 0.012 60);     /* #524c47   7.90:1 auf --bg */
+  --ink-subtle:oklch(50% 0.012 60);    /* #69625d   5.60:1 auf --bg, 5.28:1 auf --wash */
+
+  /* Linien, perzeptiv gleichabstaendig in L: 86, 74, 62 */
+  --rule-1:oklch(86% 0.008 90);        /* #d3d1cb  Haarlinie zwischen Zeilen */
+  --rule-2:oklch(74% 0.008 90);        /* #adaba5  Blocktrenner */
+  --rule-3:oklch(62% 0.008 90);        /* #888681  3.39:1, Rand von Bedienelementen */
+
+  /* Signal: nur Favorit-Markierung und Suchen-Button */
+  --signal:oklch(48% 0.190 30);        /* #b01003  6.71:1 auf --bg, Weiss darauf 7.21:1 */
+  --signal-fg:#ffffff;
+
+  /* Status */
+  --ok:oklch(45% 0.110 150);           /* #196632  6.58:1 */
+  --warn:oklch(50% 0.110 75);          /* #875800  5.69:1 */
+  --err:oklch(47% 0.160 25);           /* #a12628  6.90:1 */
+
+  /* Typo: fuenf Stufen, mehr gibt es nicht */
+  --sans:"Archivo Narrow",ui-sans-serif,system-ui,"Segoe UI",sans-serif;
+  --mono:"Sometype Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --t12:12px; --t14:14px; --t16:16px; --t21:21px; --t28:28px;
+
+  /* Raum: 4-pt-Raster */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px;
+  --s5:24px; --s6:32px; --s7:48px; --s8:64px;
+  --gut:clamp(16px,3.5vw,40px);
+
+  /* Form */
+  --r:2px;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:var(--t14);
+  line-height:1.45;-webkit-font-smoothing:antialiased}
+::selection{background:var(--wash)}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
+.wrap{max-width:1180px;margin:0 auto;padding:0 var(--gut) var(--s8)}
+
+/* Zahlen, Codes und Daten immer Mono mit gleichbreiten Ziffern. */
+.num,.mono,input[type=date],input[type=number],
+#progresscount,.hop .code,.ac .c,.tail,.sum,.fare,.legdays{
+  font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+
+:where(a,button,input,select,textarea,summary,[tabindex]):focus-visible{
+  outline:2px solid var(--ink);outline-offset:1px}
+
+/* --- Kopf ---------------------------------------------------------------- */
+.mast{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s5);
+  padding:var(--s6) 0 var(--s3);border-bottom:1px solid var(--ink);flex-wrap:wrap}
+.mark{font-size:var(--t28);letter-spacing:-.03em}
+.mark span{color:var(--signal)}
+.tagline{margin:0;font-size:var(--t16);color:var(--ink-subtle);max-width:46ch}
+
+/* --- Reiseart: Segmented Control aus Radios ------------------------------ */
+.seg{margin:var(--s5) 0 var(--s4);padding:0;border:0}
+.seg legend{padding:0;margin-bottom:var(--s2)}
+.segset{display:inline-flex;border:1px solid var(--rule-3);border-radius:var(--r)}
+.segopt{position:relative;display:block}
+.segopt input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.segopt span{display:block;padding:var(--s2) var(--s4);font-size:var(--t14);
+  color:var(--ink-subtle);border-right:1px solid var(--rule-3);white-space:nowrap}
+.segopt:last-child span{border-right:0}
+.segopt input:checked + span{background:var(--ink);color:var(--bg);font-weight:500}
+.segopt input:focus-visible{outline:0}
+.segopt input:focus-visible + span{outline:2px solid var(--ink);outline-offset:2px}
+.segopt:hover input:not(:checked) + span{background:var(--wash);color:var(--ink)}
+
+/* --- Formular ------------------------------------------------------------ */
+.panel{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
+  gap:var(--s5) var(--s7);padding-bottom:var(--s5)}
+@media(max-width:840px){.panel{grid-template-columns:1fr}}
+.lab{display:block;font-size:var(--t12);font-weight:500;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-subtle);margin-bottom:var(--s1)}
+
+/* Ein Muster fuer jede Rueckmeldung. Ton steuert nur die Farbe. */
+.msg{display:block;margin:var(--s1) 0 0;font-size:var(--t12);min-height:1.2em;
+  color:var(--ink-subtle)}
+.msg[data-tone="ok"]{color:var(--ok)}
+.msg[data-tone="warn"]{color:var(--warn)}
+.msg[data-tone="err"]{color:var(--err)}
+.msg b{color:var(--ink);font-weight:500}
+
+/* Aufklappbereiche: Freitext, Optionen, Airlines. */
+.fold{margin-top:var(--s4);border-top:1px solid var(--rule-1)}
+.fold>summary{list-style:none;cursor:pointer;padding:var(--s3) 0;font-size:var(--t16);
+  color:var(--ink-muted);display:flex;align-items:center;gap:var(--s2)}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::before{content:"+";font-family:var(--mono);color:var(--ink-subtle);
+  width:1em;text-align:center}
+.fold[open]>summary::before{content:"-"}
+.fold>summary:hover{color:var(--ink)}
+.foldbody{padding:0 0 var(--s4)}
+
+/* --- Freitext und Sprache ------------------------------------------------ */
+.quickroute{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:var(--s2)}
+.quickroute textarea{min-height:44px;resize:vertical;padding:var(--s2) var(--s3);
+  background:var(--paper);border:1px solid var(--rule-3);border-radius:var(--r);
+  font-size:var(--t14);color:var(--ink)}
+.quickactions{display:flex;gap:var(--s2);align-items:stretch}
+.quickroute button{padding:0 var(--s4);background:var(--ink);color:var(--bg);border:0;
+  border-radius:var(--r);font-size:var(--t14);font-weight:500;cursor:pointer}
+.quickroute button:hover{background:var(--ink-muted)}
+.quickroute button:disabled{background:var(--rule-2);color:var(--ink-subtle);cursor:not-allowed}
+.quickroute .voicebtn{display:flex;align-items:center;gap:var(--s2);background:var(--paper);
+  color:var(--ink);border:1px solid var(--rule-3);padding:0 var(--s3);white-space:nowrap}
+.quickroute .voicebtn:hover{background:var(--wash);color:var(--ink)}
+.quickroute .voicebtn.on{border-color:var(--ink);background:var(--wash);font-weight:500}
+.quickroute .voicebtn:disabled{background:var(--wash);color:var(--ink-subtle);
+  border-color:var(--rule-1);cursor:not-allowed}
+.voicemark{position:relative;width:10px;height:14px;border:1.5px solid currentColor;border-radius:7px}
+.voicemark:before{content:"";position:absolute;left:50%;bottom:-6px;width:12px;height:7px;
+  transform:translateX(-50%);border:1.5px solid currentColor;border-top:0;border-radius:0 0 8px 8px}
+.voicemark:after{content:"";position:absolute;left:50%;bottom:-10px;width:12px;height:1.5px;
+  transform:translateX(-50%);background:currentColor}
+.quickroute .msg{grid-column:1/-1}
+@media(max-width:700px){
+  .quickroute{grid-template-columns:1fr}
+  .quickactions{display:grid;grid-template-columns:1fr 1fr}
+  .quickroute button{height:38px;justify-content:center}
+}
+
+/* --- Route --------------------------------------------------------------- */
+.route{display:flex;align-items:flex-start;gap:var(--s2);flex-wrap:wrap}
+.hop{position:relative;display:flex;align-items:center;gap:var(--s1);cursor:grab}
+.hop>input{width:190px;padding:var(--s2) var(--s3) var(--s2) 20px;background:var(--paper);
+  color:var(--ink);border:1px solid var(--rule-3);border-radius:var(--r)}
+.hop>input::placeholder{color:var(--ink-subtle)}
+.hop .code{position:absolute;right:52px;top:11px;font-size:var(--t12);font-weight:500;
+  color:var(--ink-muted);pointer-events:none;background:var(--paper);padding-left:var(--s1)}
+.hop.nokill .code{right:var(--s3)}
+.hop .grip{position:absolute;left:var(--s1);top:50%;transform:translateY(-50%);
+  width:10px;height:16px;cursor:grab;
+  background:radial-gradient(circle,var(--rule-2) 1px,transparent 1px) 0 0/5px 5px}
+/* Der Vorschlag hinter dem Getippten muss lesbar sein, sonst tippt niemand Tab.
+   --ink-subtle liegt bei 5.60:1 auf --bg. */
+.hop .ghost{position:absolute;left:20px;top:10px;color:var(--ink-subtle);pointer-events:none;
+  white-space:pre;overflow:hidden;max-width:150px}
+.hop .ghost i{font-style:normal;color:transparent}
+.hop.drag{opacity:.4;cursor:grabbing}
+.hop.over>input{border-color:var(--ink);border-left-width:3px}
+/* 44 x 44, immer sichtbar, kein Hover-only. */
+.hop .kill{flex:none;width:44px;height:44px;line-height:1;background:var(--paper);
+  border:1px solid var(--rule-3);border-radius:var(--r);color:var(--ink-muted);
+  font-size:var(--t16);cursor:pointer;padding:0}
+.hop .kill:hover{border-color:var(--err);color:var(--err)}
+/* Trenner zwischen Routenfeldern: reine Dekoration, kein Pfeil, kein Textknoten. */
+.sep{align-self:center;color:var(--rule-2);user-select:none}
+.sep::before{content:"-"}
+.addhop{align-self:center;height:44px;padding:0 var(--s3);background:none;
+  border:1px dashed var(--rule-2);border-radius:var(--r);font-size:var(--t14);
+  color:var(--ink-subtle);cursor:pointer}
+.addhop:hover{border-color:var(--ink);color:var(--ink)}
+
+/* Vorschlagsliste: 1-px-Linie statt Schatten. */
+.ac{position:absolute;z-index:30;top:calc(100% + 2px);left:0;width:310px;max-height:264px;
+  overflow:auto;background:var(--paper);border:1px solid var(--rule-3);
+  border-radius:var(--r);display:none}
+.ac.on{display:block}
+.ac b{display:flex;align-items:baseline;gap:var(--s2);padding:var(--s2) var(--s3);
+  cursor:pointer;font-weight:400;border-bottom:1px solid var(--rule-1)}
+.ac b:last-child{border-bottom:0}
+.ac b[aria-selected="true"],.ac b:hover{background:var(--wash)}
+.ac .c{font-size:var(--t12);font-weight:500;color:var(--ink-muted);min-width:34px}
+.ac .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:var(--t14)}
+.ac .k{font-size:var(--t12);color:var(--ink-subtle);white-space:nowrap}
+.ac .none{padding:var(--s3);font-size:var(--t14);color:var(--ink-subtle);margin:0}
+
+/* --- Felder -------------------------------------------------------------- */
+.row{display:flex;gap:var(--s3);flex-wrap:wrap}
+.row>div{flex:1;min-width:130px}
+input[type=date],input[type=number],input[type=text],select{width:100%;
+  padding:var(--s2) var(--s3);background:var(--paper);color:var(--ink);
+  border:1px solid var(--rule-3);border-radius:var(--r)}
+input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
+  border-color:var(--rule-1);cursor:not-allowed}
+.stayrow{margin-top:var(--s4)}
+.stayrow.off{opacity:.55}
+.stayhead{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s3);
+  margin-bottom:var(--s1)}
+.stayhint{font-size:var(--t12);color:var(--ink-subtle)}
+.staylist{display:grid;gap:var(--s2)}
+.stayitem{display:grid;grid-template-columns:minmax(96px,1fr) minmax(78px,.7fr) minmax(78px,.7fr);
+  gap:var(--s2);align-items:end}
+.stayname{min-width:0;font-size:var(--t14);color:var(--ink-muted);padding:var(--s2) 0 var(--s3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:520px){
+  .stayitem{grid-template-columns:1fr 1fr}
+  .stayname{grid-column:1/-1;padding-bottom:0}
+}
+
+/* --- Airlines ------------------------------------------------------------ */
+.chips{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s1)}
+.chip{display:inline-flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s3);
+  background:var(--paper);border:1px solid var(--rule-3);border-radius:var(--r);
+  font-size:var(--t14);cursor:pointer}
+.chip:hover{border-color:var(--ink)}
+.chip[aria-pressed=true]{border-color:var(--ink);background:var(--wash);font-weight:500}
+.chip:disabled{cursor:not-allowed;opacity:.55}
+.tail{width:22px;height:22px;border-radius:var(--r);display:inline-grid;place-items:center;
+  flex:none;font-size:10px;font-weight:500;letter-spacing:-.02em;font-style:normal}
+.chip .st{font-size:var(--t12);color:var(--ink-subtle);font-weight:400}
+.hint{font-size:var(--t12);color:var(--ink-subtle);margin:var(--s3) 0 0;max-width:90ch}
+
+/* --- Aktionen ------------------------------------------------------------ */
+.actions{display:flex;align-items:center;gap:var(--s5);padding:var(--s5) 0;
+  border-top:1px solid var(--rule-2);flex-wrap:wrap}
+.go{min-height:44px;padding:0 var(--s6);background:var(--signal);color:var(--signal-fg);
+  border:0;border-radius:var(--r);font-size:var(--t16);font-weight:700;cursor:pointer}
+.go:hover{background:oklch(42% 0.19 30)}
+.go:disabled{background:var(--rule-2);color:var(--ink-muted);cursor:not-allowed}
+.sizing{margin:0;font-size:var(--t14)}
+.routeglance{margin:0 0 var(--s5);padding:var(--s3);border:1px solid var(--rule-1);
+  background:var(--paper);border-radius:var(--r);font-size:var(--t14);color:var(--ink-muted)}
+.routeglance b{color:var(--ink);font-weight:500}
+.routeglance i{font-style:normal;color:var(--ink-subtle)}
+
+/* Gespeicherte Scans: eigener, nachgeordneter Bereich unter den Ergebnissen.
+   Profil und Scanner sitzen in seiner Kopfzeile, weil beide nur hier etwas
+   bewirken. */
+.deals{margin-top:var(--s7);padding-top:var(--s4);border-top:1px solid var(--rule-2)}
+.deals h2{font-size:var(--t12);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-subtle);font-weight:500}
+.dealshead{display:grid;gap:var(--s2);padding-bottom:var(--s3);
+  border-bottom:1px solid var(--rule-1)}
+#dealstable td.mono{font-family:var(--mono);font-size:var(--t12);color:var(--ink-muted)}
+#dealstable td[data-signal="cheap"]{color:var(--ok);font-weight:500}
+#dealstable td[data-signal="expensive"]{color:var(--warn)}
+#dealstable .c-price{font-size:var(--t21)}
+.saveprofile{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)}
+.saveprofile .lab{margin:0}
+.saveprofile input{width:200px}
+.saveprofile button,.scanbar button{min-height:36px;padding:0 var(--s3);background:var(--paper);
+  border:1px solid var(--rule-3);border-radius:var(--r);font-size:var(--t14);
+  color:var(--ink-muted);cursor:pointer}
+.saveprofile button:hover,.scanbar button:hover{border-color:var(--ink);color:var(--ink)}
+.scanbar{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s3);
+  font-size:var(--t12);color:var(--ink-subtle)}
+
+/* --- Fortschritt, Leitstand ---------------------------------------------- */
+.log{display:none;padding:var(--s4) 0 var(--s5);border-top:1px solid var(--rule-2)}
+.log.on{display:block}
+.progressmeter{display:grid;gap:var(--s2);margin-bottom:var(--s3)}
+.progressbar{height:8px;background:var(--wash);border:1px solid var(--rule-2);
+  border-radius:var(--r);overflow:hidden}
+.progressbar i{display:block;height:100%;width:0;background:var(--ink);transition:width .22s ease}
+.progressbar.failed i{background:var(--err)}
+.progressmeta{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
+  font-size:var(--t12);color:var(--ink-subtle)}
+#progresslabel{font-weight:500;color:var(--ink);font-size:var(--t14)}
+#progresscount{margin-left:auto}
+.kill-search{min-height:44px;min-width:44px;padding:0 var(--s4);background:var(--paper);
+  border:1px solid var(--rule-3);border-radius:var(--r);font-size:var(--t14);
+  color:var(--ink-muted);cursor:pointer}
+.kill-search:hover{border-color:var(--err);color:var(--err)}
+.kill-search[hidden]{display:none}
+.steps{display:flex;flex-wrap:wrap;gap:var(--s1);margin-bottom:var(--s3)}
+.step{padding:var(--s1) var(--s3);border:1px solid var(--rule-1);border-radius:var(--r);
+  background:var(--paper);color:var(--ink-subtle);font-size:var(--t12)}
+.step.now{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.step.was{color:var(--ink);border-color:var(--rule-2)}
+.step.was::before{content:"ok ";color:var(--ok)}
+.note{font-size:var(--t14);color:var(--ink-muted);min-height:1.4em}
+
+/* Ein Balken je Leg, fuellt sich sobald die Tage ankommen. */
+.legs{display:grid;gap:var(--s1);margin-top:var(--s3)}
+.legmeter{display:grid;grid-template-columns:minmax(84px,auto) 1fr auto;gap:var(--s3);
+  align-items:center;font-size:var(--t12);color:var(--ink-subtle)}
+.legname{font-family:var(--mono);color:var(--ink-muted)}
+.legbar{height:6px;background:var(--wash);border:1px solid var(--rule-1);border-radius:var(--r)}
+.legbar i{display:block;height:100%;width:0;background:var(--ink);transition:width .22s ease}
+.legmeter.zero .legbar i{background:var(--err)}
+.legdays{color:var(--ink);font-weight:500}
+
+/* --- Ergebnisse ---------------------------------------------------------- */
+.out{display:none;padding-top:var(--s5)}
+.out.on{display:block}
+.outhead{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s4);
+  flex-wrap:wrap;padding-bottom:var(--s2);border-bottom:1px solid var(--ink)}
+.outhead h2{font-size:var(--t16);color:var(--ink)}
+.outhead h2:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.tools{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.sortlbl{font-size:var(--t12);color:var(--ink-subtle)}
+.tools select{width:auto;padding:var(--s1) var(--s2);font-size:var(--t14)}
+.tools label.check{display:flex;align-items:center;gap:var(--s1);font-size:var(--t12);
+  color:var(--ink-subtle)}
+.filtercount{font-size:var(--t12);color:var(--ink-subtle)}
+/* Legende der Tintendichte: feste Stufen, kein Verlauf. */
+.key{display:flex;align-items:center;gap:var(--s1);font-size:var(--t12);color:var(--ink-subtle)}
+.key .scale{display:flex;gap:1px}
+.key .scale i{width:14px;height:8px;border-radius:var(--r);
+  background:color-mix(in oklab,var(--ink) calc(var(--d) * 100%),var(--bg))}
+.outsummary{margin:var(--s3) 0 0;font-size:var(--t12);color:var(--ink-subtle)}
+.usedby{margin:var(--s3) 0;font-size:var(--t12);color:var(--ink-subtle);display:flex;
+  align-items:center;gap:var(--s2);flex-wrap:wrap}
+.ruler{position:relative;height:20px;border-bottom:1px solid var(--rule-2)}
+.ruler span{position:absolute;top:0;transform:translateX(-50%);font-family:var(--mono);
+  font-size:var(--t12);color:var(--ink-subtle);white-space:nowrap}
+
+/* --- Kursbuch-Tabelle ---------------------------------------------------- */
+.tablewrap{overflow-x:auto}
+table.kursbuch{width:100%;border-collapse:collapse;font-size:var(--t14)}
+table.kursbuch thead th{position:sticky;top:0;z-index:2;background:var(--paper);
+  border-bottom:1px solid var(--ink);padding:var(--s2) var(--s3);text-align:left;
+  font-size:var(--t12);font-weight:500;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-subtle);white-space:nowrap}
+table.kursbuch td{padding:var(--s2) var(--s3);border-bottom:1px solid var(--rule-1);
+  vertical-align:middle}
+tr.opt{cursor:pointer;transition:background .12s}
+tr.opt:hover,tr.opt.open{background:var(--wash)}
+tr.opt:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+/* Der Favorit bekommt eine echte Kante, keinen inset-shadow. */
+tr.opt.best td{border-top:2px solid var(--signal)}
+tr.opt.best td.c-rank{border-left:3px solid var(--signal)}
+.c-rank{font-family:var(--mono);font-size:var(--t12);color:var(--ink-subtle);width:78px}
+tr.opt.best .c-rank{color:var(--signal);font-weight:500}
+.c-price{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
+  font-size:var(--t21);font-weight:700;white-space:nowrap;width:136px}
+tr.opt.best .c-price{font-size:var(--t28)}
+.c-price small{font-size:var(--t12);font-weight:400;color:var(--ink-subtle);margin-left:2px}
+.c-status{width:104px;color:var(--ink-muted);font-size:var(--t12)}
+.c-num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
+  width:92px;white-space:nowrap}
+.c-air{width:190px}
+.c-rail{min-width:220px}
+tr.empty td{padding:var(--s5) 0;color:var(--ink-subtle);border-bottom:0}
+.rail{position:relative;display:block;height:24px}
+.rail .line{position:absolute;top:12px;height:1px;background:var(--rule-2)}
+.dot{position:absolute;top:6px;width:11px;height:11px;border-radius:var(--r);
+  transform:translateX(-50%);border:2px solid var(--bg)}
+tr.opt:hover .dot,tr.opt.open .dot{border-color:var(--wash)}
+.gap{position:absolute;top:-3px;transform:translateX(-50%);font-family:var(--mono);
+  font-size:var(--t12);color:var(--ink-subtle);background:var(--bg);padding:0 var(--s1);
+  white-space:nowrap}
+tr.opt:hover .gap,tr.opt.open .gap{background:var(--wash)}
+.tails{display:flex;gap:2px;flex-wrap:wrap}
+.routepill{display:inline-flex;align-items:center;min-height:22px;padding:0 var(--s2);
+  border-radius:var(--r);border:1px solid var(--rule-2);font-family:var(--mono);
+  font-size:var(--t12);color:var(--ink-muted);background:var(--paper);margin-right:var(--s1)}
+/* Aufklappen ueber die Zeilenhoehe statt ueber geratene max-height-Werte. */
+tr.detrow td{padding:0;border-bottom:0}
+.detgrid{display:grid;grid-template-rows:0fr}
+tr.detrow.open .detgrid{grid-template-rows:1fr}
+.detinner{overflow:hidden;min-height:0}
+tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
+
+/* --- Detail -------------------------------------------------------------- */
+.detinner>.fl:first-child{border-top:1px solid var(--rule-1)}
+.fl{display:grid;grid-template-columns:26px 104px 124px 1fr auto auto;gap:var(--s3);
+  align-items:baseline;padding:var(--s2) 0;border-bottom:1px solid var(--rule-1);
+  font-size:var(--t14)}
+.fl:last-of-type{border-bottom:0}
+.fl>span{white-space:nowrap}
+.fl .pair{font-family:var(--mono);font-weight:500}
+.fl .when{font-family:var(--mono);color:var(--ink-muted)}
+.fl .times i{font-style:normal;color:var(--ink-subtle);font-size:var(--t12);margin-left:var(--s2)}
+.fl .fare{font-weight:500;text-align:right}
+.fl a{display:inline-block;min-height:36px;line-height:36px;padding:0 var(--s4);
+  background:var(--ink);color:var(--bg);border-radius:var(--r);text-decoration:none;
+  font-size:var(--t14)}
+.fl a:hover{background:var(--ink-muted)}
+.fl .miss{color:var(--warn);font-size:var(--t12);white-space:normal}
+.dsum{margin:var(--s3) 0 0;font-size:var(--t12);color:var(--ink-subtle)}
+.dsum b{color:var(--ink);font-weight:500}
+@media(max-width:760px){
+  .c-status,.c-air{display:none}
+  .fl{grid-template-columns:1fr auto;gap:var(--s1) var(--s3)}
+  .fl .times,.fl .when{grid-column:1/-1;white-space:normal}
+}
+
+footer{margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid var(--rule-2);
+  font-size:var(--t12);color:var(--ink-subtle)}
+
+/* --- Bewegung: Opt-in, nie Pflicht ---------------------------------------
+   Nur Opazitaet und Hoehe. Kein Verschieben, kein Skalieren, nichts, was den
+   Blick von der Preisspalte wegzieht. Der Versatz von 18 ms je Zeile ist gerade
+   noch als Reihenfolge lesbar und noch nicht als Warten spuerbar. */
+@media(prefers-reduced-motion:no-preference){
+  tr.opt{animation:fade .2s ease both}
+  .detgrid{transition:grid-template-rows .16s ease}
+  .go.busy{animation:pressing 1.1s ease-in-out infinite}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  @keyframes pressing{0%,100%{transform:none}50%{transform:translateY(1px)}}
+}

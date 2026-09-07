@@ -8,10 +8,11 @@ spike/*_results.json
 .cache/
 .claude/
 work/
-spike/
 .env
 .env.*
 *.db
 *.sqlite
 *.sqlite3
 google_consent.json
+*.log
+.worktrees/

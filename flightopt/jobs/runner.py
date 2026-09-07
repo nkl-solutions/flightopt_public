@@ -12,26 +12,24 @@ import json
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Callable
 
 from flightopt.domain import airlines as airline_registry
+from flightopt.domain.fx import Rates
 from flightopt.domain.models import Money, SearchSpec
 from flightopt.search.dp import count_combinations, feasible_dates, solve
 from flightopt.search.grid import build_grid
 from flightopt.search.verify import verify
-from flightopt.sources.aegean import AegeanSource
-from flightopt.sources.britishairways import BritishAirwaysSource
-from flightopt.sources.condor import CondorSource
-from flightopt.sources.eurowings import EurowingsSource
-from flightopt.sources.icelandair import IcelandairSource
-from flightopt.sources.kiwi import KiwiSource
-from flightopt.sources.ryanair import RyanairSource
-from flightopt.sources.wizz import WizzSource
-from flightopt.storage import db
+from flightopt.sources.registry import build_sources
+from flightopt.storage import db, fx_store
 from flightopt.storage.cache import SqliteCache, SqliteHistory
 
 logger = logging.getLogger(__name__)
+
+
+class JobCancelled(Exception):
+    """Der Job wurde zwischen zwei Phasen abgebrochen."""
 
 
 @dataclass
@@ -56,6 +54,7 @@ def spec_to_dict(spec: SearchSpec) -> dict[str, Any]:
         "cabin": spec.cabin.value,
         "currency": spec.currency,
         "checked_bags": spec.checked_bags,
+        "max_stops": spec.max_stops,
     }
 
 
@@ -119,6 +118,18 @@ async def preload_routes(sources: Sequence[Any], legs: Sequence[Any]) -> None:
         await asyncio.gather(*tasks)
 
 
+def build_catalogue(
+    wanted: set[str], *, conn: Any, env: Mapping[str, str] | None = None
+) -> list:
+    """Der Katalog eines Suchlaufs - gebaut in `flightopt.sources.registry`.
+
+    Hier steht nur noch der Name, unter dem Runner und CLI ihn seit jeher
+    aufrufen. Der Katalog selbst hat genau eine Quelle, sonst laufen die
+    Kopien auseinander.
+    """
+    return build_sources(wanted, conn=conn, env=env)
+
+
 class JobRunner:
     """Owns running searches and their progress streams."""
 
@@ -130,6 +141,9 @@ class JobRunner:
         # The browser subscribes a moment after the job starts, so the first
         # events would otherwise be emitted to nobody. Keep them and replay.
         self._history: dict[int, list[Progress]] = {}
+        # Abbruch wirkt zwischen den Phasen, nicht mitten in einem HTTP-Abruf.
+        # Ein halb fertiger Abruf ist billiger als ein hart abgebrochener Task.
+        self._cancelled: set[int] = set()
 
     # -- plumbing -------------------------------------------------------------
 
@@ -230,11 +244,41 @@ class JobRunner:
         conn.close()
         return row["status"] if row else None
 
+    def cancel(self, job_id: int) -> str:
+        """Markiert den Job als abgebrochen. Fertige Jobs bleiben unangetastet."""
+        current = self.status(job_id)
+        if current in ("done", "failed", "cancelled"):
+            return current
+        self._cancelled.add(job_id)
+        conn = self._conn()
+        conn.execute(
+            "UPDATE search_job SET status='cancelled', finished_at=? WHERE id=?",
+            (db.now(), job_id),
+        )
+        conn.commit()
+        conn.close()
+        self._results[job_id] = {"status": "cancelled", "error": None, "results": []}
+        return "cancelled"
+
+    def _raise_if_cancelled(self, job_id: int) -> None:
+        if job_id in self._cancelled:
+            raise JobCancelled("Suche abgebrochen")
+
+    def _cancel_pending(self, job_id: int) -> bool:
+        """Merker fuer Rueckmeldungen, die in einem gather-Task laufen.
+
+        Dort waere ein Ausloesen unsauber: `asyncio.gather` raeumt die
+        Geschwister nicht ab, und in `build_grid` steht die Rueckmeldung in
+        einem `finally`. Also nur den Fortschritt einstellen; die Coroutine
+        prueft direkt nach der abgewarteten Einheit.
+        """
+        return job_id in self._cancelled
+
     # -- the actual work ------------------------------------------------------
 
     @staticmethod
     def _leg_payload(spec, grid, combo, i, day, live, winner=None,
-                     indicative=None, by_source=None) -> dict[str, Any]:
+                     indicative=None, by_source=None, native=None) -> dict[str, Any]:
         """One leg for the UI: estimate always, real flight when confirmed."""
         leg = spec.legs[i]
         estimated_by = (winner or {}).get((i, day))
@@ -256,6 +300,16 @@ class JobRunner:
         # A price from a comparison site is a guide, not a fare. Say so, or the
         # total looks firmer than it is.
         out["indicative"] = (i, day) in (indicative or set())
+        # An estimate that had to be converted names its original price, so the
+        # UI can say "umgerechnet aus 48.500 JPY" instead of implying a EUR fare.
+        estimate_native = (native or {}).get((i, day))
+        if estimate_native is not None:
+            out["price_native"] = {
+                "amount": estimate_native.major,
+                "currency": estimate_native.currency,
+            }
+        # Unknown until a real flight is found: a calendar day has no itinerary.
+        out["stops"] = None
         offer = live.offers[i] if live is not None else None
         if offer is None:
             return out
@@ -272,8 +326,16 @@ class JobRunner:
             out["bag_fee"] = live_bag_minor / 100
             out["checked_bags"] = spec.checked_bags
             out["price"] = round(out["price"] + out["bag_fee"], 2)
-        # The live price replaces the estimate, so this cell is no longer one.
+        # The live price replaces the estimate, so this cell is no longer one,
+        # and the estimate's original currency no longer describes it.
         out["indicative"] = False
+        if offer.price_native is not None:
+            out["price_native"] = {
+                "amount": offer.price_native.major,
+                "currency": offer.price_native.currency,
+            }
+        else:
+            out.pop("price_native", None)
         out["deep_link"] = offer.deep_link
         out["source"] = offer.source
         out["stops"] = offer.stops
@@ -281,6 +343,9 @@ class JobRunner:
             first, last = offer.segments[0], offer.segments[-1]
             out["depart"] = first.departure.strftime("%H:%M")
             out["arrive"] = last.arrival.strftime("%H:%M")
+            # Long-haul lands on the next day. The date is always sent; the UI
+            # decides whether it differs from the departure date.
+            out["arrival_date"] = last.arrival.date().isoformat()
             out["flights"] = " / ".join(s.flight_number for s in offer.segments)
             minutes = int((last.arrival - first.departure).total_seconds() // 60)
             out["duration"] = f"{minutes // 60}h {minutes % 60:02d}m"
@@ -297,9 +362,66 @@ class JobRunner:
                 if fee_minor:
                     days[day] = Money(price.minor + fee_minor, price.currency)
 
+    @staticmethod
+    def _partial_payload(spec: SearchSpec, grid, best, report, *,
+                         route: str | None = None) -> list[dict[str, Any]]:
+        """Die Top-K nach dem DP, ohne Live-Pruefung. Genau die Form von `done`."""
+        rows: list[dict[str, Any]] = []
+        for rank, combo in enumerate(best, 1):
+            legs = [
+                JobRunner._leg_payload(spec, grid, combo, i, day, None,
+                                       report.winner, report.indicative, None,
+                                       report.native)
+                for i, day in enumerate(combo.dates)
+            ]
+            row: dict[str, Any] = {
+                "rank": rank,
+                "dates": [d.isoformat() for d in combo.dates],
+                "total": combo.total.major,
+                "currency": combo.total.currency,
+                "verified": False,
+                "estimate": combo.total.major,
+                "drift": None,
+                "legs": legs,
+            }
+            if route is not None:
+                row["route"] = route
+                row["legs"] = [dict(leg, route=route) for leg in legs]
+            rows.append(row)
+        return rows
+
+    def _emit_partial(self, job_id: int, rows: list[dict[str, Any]]) -> None:
+        """Die Liste steht schon, nur die Preise sind noch Schaetzung."""
+        self._emit(
+            job_id,
+            Progress(
+                "partial",
+                f"{len(rows)} Kandidaten geschätzt, Preise werden jetzt nachgeprüft",
+                done=0,
+                total=len(rows),
+                detail={"results": rows},
+            ),
+        )
+
+    def _emit_verified(self, job_id: int, row: dict[str, Any], done: int,
+                       total: int) -> None:
+        self._emit(
+            job_id,
+            Progress(
+                "verified",
+                f"Kandidat {row['rank']} von {total} steht fest",
+                done=done,
+                total=total,
+                detail={"result": row},
+            ),
+        )
+
     async def _run_variant_payloads(self, job_id: int, conn, spec: SearchSpec, *,
                                     airlines: list[str] | None = None,
-                                    verify_limit: int = 20) -> list[dict[str, Any]]:
+                                    verify_limit: int = 20,
+                                    sources: list | None = None,
+                                    rates: Rates | None = None) -> list[dict[str, Any]]:
+        self._raise_if_cancelled(job_id)
         combos = count_combinations(spec)
         allowed = feasible_dates(spec)
         cells = sum(len(a) for a in allowed)
@@ -325,27 +447,25 @@ class JobRunner:
         cache = SqliteCache(conn)
         history = SqliteHistory(conn)
         wanted = set(airlines or [])
-        catalogue = (RyanairSource(), WizzSource(), AegeanSource(),
-                     CondorSource(), EurowingsSource(),
-                     BritishAirwaysSource(), IcelandairSource(),
-                     KiwiSource())
-        sources = []
-        for s in catalogue:
-            if not wanted:
-                sources.append(s)
-            elif isinstance(s, KiwiSource):
-                sources.append(KiwiSource(carriers=sorted(wanted)))
-            elif wanted & set(s.carriers):
-                sources.append(s)
+        # Catalogue and rates belong to the job, not to the route variant: the
+        # sources carry the rate limiter and the circuit breaker, and rebuilding
+        # them per variant would hand every variant a fresh, empty breaker.
+        # Building here is the fallback for a caller that runs one variant.
+        if sources is None:
+            sources = build_catalogue(wanted, conn=conn)
         if wanted and not sources:
             names = ", ".join(sorted(wanted))
             raise ValueError(
                 f"Für {names} gibt es noch keine Preisquelle. "
                 f"Aktuell können nur Ryanair-Flüge abgefragt werden."
             )
+        if rates is None:
+            rates = await fx_store.current_rates(conn)
 
+        self._raise_if_cancelled(job_id)
         self._emit(job_id, Progress("routes", f"{spec.route}: Prüfe bediente Strecken"))
         await preload_routes(sources, spec.legs)
+        self._raise_if_cancelled(job_id)
 
         self._emit(
             job_id,
@@ -353,6 +473,8 @@ class JobRunner:
         )
 
         def report_source(done: int, total: int) -> None:
+            if self._cancel_pending(job_id):
+                return
             self._emit(
                 job_id,
                 Progress(
@@ -364,9 +486,10 @@ class JobRunner:
             )
 
         grid, report = await build_grid(
-            spec, sources, cache=cache, history=history,
+            spec, sources, cache=cache, history=history, rates=rates,
             on_progress=report_source,
         )
+        self._raise_if_cancelled(job_id)
         coverage = report.coverage(spec)
         self._emit(
             job_id,
@@ -403,6 +526,7 @@ class JobRunner:
             )
         self._apply_checked_bag_estimates(spec, grid, report.winner)
 
+        self._raise_if_cancelled(job_id)
         self._emit(job_id, Progress("solving", f"{spec.route}: Kombiniere Datumsvarianten"))
         best = solve(spec, grid, top_k=20, max_per_start=3)
         if not best:
@@ -410,7 +534,14 @@ class JobRunner:
                 f"{spec.route}: Keine gültige Kombination aus den vorhandenen Preisen."
             )
 
+        self._emit_partial(
+            job_id,
+            self._partial_payload(spec, grid, best, report, route=spec.route),
+        )
+
         def report_verify(done: int, total: int) -> None:
+            if self._cancel_pending(job_id):
+                return
             self._emit(
                 job_id,
                 Progress(
@@ -421,11 +552,13 @@ class JobRunner:
                 ),
             )
 
+        self._raise_if_cancelled(job_id)
         self._emit(job_id, Progress("verifying", f"{spec.route}: Prüfe echte Flüge"))
         verified, _ = await verify(
-            spec, best, sources, cache=cache, limit=verify_limit,
+            spec, best, sources, cache=cache, rates=rates, limit=verify_limit,
             on_progress=report_verify,
         )
+        self._raise_if_cancelled(job_id)
         live_by_dates = {tuple(v.combination.dates): v for v in verified}
         by_source = {s.name: (s.carrier or s.name.upper()) for s in sources}
 
@@ -434,7 +567,8 @@ class JobRunner:
             live = live_by_dates.get(tuple(combo.dates))
             legs = [
                 self._leg_payload(spec, grid, combo, i, d, live,
-                                  report.winner, report.indicative, by_source)
+                                  report.winner, report.indicative, by_source,
+                                  report.native)
                 for i, d in enumerate(combo.dates)
             ]
             confirmed = live is not None and live.complete
@@ -458,6 +592,7 @@ class JobRunner:
                     "legs": legs,
                 }
             )
+            self._emit_verified(job_id, payload[-1], rank, len(rows))
         return payload
 
     async def _run_many(self, job_id: int, specs: Sequence[SearchSpec], *,
@@ -471,6 +606,11 @@ class JobRunner:
         conn.commit()
 
         try:
+            self._raise_if_cancelled(job_id)
+            # Once per job, shared by every route variant: one budget, one
+            # breaker, one exchange rate for prices that end up in one ranking.
+            sources = build_catalogue(set(airlines or []), conn=conn)
+            rates = await fx_store.current_rates(conn)
             all_payloads: list[dict[str, Any]] = []
             for done, spec in enumerate(specs, 1):
                 self._emit(
@@ -485,7 +625,7 @@ class JobRunner:
                 all_payloads.extend(
                     await self._run_variant_payloads(
                         job_id, conn, spec, airlines=airlines or [],
-                        verify_limit=verify_limit,
+                        verify_limit=verify_limit, sources=sources, rates=rates,
                     )
                 )
 
@@ -507,11 +647,15 @@ class JobRunner:
                     ),
                 )
 
+            # Ein Abbruch zwischen Pruefpunkt und Abschluss darf den Job nicht
+            # doch noch auf fertig drehen.
             conn.execute(
-                "UPDATE search_job SET status='done', finished_at=? WHERE id=?",
+                "UPDATE search_job SET status='done', finished_at=? "
+                "WHERE id=? AND status<>'cancelled'",
                 (db.now(), job_id),
             )
             conn.commit()
+            self._raise_if_cancelled(job_id)
 
             self._results[job_id] = {"status": "done", "error": None, "results": payload}
             confirmed_n = sum(1 for p in payload if p.get("verified"))
@@ -527,16 +671,37 @@ class JobRunner:
                 ),
             )
 
+        except JobCancelled as stop:
+            self._cancelled.discard(job_id)
+            # `cancel()` hat Status und Endzeitpunkt bereits geschrieben. Der
+            # Schreibvorgang bleibt idempotent und laesst die Zeit stehen.
+            conn.execute(
+                "UPDATE search_job SET status='cancelled', "
+                "finished_at=COALESCE(finished_at, ?) WHERE id=?",
+                (db.now(), job_id),
+            )
+            conn.commit()
+            self._results[job_id] = {"status": "cancelled", "error": None, "results": []}
+            self._emit(job_id, Progress("cancelled", str(stop)))
         except Exception as exc:  # noqa: BLE001 - surface every failure to the UI
             logger.exception("job %s failed", job_id)
             message = str(exc) or type(exc).__name__
+            # Nach einem Abbruch kommt der Folgefehler oft erst hier an. Er darf
+            # den bereits geschriebenen Abbruch nicht in ein Scheitern drehen.
+            aborted = job_id in self._cancelled
+            self._cancelled.discard(job_id)
             conn.execute(
-                "UPDATE search_job SET status='failed', finished_at=?, error=? WHERE id=?",
+                "UPDATE search_job SET status='failed', finished_at=?, error=? "
+                "WHERE id=? AND status<>'cancelled'",
                 (db.now(), message, job_id),
             )
             conn.commit()
-            self._results[job_id] = {"status": "failed", "error": message, "results": []}
-            self._emit(job_id, Progress("failed", message))
+            if aborted:
+                # Ohne Endereignis haengt jeder spaete Abonnent des Streams fest.
+                self._emit(job_id, Progress("cancelled", "Suche abgebrochen"))
+            else:
+                self._results[job_id] = {"status": "failed", "error": message, "results": []}
+                self._emit(job_id, Progress("failed", message))
         finally:
             conn.close()
 
@@ -550,6 +715,7 @@ class JobRunner:
         conn.commit()
 
         try:
+            self._raise_if_cancelled(job_id)
             combos = count_combinations(spec)
             allowed = feasible_dates(spec)
             cells = sum(len(a) for a in allowed)
@@ -577,31 +743,21 @@ class JobRunner:
             # An empty filter means "everything we can price"; otherwise keep
             # only the sources whose carrier the person actually asked for.
             wanted = set(airlines or [])
-            catalogue = (RyanairSource(), WizzSource(), AegeanSource(),
-                         CondorSource(), EurowingsSource(),
-                         BritishAirwaysSource(), IcelandairSource(),
-                         KiwiSource())
-            # Kiwi has no carrier of its own, so a carrier filter is
-            # passed through to it instead of excluding it.
-            sources = []
-            for s in catalogue:
-                if not wanted:
-                    sources.append(s)
-                elif isinstance(s, KiwiSource):
-                    sources.append(KiwiSource(carriers=sorted(wanted)))
-                elif wanted & set(s.carriers):
-                    sources.append(s)
-            if not wanted:
-                pass
-            elif not sources:
+            sources = build_catalogue(wanted, conn=conn)
+            if wanted and not sources:
                 names = ", ".join(sorted(wanted))
                 raise ValueError(
                     f"Für {names} gibt es noch keine Preisquelle. "
                     f"Aktuell können nur Ryanair-Flüge abgefragt werden."
                 )
+            # Once per job, shared by the calendar pass and the live lookup, so
+            # both price a foreign fare with the same rate.
+            rates = await fx_store.current_rates(conn)
 
+            self._raise_if_cancelled(job_id)
             self._emit(job_id, Progress("routes", "Prüfe, welche Strecken bedient werden"))
             await preload_routes(sources, spec.legs)
+            self._raise_if_cancelled(job_id)
 
             self._emit(
                 job_id,
@@ -609,6 +765,8 @@ class JobRunner:
             )
 
             def report_source(done: int, total: int) -> None:
+                if self._cancel_pending(job_id):
+                    return
                 self._emit(
                     job_id,
                     Progress(
@@ -620,9 +778,10 @@ class JobRunner:
                 )
 
             grid, report = await build_grid(
-                spec, sources, cache=cache, history=history,
+                spec, sources, cache=cache, history=history, rates=rates,
                 on_progress=report_source,
             )
+            self._raise_if_cancelled(job_id)
 
             coverage = report.coverage(spec)
             self._emit(
@@ -660,13 +819,19 @@ class JobRunner:
                 )
             self._apply_checked_bag_estimates(spec, grid, report.winner)
 
+            self._raise_if_cancelled(job_id)
             self._emit(job_id, Progress("solving", "Kombiniere Datumsvarianten"))
             best = solve(spec, grid, top_k=20, max_per_start=3)
             if not best:
                 raise ValueError("Keine gültige Kombination aus den vorhandenen Preisen.")
 
+            # Wer eine Minute auf ein leeres Feld sieht, glaubt der Suche nicht mehr.
+            self._emit_partial(job_id, self._partial_payload(spec, grid, best, report))
+
             # Phase two: the shortlist gets real flights, times and booking links.
             def report_verify(done: int, total: int) -> None:
+                if self._cancel_pending(job_id):
+                    return
                 self._emit(
                     job_id,
                     Progress(
@@ -677,11 +842,13 @@ class JobRunner:
                     ),
                 )
 
+            self._raise_if_cancelled(job_id)
             self._emit(job_id, Progress("verifying", "Prüfe echte Flüge"))
             verified, vreport = await verify(
-                spec, best, sources, cache=cache, limit=verify_limit,
+                spec, best, sources, cache=cache, rates=rates, limit=verify_limit,
                 on_progress=report_verify,
             )
+            self._raise_if_cancelled(job_id)
             live_by_dates = {
                 tuple(v.combination.dates): v for v in verified
             }
@@ -697,7 +864,8 @@ class JobRunner:
                 live = live_by_dates.get(tuple(combo.dates))
                 legs = [
                     self._leg_payload(spec, grid, combo, i, d, live,
-                                      report.winner, report.indicative, by_source)
+                                      report.winner, report.indicative, by_source,
+                                      report.native)
                     for i, d in enumerate(combo.dates)
                 ]
                 confirmed = live is not None and live.complete
@@ -738,12 +906,17 @@ class JobRunner:
                         "legs": legs,
                     }
                 )
+                self._emit_verified(job_id, payload[-1], rank, len(rows))
 
+            # Ein Abbruch zwischen Pruefpunkt und Abschluss darf den Job nicht
+            # doch noch auf fertig drehen.
             conn.execute(
-                "UPDATE search_job SET status='done', finished_at=? WHERE id=?",
+                "UPDATE search_job SET status='done', finished_at=? "
+                "WHERE id=? AND status<>'cancelled'",
                 (db.now(), job_id),
             )
             conn.commit()
+            self._raise_if_cancelled(job_id)
 
             self._results[job_id] = {"status": "done", "error": None, "results": payload}
             confirmed_n = sum(1 for p in payload if p.get("verified"))
@@ -759,15 +932,36 @@ class JobRunner:
                 ),
             )
 
+        except JobCancelled as stop:
+            self._cancelled.discard(job_id)
+            # `cancel()` hat Status und Endzeitpunkt bereits geschrieben. Der
+            # Schreibvorgang bleibt idempotent und laesst die Zeit stehen.
+            conn.execute(
+                "UPDATE search_job SET status='cancelled', "
+                "finished_at=COALESCE(finished_at, ?) WHERE id=?",
+                (db.now(), job_id),
+            )
+            conn.commit()
+            self._results[job_id] = {"status": "cancelled", "error": None, "results": []}
+            self._emit(job_id, Progress("cancelled", str(stop)))
         except Exception as exc:  # noqa: BLE001 - surface every failure to the UI
             logger.exception("job %s failed", job_id)
             message = str(exc) or type(exc).__name__
+            # Nach einem Abbruch kommt der Folgefehler oft erst hier an. Er darf
+            # den bereits geschriebenen Abbruch nicht in ein Scheitern drehen.
+            aborted = job_id in self._cancelled
+            self._cancelled.discard(job_id)
             conn.execute(
-                "UPDATE search_job SET status='failed', finished_at=?, error=? WHERE id=?",
+                "UPDATE search_job SET status='failed', finished_at=?, error=? "
+                "WHERE id=? AND status<>'cancelled'",
                 (db.now(), message, job_id),
             )
             conn.commit()
-            self._results[job_id] = {"status": "failed", "error": message, "results": []}
-            self._emit(job_id, Progress("failed", message))
+            if aborted:
+                # Ohne Endereignis haengt jeder spaete Abonnent des Streams fest.
+                self._emit(job_id, Progress("cancelled", "Suche abgebrochen"))
+            else:
+                self._results[job_id] = {"status": "failed", "error": message, "results": []}
+                self._emit(job_id, Progress("failed", message))
         finally:
             conn.close()

@@ -1,0 +1,301 @@
+{
+  "DE-OST": {
+    "name": "Berlin, Leipzig/Halle, Dresden",
+    "city": "Ostflughäfen",
+    "country": "Deutschland",
+    "cc": "DE",
+    "airports": ["BER", "LEJ", "DRS"],
+    "aliases": ["ost", "ostdeutschland", "ostflughafen", "ostflughäfen",
+                "berlin leipzig dresden", "leipzig dresden berlin"]
+  },
+  "DE": {
+    "name": "Alle deutschen Flughäfen",
+    "city": "Deutschland",
+    "country": "Deutschland",
+    "cc": "DE",
+    "airports": ["BER", "LEJ", "DRS", "HAM", "FRA", "DUS", "CGN", "STR",
+                 "MUC", "NUE", "BRE", "HAJ", "NRN"],
+    "aliases": ["germany", "deutsche flughafen", "deutsche flughäfen",
+                "alle deutschen flughafen", "alle deutschen flughäfen"]
+  },
+  "BER": {
+    "name": "Berlin",
+    "city": "Berlin",
+    "country": "Deutschland",
+    "cc": "DE",
+    "airports": ["BER"],
+    "aliases": ["berlin"]
+  },
+  "TYO": {
+    "name": "Tokio",
+    "city": "Tokio",
+    "country": "Japan",
+    "cc": "JP",
+    "airports": ["NRT", "HND"],
+    "aliases": ["tokio", "tokyo"]
+  },
+  "OSA": {
+    "name": "Osaka",
+    "city": "Osaka",
+    "country": "Japan",
+    "cc": "JP",
+    "airports": ["KIX", "ITM"],
+    "aliases": ["osaka", "kansai"]
+  },
+  "SEL": {
+    "name": "Seoul",
+    "city": "Seoul",
+    "country": "Südkorea",
+    "cc": "KR",
+    "airports": ["ICN", "GMP"],
+    "aliases": ["seoul", "soul"]
+  },
+  "NYC": {
+    "name": "New York",
+    "city": "New York",
+    "country": "Vereinigte Staaten",
+    "cc": "US",
+    "airports": ["JFK", "EWR", "LGA"],
+    "aliases": ["new york", "newyork", "nyc"]
+  },
+  "WAS": {
+    "name": "Washington",
+    "city": "Washington",
+    "country": "Vereinigte Staaten",
+    "cc": "US",
+    "airports": ["IAD", "DCA", "BWI"],
+    "aliases": ["washington", "washington dc"]
+  },
+  "CHI": {
+    "name": "Chicago",
+    "city": "Chicago",
+    "country": "Vereinigte Staaten",
+    "cc": "US",
+    "airports": ["ORD", "MDW"],
+    "aliases": ["chicago"]
+  },
+  "LON": {
+    "name": "London",
+    "city": "London",
+    "country": "Großbritannien",
+    "cc": "GB",
+    "airports": ["LHR", "LGW", "STN", "LTN", "SEN", "LCY"],
+    "aliases": ["london"]
+  },
+  "PAR": {
+    "name": "Paris",
+    "city": "Paris",
+    "country": "Frankreich",
+    "cc": "FR",
+    "airports": ["CDG", "ORY", "BVA"],
+    "aliases": ["paris"]
+  },
+  "MIL": {
+    "name": "Mailand",
+    "city": "Mailand",
+    "country": "Italien",
+    "cc": "IT",
+    "airports": ["MXP", "LIN", "BGY"],
+    "aliases": ["mailand", "milan", "milano"]
+  },
+  "ROM": {
+    "name": "Rom",
+    "city": "Rom",
+    "country": "Italien",
+    "cc": "IT",
+    "airports": ["FCO", "CIA"],
+    "aliases": ["rom", "rome", "roma"]
+  },
+  "IST-ALL": {
+    "name": "Istanbul (alle Flughäfen)",
+    "city": "Istanbul",
+    "country": "Türkei",
+    "cc": "TR",
+    "airports": ["IST", "SAW"],
+    "aliases": ["istanbul"]
+  },
+  "BKK-ALL": {
+    "name": "Bangkok (alle Flughäfen)",
+    "city": "Bangkok",
+    "country": "Thailand",
+    "cc": "TH",
+    "airports": ["BKK", "DMK"],
+    "aliases": ["bangkok"]
+  },
+  "SHA-ALL": {
+    "name": "Shanghai (alle Flughäfen)",
+    "city": "Shanghai",
+    "country": "China",
+    "cc": "CN",
+    "airports": ["PVG", "SHA"],
+    "aliases": ["shanghai"]
+  },
+  "BJS": {
+    "name": "Peking",
+    "city": "Peking",
+    "country": "China",
+    "cc": "CN",
+    "airports": ["PEK", "PKX"],
+    "aliases": ["peking", "beijing"]
+  },
+  "DXB-ALL": {
+    "name": "Dubai (alle Flughäfen)",
+    "city": "Dubai",
+    "country": "Vereinigte Arabische Emirate",
+    "cc": "AE",
+    "airports": ["DXB", "DWC"],
+    "aliases": ["dubai"]
+  },
+  "BUE": {
+    "name": "Buenos Aires",
+    "city": "Buenos Aires",
+    "country": "Argentinien",
+    "cc": "AR",
+    "airports": ["EZE", "AEP"],
+    "aliases": ["buenos aires"]
+  },
+  "SAO": {
+    "name": "São Paulo",
+    "city": "São Paulo",
+    "country": "Brasilien",
+    "cc": "BR",
+    "airports": ["GRU", "CGH"],
+    "aliases": ["sao paulo", "são paulo"]
+  },
+  "RIO": {
+    "name": "Rio de Janeiro",
+    "city": "Rio de Janeiro",
+    "country": "Brasilien",
+    "cc": "BR",
+    "airports": ["GIG", "SDU"],
+    "aliases": ["rio", "rio de janeiro"]
+  },
+  "JP": {
+    "name": "Japan",
+    "city": "Japan",
+    "country": "Japan",
+    "cc": "JP",
+    "airports": ["NRT", "HND", "KIX", "NGO", "FUK", "CTS"],
+    "aliases": ["japan", "nippon"]
+  },
+  "KR": {
+    "name": "Südkorea",
+    "city": "Südkorea",
+    "country": "Südkorea",
+    "cc": "KR",
+    "airports": ["ICN", "GMP", "PUS"],
+    "aliases": ["korea", "suedkorea", "südkorea", "south korea"]
+  },
+  "US-EAST": {
+    "name": "USA Ostküste",
+    "city": "USA Ostküste",
+    "country": "Vereinigte Staaten",
+    "cc": "US",
+    "airports": ["JFK", "EWR", "BOS", "IAD", "MIA", "ORD"],
+    "aliases": ["usa", "vereinigte staaten", "amerika", "us ost", "ostküste"]
+  },
+  "US-WEST": {
+    "name": "USA Westküste",
+    "city": "USA Westküste",
+    "country": "Vereinigte Staaten",
+    "cc": "US",
+    "airports": ["LAX", "SFO", "SEA", "LAS"],
+    "aliases": ["usa", "vereinigte staaten", "amerika", "us west", "westküste"]
+  },
+  "TH": {
+    "name": "Thailand",
+    "city": "Thailand",
+    "country": "Thailand",
+    "cc": "TH",
+    "airports": ["BKK", "DMK", "HKT", "CNX"],
+    "aliases": ["thailand"]
+  },
+  "VN": {
+    "name": "Vietnam",
+    "city": "Vietnam",
+    "country": "Vietnam",
+    "cc": "VN",
+    "airports": ["SGN", "HAN", "DAD"],
+    "aliases": ["vietnam"]
+  },
+  "TW": {
+    "name": "Taiwan",
+    "city": "Taiwan",
+    "country": "Taiwan",
+    "cc": "TW",
+    "airports": ["TPE"],
+    "aliases": ["taiwan"]
+  },
+  "SG": {
+    "name": "Singapur",
+    "city": "Singapur",
+    "country": "Singapur",
+    "cc": "SG",
+    "airports": ["SIN"],
+    "aliases": ["singapur", "singapore"]
+  },
+  "MY": {
+    "name": "Malaysia",
+    "city": "Malaysia",
+    "country": "Malaysia",
+    "cc": "MY",
+    "airports": ["KUL"],
+    "aliases": ["malaysia"]
+  },
+  "ID": {
+    "name": "Indonesien",
+    "city": "Indonesien",
+    "country": "Indonesien",
+    "cc": "ID",
+    "airports": ["CGK", "DPS"],
+    "aliases": ["indonesien", "indonesia"]
+  },
+  "AE": {
+    "name": "Vereinigte Arabische Emirate",
+    "city": "Emirate",
+    "country": "Vereinigte Arabische Emirate",
+    "cc": "AE",
+    "airports": ["DXB", "AUH"],
+    "aliases": ["emirate", "vae", "uae"]
+  },
+  "TR": {
+    "name": "Türkei",
+    "city": "Türkei",
+    "country": "Türkei",
+    "cc": "TR",
+    "airports": ["IST", "SAW", "AYT", "ADB", "DLM", "BJV"],
+    "aliases": ["tuerkei", "türkei", "turkey", "tuerkiye"]
+  },
+  "GR": {
+    "name": "Griechenland",
+    "city": "Griechenland",
+    "country": "Griechenland",
+    "cc": "GR",
+    "airports": ["ATH", "SKG", "HER", "CHQ", "RHO", "CFU", "KGS", "JMK"],
+    "aliases": ["griechenland", "greece", "hellas"]
+  },
+  "ES": {
+    "name": "Spanien",
+    "city": "Spanien",
+    "country": "Spanien",
+    "cc": "ES",
+    "airports": ["MAD", "BCN", "PMI", "AGP", "ALC", "VLC", "SVQ", "IBZ"],
+    "aliases": ["spanien", "spain"]
+  },
+  "IT": {
+    "name": "Italien",
+    "city": "Italien",
+    "country": "Italien",
+    "cc": "IT",
+    "airports": ["FCO", "MXP", "BGY", "VCE", "NAP", "CTA", "PMO", "BRI"],
+    "aliases": ["italien", "italy", "italia"]
+  },
+  "PT": {
+    "name": "Portugal",
+    "city": "Portugal",
+    "country": "Portugal",
+    "cc": "PT",
+    "airports": ["LIS", "OPO", "FAO"],
+    "aliases": ["portugal"]
+  }
+}

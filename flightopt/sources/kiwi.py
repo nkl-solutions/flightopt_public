@@ -63,6 +63,7 @@ class KiwiSource(HttpSource):
     """Prices here are indicative, so they are never used to confirm a booking."""
     indicative = True
     per_minute = 20
+    accepts_max_stops = True
 
     def __init__(self, *, carriers: list[str] | None = None, max_stops: int = 1, **kw) -> None:
         """Allows one connection by default.
@@ -76,10 +77,11 @@ class KiwiSource(HttpSource):
         self.max_stops = max_stops
 
     async def _calendar_chunk(
-        self, origin: str, destination: str, start: date, end: date, currency: str
+        self, origin: str, destination: str, start: date, end: date,
+        currency: str, max_stops: int,
     ) -> dict[date, Money]:
         filt: dict = {
-            "maxStopsCount": self.max_stops,
+            "maxStopsCount": max_stops,
             "transportTypes": ["FLIGHT"],
             "contentProviders": ["KIWI"],
         }
@@ -134,8 +136,6 @@ class KiwiSource(HttpSource):
             if amount is None:
                 continue
             got = ((price.get("currency") or {}).get("code") or currency).upper()
-            if got != currency.upper():
-                continue
             day = datetime.fromisoformat(raw_date).date()
             # The amount arrives as a string, so a plain int() would crash on
             # any route that ever returns a fractional fare.
@@ -143,15 +143,19 @@ class KiwiSource(HttpSource):
         return out
 
     async def calendar_range(
-        self, origin: str, destination: str, start: date, end: date, *, currency: str = "EUR"
+        self, origin: str, destination: str, start: date, end: date, *,
+        currency: str = "EUR", max_stops: int | None = None,
     ) -> dict[date, Money]:
+        """Prices per day. `max_stops` comes per call, because it depends on
+        the leg: Berlin to Antalya needs one connection, Berlin to Tokyo two."""
+        allowed = self.max_stops if max_stops is None else max_stops
         out: dict[date, Money] = {}
         cursor = start
         while cursor <= end:
             chunk_end = min(end, cursor + timedelta(days=CHUNK_DAYS - 1))
             try:
                 chunk = await self._calendar_chunk(
-                    origin, destination, cursor, chunk_end, currency
+                    origin, destination, cursor, chunk_end, currency, allowed
                 )
             except SourceError as exc:
                 logger.warning(
@@ -164,10 +168,12 @@ class KiwiSource(HttpSource):
         return out
 
     async def calendar(
-        self, origin: str, destination: str, month: date, *, currency: str = "EUR"
+        self, origin: str, destination: str, month: date, *,
+        currency: str = "EUR", max_stops: int | None = None,
     ) -> dict[date, Money]:
         first = month.replace(day=1)
         nxt = (first + timedelta(days=32)).replace(day=1)
         return await self.calendar_range(
-            origin, destination, first, nxt - timedelta(days=1), currency=currency
+            origin, destination, first, nxt - timedelta(days=1),
+            currency=currency, max_stops=max_stops,
         )

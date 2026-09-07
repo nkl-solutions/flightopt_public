@@ -12,8 +12,11 @@ Verified live 2026-09-04 from a German residential IP:
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 from datetime import date, datetime, timedelta
+from typing import Any
 
 from flightopt.domain.models import Cabin, Money, Offer, Pax, Segment
 from flightopt.sources.base import HttpSource, SourceError
@@ -23,6 +26,16 @@ logger = logging.getLogger(__name__)
 API = "https://services-api.ryanair.com"
 WEB = "https://www.ryanair.com/api"
 """Route metadata lives on the website host, fares on the services host."""
+
+SITE = "https://www.ryanair.com/de/de"
+CLIENT_VERSION_RE = re.compile(
+    r"""["']?client[-_]?version["']?\s*[:=]\s*["']([\d.]+)["']""", re.IGNORECASE
+)
+"""Ryanair rotates its client version and answers a stale one with HTTP 409.
+
+Pinning a version here would break the adapter on the next release, which is
+exactly what happened to Wizz's published API path.
+"""
 
 
 class RyanairSource(HttpSource):
@@ -35,6 +48,53 @@ class RyanairSource(HttpSource):
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
         self._routes: dict[str, set[str]] | None = None
+        self._client_version: str | None = None
+
+    # -- client version -------------------------------------------------------
+
+    def _headers(self) -> dict[str, str]:
+        """The version header, only once we actually know a version."""
+        if not self._client_version:
+            return {}
+        return {"client-version": self._client_version}
+
+    async def _read_client_version(self) -> None:
+        """Read the current client version out of the site.
+
+        Only called after a 409, so the normal path costs no extra request.
+        """
+        from curl_cffi import requests as creq
+
+        await self.limiter.wait()
+        try:
+            resp = await asyncio.to_thread(
+                creq.get, SITE, impersonate=self.impersonate, timeout=40, proxy=self.proxy
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise SourceError(f"ryanair: site unreachable: {exc}") from exc
+        if resp.status_code != 200:
+            raise SourceError(f"ryanair: site returned HTTP {resp.status_code}")
+        match = CLIENT_VERSION_RE.search(resp.text)
+        if not match:
+            raise SourceError("ryanair: client version not found in page config")
+        self._client_version = match.group(1)
+        logger.info("ryanair: client version %s", self._client_version)
+
+    async def _get(self, url: str) -> Any:
+        """One request, with a single re-pin if the client version went stale.
+
+        409 means "Availability declined", which here always means the client
+        version is old. The retry is capped at one so a permanent 409 cannot
+        turn into a loop against the website.
+        """
+        try:
+            return await self.fetch_json(url, headers=self._headers())
+        except SourceError as exc:
+            if "HTTP 409" not in str(exc):
+                raise
+            logger.info("ryanair: HTTP 409, re-reading the client version once")
+            await self._read_client_version()
+            return await self.fetch_json(url, headers=self._headers())
 
     # -- routes ---------------------------------------------------------------
 
@@ -84,7 +144,7 @@ class RyanairSource(HttpSource):
             f"{API}/farfnd/v4/oneWayFares/{origin}/{destination}/cheapestPerDay"
             f"?outboundMonthOfDate={first.isoformat()}&currency={currency}"
         )
-        data = await self.fetch_json(url)
+        data = await self._get(url)
         out: dict[date, Money] = {}
         for fare in (data.get("outbound") or {}).get("fares") or []:
             if fare.get("soldOut") or fare.get("unavailable"):
@@ -138,7 +198,7 @@ class RyanairSource(HttpSource):
             f"&outboundDepartureDateTo={day.isoformat()}"
             f"&currency={currency}&limit=30&offset=0"
         )
-        data = await self.fetch_json(url)
+        data = await self._get(url)
         offers: list[Offer] = []
         for fare in data.get("fares") or []:
             outbound = fare.get("outbound") or {}

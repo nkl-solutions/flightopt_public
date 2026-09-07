@@ -47,22 +47,18 @@ def _clean_place(raw: str) -> str:
 
 
 def _resolve(raw: str):
+    """One resolver for the whole app.
+
+    This layer used to skip groups and take the first plain airport, so the
+    same sentence meant one thing typed into the form and another spoken into
+    the microphone. It now asks `airports.resolve_entry`, which means a city
+    with several airports resolves to its metro group - for a price search that
+    is the answer, not a detour.
+    """
     cleaned = _clean_place(raw)
     if not cleaned:
         return None, raw
-    hits = airports.search(cleaned, limit=8)
-    folded = airports._fold(cleaned)
-    for hit in hits:
-        data = hit.as_dict()
-        if data.get("kind") == "group":
-            continue
-        if folded in {
-            airports._fold(data["code"]),
-            airports._fold(data["city"]),
-            airports._fold(data["name"]),
-        }:
-            return hit, cleaned
-    return (hits[0] if hits else None), cleaned
+    return airports.resolve_entry(cleaned), cleaned
 
 
 def _trip_type(text: str, codes: list[str]) -> str:

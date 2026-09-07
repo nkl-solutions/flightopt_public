@@ -87,9 +87,10 @@ async def test_wizz_calendar_parses_recorded_payload(wizz, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_wizz_skips_a_foreign_currency(wizz, monkeypatch):
-    # Wizz prices in the departure market's currency and ignores any request to
-    # change it. Converting silently would produce a wrong total.
+async def test_wizz_reports_the_market_currency(wizz, monkeypatch):
+    # Wizz preist in der Waehrung des Abflugmarkts und ignoriert jeden Wunsch.
+    # Frueher wurde der Tag verworfen; jetzt kommt er in Originalwaehrung und
+    # der Grid rechnet ihn um (siehe search/grid.py).
     stub(wizz, {"outboundFlights": [
         {"departureDate": "2026-10-01T00:00:00",
          "price": {"amount": 25000, "currencyCode": "HUF"}},
@@ -98,7 +99,48 @@ async def test_wizz_skips_a_foreign_currency(wizz, monkeypatch):
     ]}, monkeypatch)
     prices = await wizz.calendar_range("BUD", "LTN", date(2026, 10, 1), date(2026, 10, 5))
 
-    assert prices == {date(2026, 10, 2): Money(4999, "EUR")}
+    assert prices == {
+        date(2026, 10, 1): Money(2500000, "HUF"),
+        date(2026, 10, 2): Money(4999, "EUR"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_wizz_search_leg_reports_the_market_currency(wizz, monkeypatch):
+    stub(wizz, {"outboundFlights": [{
+        "departureStation": "BUD", "arrivalStation": "LTN",
+        "departureDate": "2026-10-04T00:00:00",
+        "departureDates": ["2026-10-04T09:05:00"],
+        "price": {"amount": 25000, "currencyCode": "HUF"},
+    }]}, monkeypatch)
+    offers = await wizz.search_leg("BUD", "LTN", date(2026, 10, 4))
+
+    assert len(offers) == 1
+    assert offers[0].price == Money(2500000, "HUF")
+
+
+@pytest.mark.asyncio
+async def test_wizz_search_leg_never_sorts_across_currencies(wizz, monkeypatch):
+    """20 PLN sind nicht billiger als 12 EUR, auch wenn die Minor-Zahl kleiner ist."""
+    stub(wizz, {"outboundFlights": [
+        {"departureStation": "BUD", "arrivalStation": "LTN",
+         "departureDate": "2026-10-04T00:00:00",
+         "departureDates": ["2026-10-04T06:00:00"],
+         "price": {"amount": 30.0, "currencyCode": "EUR"}},
+        {"departureStation": "BUD", "arrivalStation": "LTN",
+         "departureDate": "2026-10-04T00:00:00",
+         "departureDates": ["2026-10-04T09:00:00"],
+         "price": {"amount": 20.0, "currencyCode": "PLN"}},
+        {"departureStation": "BUD", "arrivalStation": "LTN",
+         "departureDate": "2026-10-04T00:00:00",
+         "departureDates": ["2026-10-04T21:00:00"],
+         "price": {"amount": 12.0, "currencyCode": "EUR"}},
+    ]}, monkeypatch)
+    offers = await wizz.search_leg("BUD", "LTN", date(2026, 10, 4))
+
+    assert [o.price for o in offers] == [
+        Money(1200, "EUR"), Money(3000, "EUR"), Money(2000, "PLN")
+    ]
 
 
 @pytest.mark.asyncio
@@ -288,20 +330,17 @@ def test_every_adapter_can_be_constructed():
     A property added to `HttpSource` shadows any instance attribute of the same
     name, and the failure only shows up when the adapter is instantiated. That
     once broke every search at runtime while all unit tests stayed green.
+
+    The list comes from the registry, so a new adapter is covered the moment it
+    is registered instead of when someone remembers to edit this test.
     """
-    from flightopt.sources.aegean import AegeanSource
-    from flightopt.sources.britishairways import BritishAirwaysSource
-    from flightopt.sources.condor import CondorSource
-    from flightopt.sources.eurowings import EurowingsSource
-    from flightopt.sources.icelandair import IcelandairSource
     from flightopt.sources.kiwi import KiwiSource
-    from flightopt.sources.ryanair import RyanairSource
-    from flightopt.sources.wizz import WizzSource
+    from flightopt.sources.registry import build_sources
 
     built = [
-        RyanairSource(), WizzSource(), AegeanSource(), CondorSource(),
-        EurowingsSource(), BritishAirwaysSource(), IcelandairSource(),
-        KiwiSource(), KiwiSource(carriers=["XQ", "EW"]),
+        *build_sources(None, env={}),
+        *build_sources({"XQ", "EW"}, env={}),
+        KiwiSource(carriers=["XQ", "EW"]),
     ]
     for src in built:
         assert isinstance(src.carriers, tuple)

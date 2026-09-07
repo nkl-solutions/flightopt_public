@@ -1,0 +1,179 @@
+{
+  "currencyCode": "USD",
+  "outboundFares": [
+    {
+      "date": "2026-11-01",
+      "amount": 219,
+      "tax": 0,
+      "seats": 8
+    },
+    {
+      "date": "2026-11-02",
+      "amount": 219,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-03",
+      "amount": 184,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-04",
+      "amount": 184,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-05",
+      "amount": 219,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-06",
+      "amount": 219,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-07",
+      "amount": 184,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-08",
+      "amount": 219,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-09",
+      "amount": 219,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-10",
+      "amount": 184,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-11",
+      "amount": 184,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-12",
+      "amount": 219,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-13",
+      "amount": 219,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-14",
+      "amount": 184,
+      "tax": 0,
+      "seats": 7
+    },
+    {
+      "date": "2026-11-15",
+      "amount": 219,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-16",
+      "amount": 219,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-17",
+      "amount": 184,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-18",
+      "amount": 184,
+      "tax": 0,
+      "seats": 7
+    },
+    {
+      "date": "2026-11-19",
+      "amount": 264,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-20",
+      "amount": 264,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-21",
+      "amount": 264,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-22",
+      "amount": 264,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-23",
+      "amount": 264,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-24",
+      "amount": 264,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-25",
+      "amount": 284,
+      "tax": 0,
+      "seats": 9
+    },
+    {
+      "date": "2026-11-26",
+      "amount": 264,
+      "tax": 0,
+      "seats": 7
+    },
+    {
+      "date": "2026-11-27",
+      "amount": 284,
+      "tax": 0,
+      "seats": 8
+    },
+    {
+      "date": "2026-11-28",
+      "amount": 414,
+      "tax": 0,
+      "seats": 3
+    },
+    {
+      "date": "2026-11-30",
+      "amount": 354,
+      "tax": 0,
+      "seats": 6
+    }
+  ]
+}

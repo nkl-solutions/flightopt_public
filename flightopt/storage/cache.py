@@ -33,8 +33,18 @@ def cache_key(
     pax: int = 1,
     cabin: str = "economy",
     currency: str = "EUR",
+    max_stops: int | None = None,
 ) -> str:
+    """Every parameter that can change the answer, hashed into one key.
+
+    `max_stops` is appended only when a source was actually asked for it: a
+    calendar for one stop is a different calendar than one for two, but an
+    airline that has no such knob would otherwise lose every cached row for a
+    parameter it never saw.
+    """
     raw = f"{source}|{kind}|{origin}|{destination}|{day.isoformat()}|{pax}|{cabin}|{currency}"
+    if max_stops is not None:
+        raw += f"|stops{max_stops}"
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 

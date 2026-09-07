@@ -106,6 +106,19 @@ CREATE TABLE IF NOT EXISTS price_baseline (
     computed_at        TEXT NOT NULL,
     PRIMARY KEY(entity_type, entity_key, weekday, leadtime_bucket, currency)
 );
+
+CREATE TABLE IF NOT EXISTS fx_rate (
+    currency   TEXT PRIMARY KEY,
+    rate       REAL NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS api_budget (
+    source TEXT NOT NULL,
+    month  TEXT NOT NULL,          -- 'YYYY-MM'
+    used   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(source, month)
+);
 """
 
 

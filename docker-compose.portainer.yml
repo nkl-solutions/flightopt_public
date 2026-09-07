@@ -10,6 +10,10 @@ services:
       FLIGHTOPT_DAILY_SCANS: "1"
       FLIGHTOPT_SCAN_INTERVAL_SECONDS: "600"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Ohne Schluessel bleibt SerpApi still aus dem Katalog; die Obergrenze
+      # deckelt den bezahlten Monatsverbrauch (Standard siehe DEFAULT_CAP).
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
+      SERPAPI_MONTHLY_CAP: ${SERPAPI_MONTHLY_CAP:-}
       MALLOC_ARENA_MAX: "2"
     volumes:
       - flightopt-data:/app/data

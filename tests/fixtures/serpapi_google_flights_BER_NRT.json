@@ -1,0 +1,128 @@
+{
+  "search_metadata": {
+    "id": "68b9c1f2a4c1d2e3f4a5b6c7",
+    "status": "Success",
+    "created_at": "2026-09-05 09:14:22 UTC",
+    "google_flights_url": "https://www.google.com/travel/flights?hl=de&gl=de&curr=EUR&tfs=CBwQAhoeEgoyMDI3LTAzLTEwagcIARIDQkVScgcIARIDTlJU"
+  },
+  "search_parameters": {
+    "engine": "google_flights",
+    "hl": "de",
+    "currency": "EUR",
+    "departure_id": "BER",
+    "arrival_id": "NRT",
+    "outbound_date": "2027-03-10",
+    "type": "2"
+  },
+  "best_flights": [
+    {
+      "flights": [
+        {
+          "departure_airport": {"name": "Berlin Brandenburg Airport", "id": "BER", "time": "2027-03-10 11:45"},
+          "arrival_airport": {"name": "Istanbul Airport", "id": "IST", "time": "2027-03-10 16:10"},
+          "duration": 205,
+          "airplane": "Airbus A321neo",
+          "airline": "Turkish Airlines",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/TK.png",
+          "travel_class": "Economy",
+          "flight_number": "TK 1724",
+          "legroom": "31 in",
+          "overnight": false
+        },
+        {
+          "departure_airport": {"name": "Istanbul Airport", "id": "IST", "time": "2027-03-10 17:45"},
+          "arrival_airport": {"name": "Tokyo Narita International Airport", "id": "NRT", "time": "2027-03-11 11:15"},
+          "duration": 690,
+          "airplane": "Boeing 787",
+          "airline": "Turkish Airlines",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/TK.png",
+          "travel_class": "Economy",
+          "flight_number": "TK 198",
+          "legroom": "31 in",
+          "overnight": true
+        }
+      ],
+      "layovers": [{"duration": 95, "name": "Istanbul Airport", "id": "IST"}],
+      "total_duration": 990,
+      "carbon_emissions": {"this_flight": 1024000, "typical_for_this_route": 980000, "difference_percent": 4},
+      "price": 612,
+      "type": "One way",
+      "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/TK.png"
+    },
+    {
+      "flights": [
+        {
+          "departure_airport": {"name": "Berlin Brandenburg Airport", "id": "BER", "time": "2027-03-10 06:20"},
+          "arrival_airport": {"name": "Frankfurt Airport", "id": "FRA", "time": "2027-03-10 07:35"},
+          "duration": 75,
+          "airplane": "Airbus A320",
+          "airline": "Lufthansa",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/LH.png",
+          "travel_class": "Economy",
+          "flight_number": "LH 195",
+          "legroom": "30 in",
+          "overnight": false
+        },
+        {
+          "departure_airport": {"name": "Frankfurt Airport", "id": "FRA", "time": "2027-03-10 09:20"},
+          "arrival_airport": {"name": "Tokyo Narita International Airport", "id": "NRT", "time": "2027-03-11 05:40"},
+          "duration": 740,
+          "airplane": "Boeing 747-8",
+          "airline": "Lufthansa",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/LH.png",
+          "travel_class": "Economy",
+          "flight_number": "LH 716",
+          "legroom": "31 in",
+          "overnight": true
+        }
+      ],
+      "layovers": [{"duration": 105, "name": "Frankfurt Airport", "id": "FRA"}],
+      "total_duration": 920,
+      "carbon_emissions": {"this_flight": 1180000, "typical_for_this_route": 980000, "difference_percent": 20},
+      "price": 738,
+      "type": "One way",
+      "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/LH.png"
+    }
+  ],
+  "other_flights": [
+    {
+      "flights": [
+        {
+          "departure_airport": {"name": "Berlin Brandenburg Airport", "id": "BER", "time": "2027-03-10 07:05"},
+          "arrival_airport": {"name": "Paris Charles de Gaulle Airport", "id": "CDG", "time": "2027-03-10 08:55"},
+          "duration": 110,
+          "airplane": "Airbus A220",
+          "airline": "Air France",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/AF.png",
+          "travel_class": "Economy",
+          "flight_number": "AF 1435",
+          "legroom": "31 in",
+          "overnight": false
+        },
+        {
+          "departure_airport": {"name": "Paris Charles de Gaulle Airport", "id": "CDG", "time": "2027-03-10 11:05"},
+          "arrival_airport": {"name": "Tokyo Narita International Airport", "id": "NRT", "time": "2027-03-11 06:35"},
+          "duration": 690,
+          "airplane": "Boeing 777",
+          "airline": "Air France",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/AF.png",
+          "travel_class": "Economy",
+          "flight_number": "AF 274",
+          "legroom": "32 in",
+          "overnight": true
+        }
+      ],
+      "layovers": [{"duration": 130, "name": "Paris Charles de Gaulle Airport", "id": "CDG"}],
+      "total_duration": 930,
+      "carbon_emissions": {"this_flight": 1090000, "typical_for_this_route": 980000, "difference_percent": 11},
+      "price": 845,
+      "type": "One way",
+      "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/AF.png"
+    }
+  ],
+  "price_insights": {
+    "lowest_price": 612,
+    "price_level": "typical",
+    "typical_price_range": [590, 980]
+  }
+}

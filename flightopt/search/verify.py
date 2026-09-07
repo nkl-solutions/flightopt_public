@@ -18,8 +18,11 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Callable
 
+from flightopt.domain import fx
+from flightopt.domain.fx import Rates
 from flightopt.domain.models import Money, Offer, SearchSpec
 from flightopt.search.dp import Combination
+from flightopt.search.grid import convert_offer
 from flightopt.sources.base import SourceError
 from flightopt.storage.cache import TTL_VERIFY, SqliteCache, cache_key
 
@@ -71,6 +74,7 @@ async def verify(
     sources: list,
     *,
     cache: SqliteCache | None = None,
+    rates: Rates | None = None,
     limit: int = 10,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[list[VerifiedItinerary], VerifyReport]:
@@ -90,54 +94,86 @@ async def verify(
     if on_progress:
         on_progress(0, total)
 
+    seen_errors: set[tuple[str, str]] = set()
+
+    def note_error(source_name: str, where: str, message: str) -> None:
+        """One line per (source, message), in the order they first appeared.
+
+        A source that is out of budget or blocked fails identically for every
+        leg-date in the shortlist. Twenty copies of the same sentence bury the
+        one error that is actually different.
+        """
+        key = (source_name, message)
+        if key in seen_errors:
+            return
+        seen_errors.add(key)
+        report.errors.append(f"{source_name} {where}: {message}")
+
+    async def ask(source, index: int, day: date) -> list[Offer]:
+        leg = spec.legs[index]
+        key = cache_key(
+            source.name, "verify", leg.origin, leg.destination, day,
+            pax=spec.pax.total, cabin=spec.cabin.value, currency=spec.currency,
+        )
+        cached = await cache.get(key) if cache is not None else None
+        if cached is not None:
+            report.cache_hits += 1
+            return [_offer_from_cache(row, source.name) for row in cached]
+
+        try:
+            report.calls += 1
+            offers = await source.search_leg(
+                leg.origin, leg.destination, day,
+                pax=spec.pax, cabin=spec.cabin, currency=spec.currency,
+            )
+        except SourceError as exc:
+            note_error(source.name, f"{leg.origin}-{leg.destination} {day}", str(exc))
+            return []
+        except Exception as exc:  # noqa: BLE001
+            note_error(
+                source.name,
+                f"{leg.origin}-{leg.destination} {day}",
+                f"{type(exc).__name__}: {exc}",
+            )
+            logger.exception("verify crashed on %s", leg)
+            return []
+
+        if cache is not None:
+            await cache.put(
+                key, [_offer_to_cache(o) for o in offers],
+                TTL_VERIFY, source=source.name,
+            )
+        return offers
+
     async def resolve_one(index: int, day: date) -> tuple[tuple[int, date], Offer | None]:
         leg = spec.legs[index]
+        usable = [
+            s for s in sources
+            if getattr(s, "supports_search", False)
+            and s.supports_route(leg.origin, leg.destination)
+        ]
+        # Airlines first: their price is the one that can actually be booked,
+        # and a paid collector must not be spent on a leg an airline covers.
+        airlines = [s for s in usable if getattr(s, "carrier", "")]
+        collectors = [s for s in usable if not getattr(s, "carrier", "")]
+
         best: Offer | None = None
-
-        for source in sources:
-            if not getattr(source, "supports_search", False):
-                continue
-            if not source.supports_route(leg.origin, leg.destination):
-                continue
-
-            key = cache_key(
-                source.name, "verify", leg.origin, leg.destination, day,
-                pax=spec.pax.total, cabin=spec.cabin.value, currency=spec.currency,
-            )
-            offers: list[Offer] = []
-            cached = await cache.get(key) if cache is not None else None
-            if cached is not None:
-                report.cache_hits += 1
-                offers = [_offer_from_cache(row, source.name) for row in cached]
-            else:
-                try:
-                    report.calls += 1
-                    offers = await source.search_leg(
-                        leg.origin, leg.destination, day,
-                        pax=spec.pax, cabin=spec.cabin, currency=spec.currency,
-                    )
-                except SourceError as exc:
-                    report.errors.append(
-                        f"{source.name} {leg.origin}-{leg.destination} {day}: {exc}"
-                    )
-                    continue
-                except Exception as exc:  # noqa: BLE001
-                    report.errors.append(
-                        f"{source.name} {leg.origin}-{leg.destination} {day}: "
-                        f"{type(exc).__name__}: {exc}"
-                    )
-                    logger.exception("verify crashed on %s", leg)
-                    continue
-
-                if cache is not None:
-                    await cache.put(
-                        key, [_offer_to_cache(o) for o in offers],
-                        TTL_VERIFY, source=source.name,
-                    )
-
-            for offer in offers:
-                if best is None or offer.price.minor < best.price.minor:
-                    best = offer
+        for group in (airlines, collectors):
+            for source in group:
+                for offer in await ask(source, index, day):
+                    try:
+                        offer = convert_offer(offer, spec.currency, rates)
+                    except fx.UnknownCurrency as exc:
+                        note_error(
+                            source.name,
+                            f"{leg.origin}-{leg.destination} {day}",
+                            str(exc),
+                        )
+                        continue
+                    if best is None or offer.price.minor < best.price.minor:
+                        best = offer
+            if best is not None:
+                break
 
         return (index, day), best
 

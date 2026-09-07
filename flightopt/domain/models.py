@@ -87,10 +87,19 @@ class Offer:
     deep_link: str | None = None
     is_estimate: bool = False
     """True for calendar/cached prices that still need live verification."""
+    price_native: Money | None = None
+    """The source's own currency, when `price` had to be converted."""
 
     @property
-    def stops(self) -> int:
-        return max(0, len(self.segments) - 1)
+    def stops(self) -> int | None:
+        """None, solange kein Flugplan dahintersteht.
+
+        Ein Kalenderpreis kennt keine Segmente. Null Umstiege zu melden waere
+        eine Aussage ueber einen Direktflug, den niemand gesehen hat.
+        """
+        if not self.segments:
+            return None
+        return len(self.segments) - 1
 
     @property
     def duration(self) -> timedelta | None:
@@ -144,6 +153,8 @@ class SearchSpec:
     cabin: Cabin = Cabin.ECONOMY
     currency: str = "EUR"
     checked_bags: int = 0
+    max_stops: int | None = None
+    """None means: decide per leg from the distance (see airports.auto_max_stops)."""
 
     def __post_init__(self) -> None:
         if not self.legs:
@@ -197,7 +208,8 @@ class Itinerary:
 
     @property
     def stops(self) -> int:
-        return sum(o.stops for o in self.offers)
+        """Summe der bekannten Umstiege; unbekannte zaehlen nicht mit."""
+        return sum(o.stops for o in self.offers if o.stops is not None)
 
     @property
     def travel_days(self) -> int:
