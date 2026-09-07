@@ -278,3 +278,42 @@ assert.strictEqual($("#aiStatus").textContent, "Route übernommen.");
     )
 
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_voice_input_adds_spoken_route_to_ai_field():
+    result = run_ui_assertion(
+        r"""
+let started = false;
+class FakeRecognition {
+  constructor() {
+    this.lang = "";
+    this.continuous = true;
+    this.interimResults = false;
+  }
+  start() {
+    started = true;
+    this.onstart();
+    this.onresult({
+      resultIndex: 0,
+      results: [
+        {0: {transcript: "Berlin nach Istanbul"}, isFinal: true},
+      ],
+    });
+    this.onend();
+  }
+  stop() { this.onend(); }
+}
+
+global.window = {SpeechRecognition: FakeRecognition};
+setupVoiceInput();
+$("#aiText").value = "";
+$("#voiceInput").onclick();
+
+assert.strictEqual(started, true);
+assert.strictEqual($("#aiText").value, "Berlin nach Istanbul");
+assert.strictEqual($("#voiceStatus").textContent, "Sprache übernommen. Route prüfen und übernehmen.");
+assert.strictEqual($("#voiceInput").attributes["aria-pressed"], "false");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout

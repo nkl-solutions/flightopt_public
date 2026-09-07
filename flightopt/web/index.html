@@ -56,11 +56,24 @@ button,input{font:inherit;color:inherit}
   font-size:13px;font-weight:600;cursor:pointer}
 .quickroute button:hover{background:var(--accent-hover)}
 .quickroute button:disabled{background:var(--rule-strong);cursor:not-allowed}
+.quickactions{display:flex;gap:8px;align-items:stretch}
+.quickroute .voicebtn{display:flex;align-items:center;gap:7px;background:var(--bg-elevated);color:var(--ink);
+  border:1px solid var(--rule-interactive);padding:0 12px;white-space:nowrap}
+.quickroute .voicebtn:hover{background:var(--bg-elevated);border-color:var(--accent);color:var(--accent)}
+.quickroute .voicebtn.on{border-color:var(--accent);color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
+.quickroute .voicebtn:disabled{background:var(--bg-subtle);color:var(--ink-subtle);border-color:var(--rule);cursor:not-allowed}
+.voicemark{position:relative;width:10px;height:14px;border:1.5px solid currentColor;border-radius:7px}
+.voicemark:before{content:"";position:absolute;left:50%;bottom:-6px;width:12px;height:7px;
+  transform:translateX(-50%);border:1.5px solid currentColor;border-top:0;border-radius:0 0 8px 8px}
+.voicemark:after{content:"";position:absolute;left:50%;bottom:-10px;width:12px;height:1.5px;
+  transform:translateX(-50%);background:currentColor}
 .quickhint{grid-column:1/-1;min-height:18px;font-size:12.5px;color:var(--ink-subtle)}
 .quickhint.err{color:var(--error)}
+.voicehint{margin-top:-4px}
 @media(max-width:700px){
   .quickroute{grid-template-columns:1fr}
-  .quickroute button{height:38px}
+  .quickactions{display:grid;grid-template-columns:1fr 1fr}
+  .quickroute button{height:38px;justify-content:center}
 }
 .route{display:flex;align-items:flex-start;gap:7px;flex-wrap:wrap}
 .hop{position:relative}
@@ -294,8 +307,15 @@ footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--rule);font-si
       <div class="quickroute">
         <textarea id="aiText" rows="2"
           placeholder="Berlin nach Istanbul, weiter nach Athen, zurück nach Berlin"></textarea>
-        <button id="aiApply" type="button">Route übernehmen</button>
+        <div class="quickactions">
+          <button id="voiceInput" class="voicebtn" type="button"
+            aria-label="Route per Sprache eingeben" aria-pressed="false" title="Route per Sprache eingeben">
+            <span class="voicemark" aria-hidden="true"></span><span>Sprache</span>
+          </button>
+          <button id="aiApply" type="button">Route übernehmen</button>
+        </div>
         <span class="quickhint" id="aiStatus"></span>
+        <span class="quickhint voicehint" id="voiceStatus" role="status" aria-live="polite"></span>
       </div>
       <span class="lab" id="routelbl">Route</span>
       <div class="route" id="route" role="group" aria-labelledby="routelbl"></div>
@@ -515,6 +535,94 @@ async function parseNaturalSearch(){
   } finally {
     $("#aiApply").disabled = false;
   }
+}
+
+/* ---------------- voice input ---------------- */
+let voiceRecognition = null, voiceListening = false;
+function voiceRecognitionCtor(){
+  const w = typeof window === "undefined" ? {} : window;
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+}
+function setVoiceStatus(text, kind=""){
+  const status = $("#voiceStatus");
+  if (!status) return;
+  status.className = kind === "err" ? "quickhint voicehint err" : "quickhint voicehint";
+  status.textContent = text;
+}
+function setVoiceListening(on){
+  voiceListening = on;
+  const button = $("#voiceInput");
+  if (!button) return;
+  button.classList.toggle("on", on);
+  button.setAttribute("aria-pressed", on ? "true" : "false");
+  button.setAttribute("aria-label", on ? "Spracheingabe stoppen" : "Route per Sprache eingeben");
+}
+function spokenRouteText(text){
+  return String(text || "").trim().replace(/\s+/g, " ");
+}
+function insertSpokenRoute(text){
+  const clean = spokenRouteText(text);
+  if (!clean) return "";
+  const field = $("#aiText");
+  const current = field.value.trim();
+  field.value = current ? `${current} ${clean}` : clean;
+  if (typeof field.focus === "function") field.focus();
+  return clean;
+}
+function voiceErrorMessage(code){
+  if (code === "not-allowed" || code === "service-not-allowed") return "Mikrofonzugriff wurde nicht erlaubt.";
+  if (code === "no-speech") return "Keine Sprache erkannt.";
+  if (code === "audio-capture") return "Kein Mikrofon gefunden.";
+  if (code === "network") return "Spracherkennung ist gerade nicht erreichbar.";
+  return "Spracheingabe konnte nicht gestartet werden.";
+}
+function setupVoiceInput(){
+  const button = $("#voiceInput");
+  if (!button) return;
+  const Recognition = voiceRecognitionCtor();
+  if (!Recognition){
+    button.disabled = true;
+    button.title = "Spracheingabe ist in diesem Browser nicht verfügbar.";
+    setVoiceStatus("Spracheingabe funktioniert in Chrome oder Edge per HTTPS.");
+    return;
+  }
+  button.disabled = false;
+  button.onclick = () => {
+    if (voiceListening && voiceRecognition){
+      voiceRecognition.stop();
+      return;
+    }
+    const recognition = new Recognition();
+    voiceRecognition = recognition;
+    recognition.lang = "de-DE";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.onstart = () => {
+      setVoiceListening(true);
+      setVoiceStatus("Höre zu...");
+    };
+    recognition.onresult = event => {
+      let finalText = "", interimText = "";
+      for (let i = event.resultIndex; i < event.results.length; i++){
+        const part = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalText += part;
+        else interimText += part;
+      }
+      if (interimText) setVoiceStatus(`Erkannt: ${spokenRouteText(interimText)}`);
+      if (finalText){
+        insertSpokenRoute(finalText);
+        setVoiceStatus("Sprache übernommen. Route prüfen und übernehmen.");
+      }
+    };
+    recognition.onerror = event => setVoiceStatus(voiceErrorMessage(event.error), "err");
+    recognition.onend = () => setVoiceListening(false);
+    try {
+      recognition.start();
+    } catch {
+      setVoiceListening(false);
+      setVoiceStatus("Spracheingabe läuft bereits.", "err");
+    }
+  };
 }
 
 /* ---------------- stay ranges ---------------- */
@@ -1201,6 +1309,7 @@ $("#stayrow").classList.toggle("off", !TRIPS.find(t=>t.id===trip).stays);
   saveForm(); if (lastResults.length) render(lastResults);
 });
 $("#aiApply").onclick = parseNaturalSearch;
+setupVoiceInput();
 drawTabs(); drawRoute(); loadAirlines().then(() => {
   // Restore the chips only after the registry has rendered them.
   if (restored) {
