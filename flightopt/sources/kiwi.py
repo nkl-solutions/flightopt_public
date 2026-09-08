@@ -27,8 +27,10 @@ logger = logging.getLogger(__name__)
 
 ENDPOINT = "https://api.skypicker.com/umbrella/v2/graphql?featureName=PriceCalendarQuery"
 
-# Kiwi answers for windows far longer than three months, but the calendar it
-# returns is capped, so long searches are walked in chunks.
+# Kiwi accepts a from/to range and answers for windows far longer than three
+# months, but the calendar it returns is capped at roughly 91 days: a longer
+# ask silently comes back short. 90 is therefore the largest chunk that is
+# safe, and a normal search window fits into a single call.
 CHUNK_DAYS = 90
 
 # Ryanair fares on the same days ran this much below Kiwi's number. Recorded so
@@ -62,7 +64,9 @@ class KiwiSource(HttpSource):
     supports_search = False
     """Prices here are indicative, so they are never used to confirm a booking."""
     indicative = True
-    per_minute = 20
+    # Oeffentliche GraphQL-API, gebaut fuer Portal-Traffic; deckt jede Strecke ab.
+    per_minute = 60
+    concurrency = 6
     accepts_max_stops = True
 
     def __init__(self, *, carriers: list[str] | None = None, max_stops: int = 1, **kw) -> None:

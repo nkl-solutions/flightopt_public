@@ -38,27 +38,38 @@ class EurowingsSource(HttpSource):
     supports_calendar = True
     supports_search = False
     """Prices come per day; flight times are not part of this payload."""
+    # Bleibt niedrig: Cloudflare davor, und ein Abruf deckt 15 Monate ab.
     per_minute = 15
 
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
         self._session = None
+        self._warmup_lock = asyncio.Lock()
 
     async def _warm_session(self):
-        """One page load to earn the Cloudflare cookie the service expects."""
+        """One page load to earn the Cloudflare cookie the service expects.
+
+        Under the lock, because parallel legs would otherwise each see an empty
+        `_session` and fetch the warm-up page again. Several challenge requests
+        in a row is precisely what Cloudflare is watching for.
+        """
         if self._session is not None:
             return self._session
 
-        from curl_cffi import requests as creq
+        async with self._warmup_lock:
+            if self._session is not None:
+                return self._session
 
-        session = creq.Session(impersonate=self.impersonate)
-        await self.limiter.wait()
-        try:
-            await asyncio.to_thread(session.get, WARMUP, timeout=40)
-        except Exception as exc:  # noqa: BLE001
-            raise SourceError(f"eurowings: warm-up failed: {exc}") from exc
-        self._session = session
-        return session
+            from curl_cffi import requests as creq
+
+            session = creq.Session(impersonate=self.impersonate)
+            await self.limiter.wait()
+            try:
+                await asyncio.to_thread(session.get, WARMUP, timeout=40)
+            except Exception as exc:  # noqa: BLE001
+                raise SourceError(f"eurowings: warm-up failed: {exc}") from exc
+            self._session = session
+            return session
 
     async def _fetch(self, origin: str, destination: str) -> dict:
         session = await self._warm_session()

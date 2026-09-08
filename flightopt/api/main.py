@@ -32,11 +32,20 @@ from flightopt.domain import airlines as airline_registry
 from flightopt.domain import airports as airport_registry
 from flightopt.domain.models import Cabin, LegSpec, Pax, SearchSpec, StayRange
 from flightopt.domain.natural_search import parse_search_text
+from flightopt.hotels.models import HotelQuery
+from flightopt.hotels.registry import build_hotel_sources, source_report
+from flightopt.hotels.scan import load_scan, scan_days
 from flightopt.jobs.daily import (
     collect_deals,
     dispatch_due_profiles,
     due_profiles,
     save_profile,
+)
+from flightopt.jobs.hotel_runner import (
+    MAX_HOTEL_DAYS,
+    TERMINAL as HOTEL_TERMINAL,
+    HotelJobRunner,
+    stored_rows,
 )
 from flightopt.jobs.runner import JobRunner
 from flightopt.jobs.scheduler import DailyScanScheduler
@@ -49,6 +58,7 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 AUTH_REALM = "flightopt"
 
 runner = JobRunner()
+hotel_runner = HotelJobRunner()
 daily_scheduler = DailyScanScheduler(
     runner,
     interval_seconds=int(os.getenv("FLIGHTOPT_SCAN_INTERVAL_SECONDS", "600")),
@@ -232,9 +242,208 @@ class NaturalSearchRequest(BaseModel):
     text: str = Field(min_length=3, max_length=1000)
 
 
+class HotelSearchRequest(BaseModel):
+    """Eine Hotelsuche. Sie laeuft als Job, das Fenster darf lang sein."""
+
+    destination: str = Field(min_length=2, max_length=120)
+    arrival: date
+    window_end: date | None = None
+    nights: int = Field(default=1, ge=1, le=30)
+    adults: int = Field(default=2, ge=1, le=12)
+    children: list[int] = Field(default_factory=list)
+    rooms: int = Field(default=1, ge=1, le=8)
+    stars: list[int] = Field(default_factory=list)
+    min_review_score: float | None = Field(default=None, ge=0, le=10)
+    currency: str = "EUR"
+    country: str = "DE"
+    scan_id: int | None = None
+    """Einen gestoppten Lauf fortsetzen statt einen neuen anzufangen."""
+
+    def window(self) -> tuple[date, date]:
+        end = self.window_end or self.arrival
+        if end < self.arrival:
+            raise ValueError("Das Fensterende liegt vor dem Anfang.")
+        days = (end - self.arrival).days + 1
+        if days > MAX_HOTEL_DAYS:
+            # Gekuerzt wird nichts stillschweigend: wer 500 Tage eintippt, soll
+            # das erfahren und nicht 400 Tage Ergebnisse fuer 500 halten.
+            raise ValueError(
+                f"Das Fenster umfasst {days} Tage. Je Lauf sind "
+                f"{MAX_HOTEL_DAYS} Tage vorgesehen, teile den Zeitraum auf."
+            )
+        return self.arrival, end
+
+    def to_query(self) -> HotelQuery:
+        ages = [int(age) for age in self.children]
+        if any(age < 0 or age > 17 for age in ages):
+            raise ValueError("Kinderalter liegt zwischen 0 und 17.")
+        return HotelQuery(
+            destination=self.destination.strip(),
+            arrival=self.arrival,
+            nights=self.nights,
+            adults=self.adults,
+            children=tuple(ages),
+            rooms=self.rooms,
+            stars=tuple(sorted({int(s) for s in self.stars})),
+            country=self.country,
+            currency=self.currency,
+            min_review_score=self.min_review_score,
+        )
+
+
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/hotels")
+async def hotels_page() -> FileResponse:
+    return FileResponse(WEB_DIR / "hotels.html")
+
+
+@app.post("/api/hotels/search")
+async def hotel_search(req: HotelSearchRequest) -> dict[str, Any]:
+    """Startet den Durchlauf und antwortet mit seiner Kennung, nicht mit Zeilen.
+
+    Die Zeilen kommen ueber den Ereignisstrom, Tag fuer Tag. Ein Einzeltag ist
+    damit genauso schnell wie vorher, nur haelt niemand mehr die Anfrage auf.
+    """
+    try:
+        window_start, window_end = req.window()
+        query = req.to_query()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if req.scan_id is not None:
+        # Wiederaufnahme: derselbe Lauf, current_day sagt dem Runner, wo er
+        # weitermacht.
+        if hotel_runner.status(req.scan_id) is None:
+            raise HTTPException(status_code=404, detail="Unbekannter Durchlauf")
+        scan_id = req.scan_id
+    else:
+        scan_id = hotel_runner.create(
+            query, window_start=window_start, window_end=window_end
+        )
+    hotel_runner.start(
+        scan_id, query,
+        window_start=window_start, window_end=window_end,
+        sources=build_hotel_sources,
+    )
+    return {
+        "scan_id": scan_id,
+        "status": "running",
+        "destination": query.destination,
+        "window": {"start": window_start.isoformat(), "end": window_end.isoformat()},
+        "nights": query.nights,
+        "days_total": len(scan_days(window_start, window_end)),
+        "sources": source_report(),
+    }
+
+
+@app.get("/api/hotels/scan/{scan_id}")
+async def hotel_scan_state(scan_id: int) -> dict[str, Any]:
+    """Der Stand eines Durchlaufs, auch wenn er gestoppt wurde."""
+    conn = hotel_runner._conn()
+    try:
+        scan = load_scan(conn, scan_id)
+        if scan is None:
+            raise HTTPException(status_code=404, detail="Unbekannter Durchlauf")
+        return scan
+    finally:
+        conn.close()
+
+
+@app.get("/api/hotels/scans")
+async def hotel_scans(limit: int = 20) -> dict[str, Any]:
+    """Die letzten Laeufe: Ziel, Fenster, Stand, Treffer, Zeitpunkt."""
+    conn = hotel_runner._conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, destination, window_start, window_end, nights, status, "
+            "days_done, days_total, offers_found, created_at, finished_at "
+            "FROM hotel_scan ORDER BY id DESC LIMIT ?",
+            (max(1, min(100, limit)),),
+        ).fetchall()
+        return {"scans": [dict(row) for row in rows]}
+    finally:
+        conn.close()
+
+
+@app.get("/api/hotels/scan/{scan_id}/rows")
+async def hotel_scan_rows(scan_id: int) -> dict[str, Any]:
+    """Das Ergebnis eines gespeicherten Laufs, aus der Beobachtungshistorie."""
+    conn = hotel_runner._conn()
+    try:
+        scan = load_scan(conn, scan_id)
+        if scan is None:
+            raise HTTPException(status_code=404, detail="Unbekannter Durchlauf")
+        return {
+            "scan_id": scan_id,
+            "status": scan["status"],
+            "destination": scan["destination"],
+            "window": {"start": scan["window_start"], "end": scan["window_end"]},
+            "nights": scan["nights"],
+            "days_done": scan["days_done"],
+            "days_total": scan["days_total"],
+            "rows": stored_rows(conn, scan),
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/hotels/scan/{scan_id}/events")
+async def hotel_scan_events(scan_id: int) -> StreamingResponse:
+    """Fortschritt je Tag, Teilergebnisse, Abschluss. Wie bei der Flugsuche."""
+    if hotel_runner.status(scan_id) is None:
+        raise HTTPException(status_code=404, detail="Unbekannter Durchlauf")
+    queue = hotel_runner.subscribe(scan_id)
+
+    async def stream():
+        try:
+            # Ein Lauf aus einem frueheren Prozess hat keinen Verlauf mehr, nur
+            # seinen Stand. Also den senden, statt auf Ereignisse zu warten,
+            # die nie kommen.
+            if not hotel_runner.has_history(scan_id):
+                done = hotel_runner.result(scan_id)
+                if done and done["status"] in HOTEL_TERMINAL:
+                    if done["status"] == "cancelled":
+                        message = "Durchlauf abgebrochen"
+                    else:
+                        message = done.get("error") or "fertig"
+                    payload = {
+                        "phase": done["status"],
+                        "message": message,
+                        "done": 0,
+                        "total": 0,
+                        "detail": {"rows": done["rows"]},
+                    }
+                    yield f"data: {json.dumps(payload)}\n\n"
+                    return
+            while True:
+                try:
+                    progress = await asyncio.wait_for(queue.get(), timeout=20.0)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                yield f"data: {progress.to_json()}\n\n"
+                if progress.phase in HOTEL_TERMINAL:
+                    return
+        finally:
+            hotel_runner.unsubscribe(scan_id, queue)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/hotels/scan/{scan_id}/cancel")
+async def cancel_hotel_scan(scan_id: int) -> dict[str, Any]:
+    """Stoppt einen laufenden Durchlauf. Der Runner prueft zwischen zwei Tagen."""
+    if hotel_runner.status(scan_id) is None:
+        raise HTTPException(status_code=404, detail="Unbekannter Durchlauf")
+    return {"scan_id": scan_id, "status": hotel_runner.cancel(scan_id)}
 
 
 @app.get("/api/health")

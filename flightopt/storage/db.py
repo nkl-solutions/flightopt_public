@@ -113,6 +113,51 @@ CREATE TABLE IF NOT EXISTS fx_rate (
     fetched_at TEXT NOT NULL
 );
 
+-- Stammdaten je Unterkunft. Der Preis steht nicht hier, sondern in
+-- price_observation: ein Objekt hat viele Preise, aber nur einen Namen.
+CREATE TABLE IF NOT EXISTS hotel_property (
+    property_key   TEXT PRIMARY KEY,   -- '<quelle>:<id>', z.B. 'trivago:1d6fec31a3cf'
+    source         TEXT NOT NULL,
+    name           TEXT NOT NULL,
+    city           TEXT,
+    country        TEXT,
+    country_code   TEXT,               -- ISO-2, 'XX' wenn unbekannt
+    stars          INTEGER,
+    lat            REAL,
+    lon            REAL,
+    review_rating  REAL,
+    review_count   INTEGER,
+    url            TEXT,
+    first_seen     TEXT NOT NULL,
+    last_seen      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_property_place
+    ON hotel_property(country_code, city, stars);
+
+-- Ein Zeitraum-Durchlauf. current_day traegt die Wiederaufnahme: ein Lauf, der
+-- abbricht, macht dort weiter statt von vorn.
+CREATE TABLE IF NOT EXISTS hotel_scan (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    destination  TEXT NOT NULL,
+    window_start TEXT NOT NULL,
+    window_end   TEXT NOT NULL,
+    nights       INTEGER NOT NULL DEFAULT 1,
+    adults       INTEGER NOT NULL DEFAULT 2,
+    children     INTEGER NOT NULL DEFAULT 0,
+    rooms        INTEGER NOT NULL DEFAULT 1,
+    filters      TEXT NOT NULL DEFAULT '{}',   -- Sterne, Bewertung, Waehrung
+    status       TEXT NOT NULL,                -- pending|running|done|failed|cancelled
+    current_day  TEXT,
+    days_done    INTEGER NOT NULL DEFAULT 0,
+    days_total   INTEGER NOT NULL DEFAULT 0,
+    offers_found INTEGER NOT NULL DEFAULT 0,
+    error        TEXT,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL,
+    finished_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_scan_status ON hotel_scan(status, created_at);
+
 CREATE TABLE IF NOT EXISTS api_budget (
     source TEXT NOT NULL,
     month  TEXT NOT NULL,          -- 'YYYY-MM'

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flightopt: Hotelpreise</title>
+<meta name="description" content="Ein Ziel, ein Fenster, ein Preis je Tag. flightopt zeigt, an welchen Nächten dasselbe Haus am wenigsten kostet.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23f8f7f2'/%3E%3Crect x='2' y='3' width='12' height='1.4' fill='%231e1a16'/%3E%3Crect x='2' y='7.3' width='12' height='1.4' fill='%23b01003'/%3E%3Crect x='2' y='11.6' width='12' height='1.4' fill='%231e1a16'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <h1 class="mark">flightopt<span>.</span></h1>
+  <nav class="domainnav" aria-label="Bereich">
+    <a href="/">Flüge</a>
+    <a href="/hotels" aria-current="page">Hotels</a>
+  </nav>
+  <p class="tagline">Ein Ziel, ein Fenster, ein Preis je Nacht. Zeigt, wann dasselbe Haus am wenigsten kostet.</p>
+</header>
+
+<form id="hf">
+  <fieldset class="seg">
+    <legend class="lab">Modus</legend>
+    <div class="segset" id="modeoptions"></div>
+  </fieldset>
+
+  <div class="panel">
+    <div>
+      <label class="lab" for="destination">Ziel</label>
+      <input type="text" id="destination" value="Athen" required
+        placeholder="Athen, Lissabon, Zürich" autocomplete="off">
+      <p class="msg" id="destmsg" data-tone=""></p>
+    </div>
+
+    <div>
+      <div class="row">
+        <div><label class="lab" for="from">Anreise ab</label><input type="date" id="from" required></div>
+        <div id="towrap"><label class="lab" for="to">bis</label><input type="date" id="to"></div>
+        <div><label class="lab" for="nights">Nächte</label><input type="number" id="nights" min="1" max="30" value="1"></div>
+      </div>
+      <p class="msg" id="windowmsg" data-tone=""></p>
+
+      <div class="row">
+        <div><label class="lab" for="adults">Erwachsene</label><input type="number" id="adults" min="1" max="12" value="2"></div>
+        <div><label class="lab" for="kids">Kinder</label><input type="number" id="kids" min="0" max="6" value="0"></div>
+        <div><label class="lab" for="rooms">Zimmer</label><input type="number" id="rooms" min="1" max="8" value="1"></div>
+      </div>
+      <div class="stayrow" id="agesrow" hidden>
+        <div class="stayhead">
+          <span class="lab">Alter der Kinder</span>
+          <span class="stayhint">Booking und trivago rechnen je Kind mit dem Alter</span>
+        </div>
+        <div class="row" id="ages"></div>
+      </div>
+    </div>
+  </div>
+
+  <details class="fold" id="hoteloptions">
+    <summary>Optionen</summary>
+    <div class="foldbody">
+      <span class="lab" id="starslbl">Sterne</span>
+      <div class="chips" id="stars" role="group" aria-labelledby="starslbl"></div>
+      <div class="row stayrow">
+        <div>
+          <label class="lab" for="minReview">Mindestbewertung</label>
+          <select id="minReview">
+            <option value="">ohne Vorgabe</option>
+            <option value="7">ab 7,0</option>
+            <option value="8">ab 8,0</option>
+            <option value="9">ab 9,0</option>
+          </select>
+        </div>
+        <div>
+          <label class="lab" for="currency">Währung</label>
+          <select id="currency">
+            <option value="EUR">Euro</option>
+            <option value="CHF">Schweizer Franken</option>
+            <option value="USD">US-Dollar</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint" id="sourcehint"></p>
+    </div>
+  </details>
+
+  <div class="actions">
+    <button class="go" id="hgo" type="submit">Suchen</button>
+    <span class="msg sizing" id="sizing" data-tone=""></span>
+  </div>
+</form>
+
+<section class="log" id="hlog">
+  <div class="progressmeter">
+    <div class="progressbar" id="progressbar" role="progressbar" aria-valuemin="0"
+      aria-valuemax="100" aria-valuenow="0"><i id="progressfill"></i></div>
+    <div class="progressmeta">
+      <span id="progresslabel" aria-live="polite">Bereit</span>
+      <span id="progresscount"></span>
+      <button class="kill-search" id="hcancel" type="button" hidden>Abbrechen</button>
+      <button class="kill-search" id="resume" type="button" hidden>Lauf fortsetzen</button>
+    </div>
+  </div>
+  <p class="msg note" id="note" data-tone="" role="status" aria-live="polite"></p>
+</section>
+
+<section class="out" id="hout">
+  <div class="outhead">
+    <h2 id="outtitle" tabindex="-1">Ergebnisse</h2>
+    <div class="tools">
+      <label class="sortlbl" for="sort">Sortieren</label>
+      <select id="sort">
+        <option value="signal">Signal</option>
+        <option value="price">Preis pro Nacht</option>
+        <option value="date">Datum</option>
+        <option value="stars">Sterne</option>
+        <option value="rating">Bewertung</option>
+        <option value="source">Quelle</option>
+      </select>
+      <label class="sortlbl" for="filterSignal">Signal</label>
+      <select id="filterSignal">
+        <option value="">Alle</option>
+        <option value="error">Preisfehler</option>
+        <option value="cheap">günstig</option>
+        <option value="normal">normal</option>
+        <option value="expensive">teuer</option>
+        <option value="unknown">keine Basis</option>
+      </select>
+      <label class="sortlbl" for="filterStars">Sterne</label>
+      <select id="filterStars">
+        <option value="">Alle</option>
+        <option value="5">5</option>
+        <option value="4">4</option>
+        <option value="3">3</option>
+      </select>
+      <label class="sortlbl" for="filterSource">Quelle</label>
+      <select id="filterSource">
+        <option value="">Alle</option>
+      </select>
+      <span class="filtercount" id="filtercount"></span>
+    </div>
+  </div>
+  <p class="outsummary" id="outsummary" aria-live="polite"></p>
+  <div class="tablewrap">
+    <table class="kursbuch" id="hoteltable">
+      <thead>
+        <tr>
+          <th scope="col">Objekt</th>
+          <th scope="col" class="c-num">Sterne</th>
+          <th scope="col" class="c-rail">Datum</th>
+          <th scope="col" class="c-price">Preis pro Nacht</th>
+          <th scope="col" class="c-num">Bewertung</th>
+          <th scope="col" class="c-status">Signal</th>
+          <th scope="col" class="c-source">Quelle</th>
+        </tr>
+      </thead>
+      <tbody id="hotelrows"></tbody>
+    </table>
+  </div>
+
+  <section class="deals" id="scans">
+    <h2>Gespeicherte Läufe</h2>
+    <ul class="scanlist" id="scanlist"></ul>
+  </section>
+</section>
+
+<footer>
+  Die Preise sind Richtwerte der Quelle, keine geprüften Bestpreise. Ein
+  Vergleichsportal nennt je Haus genau einen Preis und sortiert ihn
+  monetarisiert, es ist also kein Bestpreisnachweis. Privater Gebrauch.
+</footer>
+</div>
+<script src="/static/hotels.js"></script>
+</body>
+</html>

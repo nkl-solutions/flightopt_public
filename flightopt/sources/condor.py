@@ -23,7 +23,15 @@ from flightopt.sources.base import HttpSource, SourceError
 logger = logging.getLogger(__name__)
 
 ENDPOINT = "https://www.condor.com/tca/rest/de/vacancies/lowFareInformation"
+
 DAYS_PER_CALL = 31
+"""How many days one request asks for.
+
+`numberOfFlightDays` is a day count, not a month, and 31 is the size that was
+verified live. It stays at 31: the endpoint's own window is about a month, so
+asking for more is a guess. What changed is that the window is now tiled in
+days rather than in calendar months, which is where the wasted requests were.
+"""
 
 
 class CondorSource(HttpSource):
@@ -34,17 +42,25 @@ class CondorSource(HttpSource):
     supports_calendar = True
     supports_search = False
     """The endpoint prices days, not flights; no times or numbers are returned."""
-    per_minute = 25
+    # Offene Lowfare-API; nur die Monatsschleife kostet mehrere Abrufe.
+    per_minute = 30
 
     async def calendar(
         self, origin: str, destination: str, month: date, *, currency: str = "EUR"
     ) -> dict[date, Money]:
-        anchor = month.replace(day=1)
+        """The days around the first of `month`. Kept for the calendar protocol."""
+        return await self._window(
+            origin, destination, month.replace(day=1), DAYS_PER_CALL, currency
+        )
+
+    async def _window(
+        self, origin: str, destination: str, anchor: date, days: int, currency: str
+    ) -> dict[date, Money]:
         params = {
             "origin": origin,
             "destination": destination,
             "outboundDate": anchor.strftime("%Y%m%d"),
-            "numberOfFlightDays": DAYS_PER_CALL,
+            "numberOfFlightDays": days,
             "currency": currency,
             "oneway": "true",
             "adults": 1,
@@ -84,27 +100,42 @@ class CondorSource(HttpSource):
     async def calendar_range(
         self, origin: str, destination: str, start: date, end: date, *, currency: str = "EUR"
     ) -> dict[date, Money]:
-        """Walk month by month and merge.
+        """Tile the window in 31-day steps, not in calendar months.
 
-        Because the anchor date only loosely controls which days come back, the
-        windows overlap on purpose and results are deduplicated by date.
+        The month loop this replaces paid for the calendar, not for the data: a
+        60-day search starting mid-month spans three calendar months and cost
+        three requests for a window two requests cover. Alignment decided the
+        price, and a window shorter than a month could still cost two calls.
+
+        The anchor only loosely controls which days come back - asking for
+        1 October returned 2 October onwards - so the cursor starts a day early
+        and the windows overlap on purpose. Results are deduplicated by date
+        and the cheapest wins.
         """
         out: dict[date, Money] = {}
-        cursor = start.replace(day=1)
+        anchor = start - timedelta(days=1)
         guard = 0
-        while cursor <= end and guard < 24:
+        while guard < 24:
             guard += 1
             try:
-                month = await self.calendar(origin, destination, cursor, currency=currency)
+                chunk = await self._window(
+                    origin, destination, anchor, DAYS_PER_CALL, currency
+                )
             except SourceError as exc:
                 logger.warning(
-                    "condor: %s-%s %s failed: %s", origin, destination, cursor, exc
+                    "condor: %s-%s %s failed: %s", origin, destination, anchor, exc
                 )
-                month = {}
-            for day, money in month.items():
+                chunk = {}
+            for day, money in chunk.items():
                 if start <= day <= end and (
                     day not in out or money.minor < out[day].minor
                 ):
                     out[day] = money
-            cursor = (cursor + timedelta(days=32)).replace(day=1)
+            # Der Abruf deckt anchor+1 bis anchor+DAYS_PER_CALL ab. Erst wenn
+            # das Fensterende darueber hinausgeht, ist ein weiterer noetig -
+            # sonst kostete ein Fenster von genau 31 Tagen zwei Abrufe.
+            covered_through = anchor + timedelta(days=DAYS_PER_CALL)
+            if covered_through >= end:
+                break
+            anchor = covered_through
         return out

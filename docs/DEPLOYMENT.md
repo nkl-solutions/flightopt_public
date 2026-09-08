@@ -83,6 +83,29 @@ Python hat keine portable Heap-Grenze wie `NODE_OPTIONS` oder `GOMEMLIMIT`.
 Die harte Grenze ist deshalb das Docker-/cgroup-Limit; ein einzelner Uvicorn-
 Prozess bleibt bewusst schlicht.
 
+## Hotelsuche auf dem VPS
+
+Die Hotelsuche laeuft im bestehenden Stack ohne Zutun: Trivago spricht ueber
+denselben HTTP-Weg wie die Flugquellen, braucht keinen Schluessel und keinen
+Browser. Seite und Endpunkte (`/hotels`, `/api/hotels/*`) liegen hinter
+derselben Basic Auth wie alles andere.
+
+Booking.com ist die Ausnahme und gehoert nicht in diesen Stack. Die Quelle
+braucht drei Dinge auf einmal:
+
+- `FLIGHTOPT_HOTELS_BOOKING=1` als Umgebungsvariable,
+- Playwright samt Chromium, also die optionale Abhaengigkeitsgruppe `hotels`
+  (`uv sync --group hotels && uv run playwright install chromium`). Das
+  Dockerfile baut mit `uv sync --frozen --no-dev` und laesst die Gruppe
+  bewusst aussen vor,
+- deutlich mehr Speicher: der Stack steht auf `mem_limit: 512m`, ein Chromium
+  mit zwei Kontexten braucht je nach Seite 300 bis 500 MB.
+
+Ohne Schalter oder ohne Playwright bleibt die Quelle einfach draussen und der
+Grund steht im Quellenbericht der Oberflaeche. Es scheitert also nichts, es
+fehlt nur eine Quelle. Booking bleibt damit dem lokalen Rechner vorbehalten,
+bis es einen groesseren Container mit eigenem Image gibt.
+
 ## Healthcheck
 
 `/api/health` bleibt ohne Basic Auth erreichbar, damit Docker den Container

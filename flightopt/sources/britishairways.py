@@ -56,7 +56,9 @@ class BritishAirwaysSource(HttpSource):
     supports_calendar = True
     supports_search = False
     """Lowest price per date; no flight numbers or times in this index."""
+    # Bleibt niedrig: der Suchindex liegt hinter einem WAF.
     per_minute = 15
+    concurrency = 2
 
     async def calendar(
         self, origin: str, destination: str, month: date, *, currency: str = "EUR"
@@ -97,6 +99,13 @@ class BritishAirwaysSource(HttpSource):
     async def calendar_range(
         self, origin: str, destination: str, start: date, end: date, *, currency: str = "EUR"
     ) -> dict[date, Money]:
+        """Ein Abruf je Kalendermonat - der Suchindex kennt nichts Groesseres.
+
+        Das Filterfeld ist `month_year:(YYYYMM)`, ein einzelner Monat. Ein
+        Mehrmonatsfilter waere in Solr syntaktisch denkbar, ist gegen diesen
+        Index aber nie geprueft worden, und `rows=80` muesste mitwachsen. Ohne
+        Live-Beleg bleibt es beim Monat.
+        """
         out: dict[date, Money] = {}
         cursor = start.replace(day=1)
         guard = 0

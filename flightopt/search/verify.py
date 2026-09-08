@@ -68,6 +68,36 @@ class VerifyReport:
     errors: list[str] = field(default_factory=list)
 
 
+def pairs_by_rank(shortlist: list[Combination]) -> list[tuple[int, date]]:
+    """The distinct (leg, day) pairs, ordered by the best candidate needing them.
+
+    Sorting by `(leg_index, day)` looked tidy and was the wrong order. The UI
+    streams a candidate as verified once all of its legs are in, so what
+    matters is finishing whole candidates, cheapest first - not finishing leg 0
+    for everybody. With the old order the favourite's outbound was resolved
+    early and its last leg often last of all, so the row the user is actually
+    looking at was the slowest to turn green.
+
+    Walking the shortlist in rank order and taking each pair the first time it
+    appears fixes that, and it costs nothing: the set of pairs is identical,
+    only the sequence changes. Deduplication is preserved, so a leg-date shared
+    by several candidates is still fetched once.
+
+    It also settles the "first candidates first" question by construction: a
+    pair that only belongs to candidate six cannot appear before a pair that
+    candidate one already needed.
+    """
+    ordered: list[tuple[int, date]] = []
+    seen: set[tuple[int, date]] = set()
+    for combo in shortlist:
+        for index, day in enumerate(combo.dates):
+            pair = (index, day)
+            if pair not in seen:
+                seen.add(pair)
+                ordered.append(pair)
+    return ordered
+
+
 async def verify(
     spec: SearchSpec,
     combinations: list[Combination],
@@ -85,9 +115,7 @@ async def verify(
         return [], report
 
     # Many combinations reuse the same leg-date, so resolve the distinct set once.
-    wanted: set[tuple[int, date]] = {
-        (i, day) for combo in shortlist for i, day in enumerate(combo.dates)
-    }
+    wanted = pairs_by_rank(shortlist)
     resolved: dict[tuple[int, date], Offer | None] = {}
     done = 0
     total = len(wanted)
@@ -185,8 +213,7 @@ async def verify(
         if on_progress:
             on_progress(done, total)
 
-    ordered = sorted(wanted, key=lambda p: (p[0], p[1]))
-    await asyncio.gather(*(tracked_resolve(index, day) for index, day in ordered))
+    await asyncio.gather(*(tracked_resolve(index, day) for index, day in wanted))
 
     out: list[VerifiedItinerary] = []
     for combo in shortlist:

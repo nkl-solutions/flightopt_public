@@ -15,6 +15,7 @@ Verified live 2026-09-04 from a German residential IP:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import date, datetime, timedelta
@@ -36,12 +37,14 @@ class WizzSource(HttpSource):
     carrier = "W6"
     supports_calendar = True
     supports_search = True
+    # Bleibt, wie es war: jede Anfrage haengt am zuvor gelesenen API-Stand.
     per_minute = 20
 
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
         self._base: str | None = None
         self._routes: dict[str, set[str]] | None = None
+        self._base_lock = asyncio.Lock()
 
     # -- discovery ------------------------------------------------------------
 
@@ -50,30 +53,36 @@ class WizzSource(HttpSource):
 
         Pinning a version here would break the adapter on Wizz's next release,
         which is exactly what happened to the previously documented path.
+
+        Under a lock: parallel legs would otherwise each load the whole
+        marketing page just to read the same version string.
         """
         if self._base:
             return self._base
 
-        import asyncio
+        async with self._base_lock:
+            if self._base:
+                return self._base
 
-        from curl_cffi import requests as creq
+            from curl_cffi import requests as creq
 
-        await self.limiter.wait()
-        try:
-            resp = await asyncio.to_thread(
-                creq.get, SITE, impersonate=self.impersonate, timeout=40, proxy=self.proxy
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise SourceError(f"wizz: site unreachable: {exc}") from exc
-        if resp.status_code != 200:
-            raise SourceError(f"wizz: site returned HTTP {resp.status_code}")
+            await self.limiter.wait()
+            try:
+                resp = await asyncio.to_thread(
+                    creq.get, SITE, impersonate=self.impersonate, timeout=40,
+                    proxy=self.proxy,
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise SourceError(f"wizz: site unreachable: {exc}") from exc
+            if resp.status_code != 200:
+                raise SourceError(f"wizz: site returned HTTP {resp.status_code}")
 
-        match = BASE_RE.search(resp.text)
-        if not match:
-            raise SourceError("wizz: API base URL not found in page config")
-        self._base = match.group(1)
-        logger.info("wizz: API base %s", self._base)
-        return self._base
+            match = BASE_RE.search(resp.text)
+            if not match:
+                raise SourceError("wizz: API base URL not found in page config")
+            self._base = match.group(1)
+            logger.info("wizz: API base %s", self._base)
+            return self._base
 
     async def load_routes(self, origin: str) -> set[str]:
         """Wizz publishes its whole network in one call, so fetch it once."""

@@ -55,7 +55,8 @@ class JetBlueSource(HttpSource):
     supports_calendar = True
     supports_search = False
     """The rows carry a date, an amount and a seat count, no flights."""
-    per_minute = 12
+    # Offene JSON-API, keine Challenge beobachtet; laeuft Monat fuer Monat.
+    per_minute = 30
 
     async def calendar(
         self, origin: str, destination: str, month: date, *, currency: str = "EUR"
@@ -108,7 +109,12 @@ class JetBlueSource(HttpSource):
     async def calendar_range(
         self, origin: str, destination: str, start: date, end: date, *, currency: str = "EUR"
     ) -> dict[date, Money]:
-        """Walk month by month; one call covers exactly one calendar month."""
+        """Walk month by month; one call covers exactly one calendar month.
+
+        The request body carries `"month": "NOVEMBER 2026"`, a month name and a
+        year. There is no range form, so the month is the endpoint's limit and
+        not a choice made here.
+        """
         out: dict[date, Money] = {}
         cursor = start.replace(day=1)
         guard = 0

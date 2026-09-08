@@ -44,7 +44,8 @@ class AirBalticSource(HttpSource):
     supports_calendar = True
     supports_search = False
     """The rows carry a date and a price, no flight numbers and no times."""
-    per_minute = 15
+    # Offener Kalender-Endpunkt der Website, ohne Bot-Schutz davor.
+    per_minute = 30
 
     async def calendar_range(
         self, origin: str, destination: str, start: date, end: date, *, currency: str = "EUR"

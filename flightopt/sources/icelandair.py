@@ -31,7 +31,8 @@ class IcelandairSource(HttpSource):
     supports_calendar = True
     supports_search = False
     """Prices are per day; the payload carries no flight numbers or times."""
-    per_minute = 15
+    # Offener Bestprice-Endpunkt; ein Abruf deckt ohnehin fast ein Jahr ab.
+    per_minute = 30
 
     async def calendar_range(
         self, origin: str, destination: str, start: date, end: date, *, currency: str = "EUR"

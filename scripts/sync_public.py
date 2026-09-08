@@ -30,6 +30,9 @@ from typing import Iterable, Sequence
 ROOT = Path(__file__).resolve().parent.parent
 
 EXCLUDED_FILES = frozenset({
+    # Tests fuer private Werkzeuge unter spike/, die nicht mit synchronisiert werden.
+    "tests/test_probe_classifier.py",
+    "tests/test_packaging.py",
     "HANDOVER.md",
     "MASTERPLAN.md",
     "docs/AIRLINE_PLAN.md",

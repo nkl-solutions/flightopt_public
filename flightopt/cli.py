@@ -3,6 +3,9 @@
     uv run flightopt search BER TYO SEL BER --window 2027-03-01 2027-04-30 \
         --stay 7-14 --stay 4-8
 
+    uv run flightopt hotels search "Athen" --from 2026-11-10 --to 2026-11-20 \
+        --nights 1 --adults 2 --rooms 1 --stars 4 5
+
 Prints the cheapest date combinations for the route. Stops may be typed as IATA
 codes, city names or group codes, exactly as in the web form; group codes fan
 out into concrete routes, which are all searched and ranked together.
@@ -20,10 +23,15 @@ from typing import Any, Mapping
 
 from flightopt.domain import airports as airport_registry
 from flightopt.domain.models import Cabin, LegSpec, Pax, SearchSpec, StayRange
+from flightopt.hotels.models import HotelQuery
+from flightopt.hotels.registry import build_hotel_sources, source_report
+from flightopt.hotels.scan import ScanProgress, run_scan
+from flightopt.hotels.store import signal_for
 from flightopt.jobs.runner import JobRunner, build_catalogue, preload_routes
 from flightopt.search.dp import Combination, count_combinations, feasible_dates, solve
 from flightopt.search.grid import build_grid
 from flightopt.storage import db, fx_store
+from flightopt.storage.baseline import refresh_baselines
 from flightopt.storage.cache import SqliteCache, SqliteHistory
 
 
@@ -261,6 +269,146 @@ async def run_search(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- Hotels ----------------------------------------------------------------
+
+SIGNAL_LABELS = {
+    "error": "PREISFEHLER",
+    "cheap": "guenstig",
+    "normal": "normal",
+    "expensive": "teuer",
+    "encoding_suspect": "Preis unplausibel",
+    "unknown": "keine Basis",
+}
+# Preisfehler zuerst, dann guenstig, dann der Rest. Wer einen Zeitraum
+# durchlaeuft, sucht den Ausreisser und nicht die Alphabetik.
+SIGNAL_ORDER = {"error": 0, "cheap": 1, "normal": 2, "expensive": 3,
+                "encoding_suspect": 4, "unknown": 5}
+
+
+def hotel_window(args: argparse.Namespace) -> tuple[date, date]:
+    """Fenster oder Einzeltag. `--single` schlaegt `--from`/`--to`."""
+    if getattr(args, "single", None):
+        day = parse_day(args.single)
+        return day, day
+    if not args.window_start:
+        raise SystemExit("hotels: --from fehlt (oder nimm --single)")
+    start = parse_day(args.window_start)
+    end = parse_day(args.window_end) if args.window_end else start
+    if end < start:
+        raise SystemExit("hotels: --to liegt vor --from")
+    return start, end
+
+
+def hotel_query(args: argparse.Namespace, arrival: date) -> HotelQuery:
+    try:
+        return HotelQuery(
+            destination=args.destination,
+            arrival=arrival,
+            nights=args.nights,
+            adults=args.adults,
+            children=tuple(args.children or ()),
+            rooms=args.rooms,
+            stars=tuple(sorted(set(args.stars or ()))),
+            country=args.country,
+            currency=args.currency,
+            min_review_score=args.min_review,
+        )
+    except ValueError as exc:
+        raise SystemExit(f"hotels: {exc}") from exc
+
+
+def hotel_rows(conn, offers: list, *, limit: int) -> list[dict[str, Any]]:
+    """Angebote mit Signal, sortiert nach Signal und dann nach Nachtpreis."""
+    rows = []
+    for offer in offers:
+        signal = signal_for(conn, offer)
+        rows.append(
+            {
+                "name": offer.name,
+                "stars": offer.stars,
+                "date": offer.arrival,
+                "nights": offer.nights,
+                "price": offer.price_per_night,
+                "native": offer.price_total if offer.converted else None,
+                # Die Stufe schlaegt den Status: `status` sagt bei einem Preisfehler
+                # weiterhin "cheap", damit die Flugsuche unveraendert bleibt.
+                "signal": signal.get("tier") or signal["status"],
+            }
+        )
+    rows.sort(key=lambda row: (SIGNAL_ORDER.get(row["signal"], 9), row["price"].minor))
+    return rows[:limit]
+
+
+def format_hotel_table(rows: list[dict[str, Any]]) -> list[str]:
+    """Kursbuch-Zeilen: Objekt, Sterne, Datum, Preis je Nacht, Signal."""
+    header = f"{'Objekt':<34}  {'Sterne':>6}  {'Datum':<10}  {'Nacht':>12}  Signal"
+    lines = [header, "-" * len(header)]
+    for row in rows:
+        name = row["name"][:33] + "." if len(row["name"]) > 34 else row["name"]
+        stars = "-" if row["stars"] is None else "*" * int(row["stars"])
+        price = f"{format_amount(row['price'].major)} {row['price'].currency}"
+        line = (
+            f"{name:<34}  {stars:>6}  {row['date'].isoformat():<10}  "
+            f"{price:>12}  {SIGNAL_LABELS.get(row['signal'], row['signal'])}"
+        )
+        if row["native"] is not None:
+            line += (
+                f"  (umgerechnet aus {format_amount(row['native'].major)} "
+                f"{row['native'].currency})"
+            )
+        lines.append(line)
+    return lines
+
+
+async def run_hotels(args: argparse.Namespace) -> int:
+    start, end = hotel_window(args)
+    query = hotel_query(args, start)
+
+    conn = db.connect(args.db)
+    rates = await fx_store.current_rates(conn)
+    sources = build_hotel_sources()
+
+    print(f"ziel    {query.destination}")
+    print(f"fenster {start} .. {end}, {query.nights} Nacht/Naechte je Suche")
+    for entry in source_report():
+        state = "aktiv" if entry["active"] else f"aus ({entry['reason']})"
+        print(f"quelle  {entry['name']}: {state}")
+    print()
+
+    def show(progress: ScanProgress) -> None:
+        print(f"  {progress.days_done:>3}/{progress.days_total}  {progress.message}")
+
+    try:
+        result = await run_scan(
+            conn, query, window_start=start, window_end=end,
+            sources=sources, rates=rates, on_progress=show,
+        )
+    finally:
+        for source in sources:
+            source.close()
+
+    print()
+    for note in result.errors[:5]:
+        print(f"  fehler: {note}")
+    if result.error:
+        print(f"  abbruch: {result.error}")
+    if not result.offers:
+        print("Keine Angebote. Weder Preisfehler noch Preis.")
+        conn.commit()
+        return 2
+
+    # Erst die Baseline auffrischen, sonst steht in jeder Signalspalte
+    # "keine Basis", obwohl gerade Beobachtungen dazugekommen sind.
+    refresh_baselines(conn, entity_type="hotel")
+    rows = hotel_rows(conn, result.offers, limit=args.top)
+    print(f"{len(result.offers)} Angebote, {len(result.skipped)} Zeilen uebersprungen")
+    print("Preise sind Richtwerte der Quelle, keine geprueften Bestpreise.\n")
+    for line in format_hotel_table(rows):
+        print(line)
+    conn.commit()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="flightopt", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -280,6 +428,27 @@ def build_parser() -> argparse.ArgumentParser:
                    help="max results sharing the same first departure date")
     s.add_argument("--db", default=str(db.DEFAULT_DB))
     s.add_argument("-v", "--verbose", action="store_true")
+
+    hotels = sub.add_parser("hotels", help="Hotelpreise ueber ein Fenster")
+    hotel_sub = hotels.add_subparsers(dest="hotel_command", required=True)
+    h = hotel_sub.add_parser("search", help="ein Ziel, ein Fenster, ein Tag je Suche")
+    h.add_argument("destination", help='Freitext, z.B. "Athen"')
+    h.add_argument("--from", dest="window_start", help="YYYY-MM-DD")
+    h.add_argument("--to", dest="window_end", help="YYYY-MM-DD")
+    h.add_argument("--single", help="nur dieser Anreisetag")
+    h.add_argument("--nights", type=int, default=1)
+    h.add_argument("--adults", type=int, default=2)
+    h.add_argument("--children", type=int, nargs="*", default=[],
+                   help="Alter je Kind, z.B. --children 6 10")
+    h.add_argument("--rooms", type=int, default=1)
+    h.add_argument("--stars", type=int, nargs="+", default=[], choices=[1, 2, 3, 4, 5])
+    h.add_argument("--min-review", dest="min_review", type=float, default=None,
+                   help="Mindestbewertung von 0 bis 10")
+    h.add_argument("--currency", default="EUR")
+    h.add_argument("--country", default="DE", help="Markt der Quelle, ISO-2")
+    h.add_argument("--top", type=int, default=30)
+    h.add_argument("--db", default=str(db.DEFAULT_DB))
+    h.add_argument("-v", "--verbose", action="store_true")
     return parser
 
 
@@ -291,6 +460,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     if args.command == "search":
         return asyncio.run(run_search(args))
+    if args.command == "hotels":
+        return asyncio.run(run_hotels(args))
     return 1
 
 

@@ -47,7 +47,9 @@ class AegeanSource(HttpSource):
     """The endpoint prices days rather than flights, so an offer from here has a
     price and a booking link but no times. That is still worth confirming: a
     result Aegean won would otherwise reach the user with no way to book it."""
+    # Bleibt niedrig: vor dem Endpunkt sitzt ein WAF, das eine Salve bestraft.
     per_minute = 15
+    concurrency = 2
     impersonate = "chrome124"
 
     async def calendar(
@@ -83,6 +85,12 @@ class AegeanSource(HttpSource):
     async def calendar_range(
         self, origin: str, destination: str, start: date, end: date, *, currency: str = "EUR"
     ) -> dict[date, Money]:
+        """Ein Abruf je Kalendermonat - mehr gibt der Endpunkt nicht her.
+
+        `DepartureDate` ist ein Monat (`YYYY-MM`), kein Zeitraum. Ein Fenster
+        ueber drei Monate kostet deshalb drei Abrufe, und daran ist nichts zu
+        sparen, solange die Airline keinen Bereichsparameter anbietet.
+        """
         out: dict[date, Money] = {}
         cursor = start.replace(day=1)
         while cursor <= end:

@@ -87,6 +87,15 @@ h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
 .mark{font-size:var(--t28);letter-spacing:-.03em}
 .mark span{color:var(--signal)}
 .tagline{margin:0;font-size:var(--t16);color:var(--ink-subtle);max-width:46ch}
+/* Umschalter zwischen den beiden Bereichen. Dieselbe Form wie die Reiseart,
+   damit der Kopf nicht ein zweites Bedienmuster einfuehrt. Der Trenner ist die
+   Linie, kein Schriftzeichen. */
+.domainnav{display:inline-flex;border:1px solid var(--rule-3);border-radius:var(--r)}
+.domainnav a{padding:var(--s1) var(--s4);font-size:var(--t14);color:var(--ink-subtle);
+  text-decoration:none;border-right:1px solid var(--rule-3);white-space:nowrap}
+.domainnav a:last-child{border-right:0}
+.domainnav a:hover{background:var(--wash);color:var(--ink)}
+.domainnav a[aria-current="page"]{background:var(--ink);color:var(--bg);font-weight:500}
 
 /* --- Reiseart: Segmented Control aus Radios ------------------------------ */
 .seg{margin:var(--s5) 0 var(--s4);padding:0;border:0}
@@ -404,6 +413,35 @@ tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
   .fl{grid-template-columns:1fr auto;gap:var(--s1) var(--s3)}
   .fl .times,.fl .when{grid-column:1/-1;white-space:normal}
 }
+
+/* --- Hotels ---------------------------------------------------------------
+   Dieselbe Kursbuch-Tabelle, dieselben Tokens. Nur die Signalspalte braucht
+   eigene Regeln, weil hier eine vierte Stufe dazukommen wird. */
+#hoteltable td[data-signal="error"]{color:var(--signal);font-weight:700}
+#hoteltable td[data-signal="cheap"]{color:var(--ok);font-weight:500}
+#hoteltable td[data-signal="expensive"]{color:var(--warn)}
+#hoteltable td[data-signal="unknown"]{color:var(--ink-subtle)}
+#hoteltable td:first-child small{display:block;font-size:var(--t12);
+  color:var(--ink-subtle)}
+.c-source{width:96px;color:var(--ink-subtle);font-size:var(--t12)}
+/* Gespeicherte Laeufe: nachgeordnete Liste unter der Tabelle, dieselben
+   Flaechen wie die Deals auf der Flugseite. */
+.scanlist{display:grid;gap:var(--s1);margin:var(--s3) 0 0;padding:0;list-style:none}
+.scanlist button{width:100%;text-align:left;min-height:44px;padding:var(--s2) var(--s3);
+  background:var(--paper);border:1px solid var(--rule-1);border-radius:var(--r);
+  font-size:var(--t14);color:var(--ink-muted);cursor:pointer}
+.scanlist button:hover{border-color:var(--ink);color:var(--ink)}
+.scanlist b{color:var(--ink);font-weight:500}
+.scanlist small{display:block;font-size:var(--t12);color:var(--ink-subtle)}
+/* Auf schmalen Geraeten faellt die Quelle weg, nicht das Signal: die Spalte,
+   wegen der jemand hier ist, bleibt stehen. */
+@media(max-width:760px){
+  #hoteltable .c-status{display:table-cell}
+  #hoteltable .c-source{display:none}
+}
+#hoteltable .c-price small.native{display:block;margin-left:0;font-weight:400}
+#hoteltable a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+#hoteltable a:hover{color:var(--signal)}
 
 footer{margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid var(--rule-2);
   font-size:var(--t12);color:var(--ink-subtle)}

@@ -14,6 +14,14 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
 ]
+# Nur fuer den Booking-Adapter, und der ist ohnehin hinter einem Schalter.
+# Playwright zieht einen Browser nach, den weder das Image noch die Testsuite
+# braucht: `uv sync --frozen --no-dev` im Dockerfile laesst diese Gruppe aussen
+# vor, und kein Test startet je einen Browser.
+#     uv sync --group hotels && uv run playwright install chromium
+hotels = [
+    "playwright>=1.49",
+]
 
 [project.scripts]
 flightopt = "flightopt.cli:main"

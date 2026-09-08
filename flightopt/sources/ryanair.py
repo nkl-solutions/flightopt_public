@@ -43,12 +43,15 @@ class RyanairSource(HttpSource):
     carrier = "FR"
     supports_calendar = True
     supports_search = True
-    per_minute = 20
+    # Offene JSON-API ohne WAF davor, und sie traegt fast jede Suche.
+    per_minute = 60
+    concurrency = 6
 
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
         self._routes: dict[str, set[str]] | None = None
         self._client_version: str | None = None
+        self._version_lock = asyncio.Lock()
 
     # -- client version -------------------------------------------------------
 
@@ -86,14 +89,21 @@ class RyanairSource(HttpSource):
         409 means "Availability declined", which here always means the client
         version is old. The retry is capped at one so a permanent 409 cannot
         turn into a loop against the website.
+
+        With several requests in flight a stale version makes all of them fail
+        at once. The lock plus the "has it already changed?" check turns that
+        into one page read instead of one per call.
         """
         try:
             return await self.fetch_json(url, headers=self._headers())
         except SourceError as exc:
             if "HTTP 409" not in str(exc):
                 raise
-            logger.info("ryanair: HTTP 409, re-reading the client version once")
-            await self._read_client_version()
+            stale = self._client_version
+            async with self._version_lock:
+                if self._client_version == stale:
+                    logger.info("ryanair: HTTP 409, re-reading the client version once")
+                    await self._read_client_version()
             return await self.fetch_json(url, headers=self._headers())
 
     # -- routes ---------------------------------------------------------------
@@ -164,7 +174,14 @@ class RyanairSource(HttpSource):
     async def calendar_range(
         self, origin: str, destination: str, start: date, end: date, *, currency: str = "EUR"
     ) -> dict[date, Money]:
-        """Cover an arbitrary window by walking the months it spans."""
+        """Cover an arbitrary window by walking the months it spans.
+
+        One call per calendar month is the endpoint's own limit:
+        `cheapestPerDay` takes `outboundMonthOfDate`, a month, and returns that
+        month only. The far-fare search does take a from/to range, but it
+        prices individual flights rather than the cheapest day, so it cannot
+        replace this call.
+        """
         out: dict[date, Money] = {}
         cursor = start.replace(day=1)
         while cursor <= end:
