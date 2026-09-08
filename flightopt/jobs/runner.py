@@ -126,8 +126,14 @@ def price_band(conn: Any, leg: Mapping[str, Any], *, currency: str = "EUR",
     `unknown`: es gibt dann weder eine Ersatzrechnung noch eine geratene
     Vergleichsgruppe, sondern nichts.
 
+    `verified` am Leg entscheidet, gegen welche Grundgesamtheit gerechnet wird.
+    Ein gepruefter Preis gegen eine Schaetzungs-Baseline gehalten sagt nichts
+    ueber den Preis und viel ueber den Unterschied der beiden Messarten. Ist
+    die passende Baseline noch nicht da, steht dort `unknown` - solange, bis
+    genug gepruefte Preise dieser Strecke gesammelt sind.
+
     Die Stufen sind die drei des Detektors plus `unknown`. Eine vierte Stufe
-    kennt `detect_price_signal` fuer `entity_type='flight'` nicht.
+    kennt `detect_price_signal` fuer Fluege nicht.
     """
     raw_date = leg.get("date")
     try:
@@ -145,11 +151,14 @@ def price_band(conn: Any, leg: Mapping[str, Any], *, currency: str = "EUR",
         price_minor,
         observed_at=observed_at,
         currency=currency,
+        is_estimate=not bool(leg.get("verified")),
     )
     band: dict[str, Any] = {
         "tier": signal.get("tier") or signal.get("status") or UNKNOWN_BAND,
         "reason": signal.get("reason", ""),
         "n": int(signal.get("n") or 0),
+        "population": signal.get("population", ""),
+        "thin": bool(signal.get("thin")),
     }
     median_minor = signal.get("median_minor")
     if median_minor:
@@ -717,8 +726,8 @@ class JobRunner:
         self._raise_if_cancelled(job_id)
         self._emit(job_id, Progress("verifying", f"{spec.route}: Prüfe echte Flüge"))
         verified, _ = await verify(
-            spec, best, sources, cache=cache, rates=rates, limit=verify_limit,
-            on_progress=report_verify,
+            spec, best, sources, cache=cache, history=history, rates=rates,
+            limit=verify_limit, on_progress=report_verify,
         )
         self._raise_if_cancelled(job_id)
         live_by_dates = {tuple(v.combination.dates): v for v in verified}
@@ -1022,8 +1031,8 @@ class JobRunner:
             self._raise_if_cancelled(job_id)
             self._emit(job_id, Progress("verifying", "Prüfe echte Flüge"))
             verified, vreport = await verify(
-                spec, best, sources, cache=cache, rates=rates, limit=verify_limit,
-                on_progress=report_verify,
+                spec, best, sources, cache=cache, history=history, rates=rates,
+                limit=verify_limit, on_progress=report_verify,
             )
             self._raise_if_cancelled(job_id)
             live_by_dates = {

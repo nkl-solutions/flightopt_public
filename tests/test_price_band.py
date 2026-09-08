@@ -39,13 +39,14 @@ def leg(price: float = 99.0, day: str = "2026-10-01") -> dict:
 
 
 def put_baseline(conn, entity_key: str, *, median_minor: int, mad_minor: int = 1000,
-                 weekday: int = 3, bucket: str = "30-59", n: int = 12) -> None:
+                 weekday: int = 3, bucket: str = "30-59", n: int = 12,
+                 is_estimate: bool = True) -> None:
     """Eine fertige Baseline setzen, ohne den Umweg ueber die Beobachtungen."""
     conn.execute(
-        "INSERT INTO price_baseline("
-        "entity_type, entity_key, weekday, leadtime_bucket, currency, "
+        "INSERT INTO flight_baseline("
+        "entity_key, weekday, leadtime_bucket, currency, is_estimate, "
         "median_minor, mad_minor, n, computed_at) VALUES(?,?,?,?,?,?,?,?,?)",
-        ("flight", entity_key, weekday, bucket, "EUR", median_minor, mad_minor, n,
+        (entity_key, weekday, bucket, "EUR", int(is_estimate), median_minor, mad_minor, n,
          OBSERVED.isoformat(timespec="seconds")),
     )
     conn.commit()

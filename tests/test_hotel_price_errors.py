@@ -188,10 +188,10 @@ def test_the_flight_detector_keeps_its_three_tiers(tmp_path):
     for price in (19000, 19500, 20000, 20000, 20500, 21000, 20000):
         conn.execute(
             "INSERT INTO price_observation(observed_at, source, entity_type, entity_key, "
-            "travel_date, return_or_nights, party_size, currency, price_total_minor) "
-            "VALUES(?,?,?,?,?,?,?,?,?)",
+            "travel_date, return_or_nights, party_size, currency, price_total_minor, "
+            "is_estimate) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (OBSERVED.isoformat(timespec="seconds"), "ryanair", "flight", "BER|ATH",
-             TRAVEL.isoformat(), "2026-11-17", 1, "EUR", price),
+             TRAVEL.isoformat(), "2026-11-17", 1, "EUR", price, 1),
         )
     refresh_baselines(conn, now=OBSERVED)
 
@@ -207,5 +207,6 @@ def test_the_flight_detector_keeps_its_three_tiers(tmp_path):
     assert blank == {
         "status": "unknown", "price_minor": 1000,
         "tier": "unknown", "reason": "keine Baseline", "basis": "none", "n": 0,
+        "population": "estimate", "thin": False,
     }
     conn.close()

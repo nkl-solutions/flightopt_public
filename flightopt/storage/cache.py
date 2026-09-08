@@ -97,13 +97,20 @@ class SqliteHistory:
         return_or_nights: str | None = None,
         party_size: int = 1,
         is_estimate: bool = False,
+        is_indicative: bool = False,
         raw_hash: str | None = None,
     ) -> None:
+        """`is_indicative` merkt sich, was der Katalog beim Schreiben wusste.
+
+        Der Aufrufer hat die Quelle in der Hand und kann ihr Kennzeichen
+        einfach durchreichen. Spaeter aus dem Quellennamen zurueckzuschliessen
+        hiesse raten, welche Quellen damals als Richtwert galten.
+        """
         self.conn.execute(
             "INSERT INTO price_observation("
             "observed_at, source, entity_type, entity_key, travel_date, return_or_nights,"
-            "party_size, currency, price_total_minor, is_estimate, raw_hash) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            "party_size, currency, price_total_minor, is_estimate, is_indicative, raw_hash) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 (observed_at or datetime.now()).isoformat(timespec="seconds"),
                 source,
@@ -115,6 +122,7 @@ class SqliteHistory:
                 price.currency,
                 price.minor,
                 int(is_estimate),
+                int(is_indicative),
                 raw_hash,
             ),
         )

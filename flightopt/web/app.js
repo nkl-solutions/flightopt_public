@@ -831,6 +831,16 @@ function bandLabel(tier){
 function bandOf(leg){
   return (leg && leg.band) || {};
 }
+/* Worauf die Stufe steht. Geschaetzte und geprüfte Preise sind zwei getrennte
+   Grundgesamtheiten, und fünf Vergleichspreise sind etwas anderes als zwanzig.
+   Beides gehört sichtbar dazu, sonst wirkt jede Stufe gleich belastbar. */
+const BAND_POPULATIONS = {estimate:"Schätzpreisen", verified:"geprüften Preisen"};
+function bandBasis(band){
+  const n = Number((band || {}).n);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const kind = BAND_POPULATIONS[String((band || {}).population || "")] || "Preisen";
+  return `aus ${n} ${kind}${band.thin ? ", dünne Basis" : ""}`;
+}
 /* Eine Baseline gibt es je Teilstrecke, nicht fuer die ganze Route. In der
    Zeile steht deshalb die Teilstrecke mit der groessten Abweichung: sie sagt
    am meisten. Worauf sie sich bezieht, steht im Titel. */
@@ -852,15 +862,19 @@ function bandTitle(o){
   const off = deviationLabel(pick.band.deviation_pct);
   const usual = (pick.band.median === null || pick.band.median === undefined)
     ? "" : ` gegenüber üblichen ${money(pick.band.median)} €`;
-  return off ? `${where}: ${off}${usual}` : `${where}: ${bandLabel(pick.tier)}`;
+  const basis = bandBasis(pick.band);
+  const head = off ? `${where}: ${off}${usual}` : `${where}: ${bandLabel(pick.tier)}`;
+  return basis ? `${head} (${basis})` : head;
 }
 /* In der Detailzeile steht die Preislage je Leg, denn dort gilt sie. */
 function legBandNote(leg){
   const band = bandOf(leg);
   if (!band.tier || band.tier === "unknown") return "Preislage: keine Basis";
   const off = deviationLabel(band.deviation_pct);
-  return off ? `Preislage: ${bandLabel(band.tier)}, ${off}`
-             : `Preislage: ${bandLabel(band.tier)}`;
+  const head = off ? `Preislage: ${bandLabel(band.tier)}, ${off}`
+                   : `Preislage: ${bandLabel(band.tier)}`;
+  const basis = bandBasis(band);
+  return basis ? `${head} (${basis})` : head;
 }
 function legBandMarkup(leg){
   const band = bandOf(leg);

@@ -24,7 +24,7 @@ from flightopt.domain.models import Money, Offer, SearchSpec
 from flightopt.search.dp import Combination
 from flightopt.search.grid import convert_offer
 from flightopt.sources.base import SourceError
-from flightopt.storage.cache import TTL_VERIFY, SqliteCache, cache_key
+from flightopt.storage.cache import TTL_VERIFY, SqliteCache, SqliteHistory, cache_key
 
 logger = logging.getLogger(__name__)
 
@@ -104,11 +104,18 @@ async def verify(
     sources: list,
     *,
     cache: SqliteCache | None = None,
+    history: SqliteHistory | None = None,
     rates: Rates | None = None,
     limit: int = 10,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[list[VerifiedItinerary], VerifyReport]:
-    """Look up real flights for the first `limit` combinations."""
+    """Look up real flights for the first `limit` combinations.
+
+    `history` schreibt die bestaetigten Preise fort, so wie `build_grid` die
+    geschaetzten fortschreibt. Ohne das bliebe die gepruefte Grundgesamtheit
+    fuer immer leer, und ein gepruefter Preis haette nie etwas, wogegen er
+    gemessen werden koennte, das seinesgleichen ist.
+    """
     shortlist = combinations[:limit]
     report = VerifyReport()
     if not shortlist:
@@ -186,6 +193,7 @@ async def verify(
         collectors = [s for s in usable if not getattr(s, "carrier", "")]
 
         best: Offer | None = None
+        best_indicative = False
         for group in (airlines, collectors):
             for source in group:
                 for offer in await ask(source, index, day):
@@ -200,8 +208,25 @@ async def verify(
                         continue
                     if best is None or offer.price.minor < best.price.minor:
                         best = offer
+                        best_indicative = bool(getattr(source, "indicative", False))
             if best is not None:
                 break
+
+        if history is not None and best is not None:
+            # Derselbe Schluessel wie in `build_grid`, nur die andere
+            # Grundgesamtheit: `is_estimate=False`. Geschrieben wird der reine
+            # Angebotspreis, ohne aufgeschlagene Gepaeckgebuehr - so wie der
+            # Kalender ihn auch schreibt.
+            await history.record(
+                source=best.source,
+                entity_type="flight",
+                entity_key=f"{leg.origin}|{leg.destination}",
+                travel_date=day,
+                price=best.price,
+                party_size=spec.pax.total,
+                is_estimate=False,
+                is_indicative=best_indicative,
+            )
 
         return (index, day), best
 

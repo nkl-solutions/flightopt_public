@@ -45,6 +45,21 @@ def _airline_sources() -> list[HttpSource]:
     ]
 
 
+def indicative_source_names(env: Mapping[str, str] | None = None) -> set[str]:
+    """Die Quellen, deren Preis ein Richtwert ist und kein Tarif.
+
+    Der Katalog weiss das, die Datenbank nicht. Neue Beobachtungen bekommen das
+    Kennzeichen beim Schreiben mit; wer alte Zeilen nachbessern will, fragt
+    hier - an einer Stelle, die sich mit dem Katalog mitbewegt, statt einer
+    Namensliste, die irgendwann daneben liegt.
+    """
+    return {
+        source.name
+        for source in build_sources(env=env)
+        if getattr(source, "indicative", False)
+    }
+
+
 def build_sources(
     carriers: set[str] | None = None,
     *,

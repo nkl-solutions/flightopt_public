@@ -92,6 +92,37 @@ assert.ok(legBandMarkup({}).includes('data-signal="unknown"'));
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_the_band_names_how_many_prices_and_of_which_kind_it_rests_on():
+    """Fuenf Vergleichspreise sind etwas anderes als zwanzig, und geschaetzte
+    etwas anderes als geprüfte. Beides steht dran, sonst wirkt jede Stufe
+    gleich belastbar."""
+    result = run_ui_assertion(
+        r"""
+assert.strictEqual(
+  legBandNote({band:{tier:"cheap", deviation_pct:-23.4, n:22, population:"estimate"}}),
+  "Preislage: günstig, -23,4 % (aus 22 Schätzpreisen)"
+);
+// Unter zehn Punkten sagt die Zeile das dazu.
+assert.strictEqual(
+  legBandNote({band:{tier:"normal", n:6, population:"verified", thin:true}}),
+  "Preislage: normal (aus 6 geprüften Preisen, dünne Basis)"
+);
+// Ohne Baseline gibt es keine Zahl zu nennen.
+assert.strictEqual(bandBasis({tier:"unknown", n:0}), "");
+assert.strictEqual(bandBasis({}), "");
+
+const row = {legs: [
+  {origin:"BER", destination:"ATH", date:"2026-10-01", price:99,
+   band:{tier:"cheap", deviation_pct:-12.0, median:112.5, n:8,
+         population:"verified", thin:true}},
+]};
+assert.ok(bandTitle(row).includes("aus 8 geprüften Preisen, dünne Basis"), bandTitle(row));
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_the_table_shows_price_band_next_to_the_status_not_instead_of_it():
     result = run_ui_assertion(
         r"""

@@ -227,6 +227,11 @@ async def build_grid(
                 # Die Quelle steht ohnehin in der Spalte `source`. Dreiteilig
                 # geschrieben und zweiteilig gelesen hiess: nie eine Baseline.
                 entity = f"{leg.origin}|{leg.destination}"
+                # Ob diese Quelle einen Richtwert liefert, steht drei Zeilen
+                # weiter oben schon im Bericht. Dieselbe Frage, dieselbe
+                # Antwort - nur wandert sie hier in die Zeile, damit die
+                # Baseline sie spaeter noch beantworten kann.
+                indicative = bool(getattr(source, "indicative", False))
                 for day, money in usable.items():
                     await history.record(
                         source=source.name,
@@ -236,6 +241,7 @@ async def build_grid(
                         price=money,
                         party_size=spec.pax.total,
                         is_estimate=True,
+                        is_indicative=indicative,
                     )
         finally:
             done += 1

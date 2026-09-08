@@ -29,13 +29,19 @@ CREATE TABLE IF NOT EXISTS price_observation (
     observed_at        TEXT NOT NULL,
     source             TEXT NOT NULL,
     entity_type        TEXT NOT NULL,      -- 'flight' | 'hotel'
-    entity_key         TEXT NOT NULL,      -- flight: 'BER|ATH|FR'   hotel: 'ATH|12345'
+    entity_key         TEXT NOT NULL,      -- flight: 'BER|ATH'   hotel: 'ATH|12345'
     travel_date        TEXT NOT NULL,
     return_or_nights   TEXT,
     party_size         INTEGER NOT NULL DEFAULT 1,
     currency           TEXT NOT NULL,
     price_total_minor  INTEGER NOT NULL,
     is_estimate        INTEGER NOT NULL DEFAULT 0,
+    -- Richtwert statt Tarif: die Quelle hat einen bekannten systematischen
+    -- Aufschlag oder preist ein anderes Produkt. `source` allein reicht dafuer
+    -- nicht, denn was indikativ ist, weiss der Quellenkatalog und nicht die
+    -- Datenbank - und ob eine Quelle es *damals* war, weiss danach niemand
+    -- mehr. Deshalb steht die Antwort in der Zeile, nicht in einer Liste.
+    is_indicative      INTEGER NOT NULL DEFAULT 0,
     raw_hash           TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_obs_entity
@@ -107,6 +113,30 @@ CREATE TABLE IF NOT EXISTS price_baseline (
     PRIMARY KEY(entity_type, entity_key, weekday, leadtime_bucket, currency)
 );
 
+-- Die Flug-Baseline mit der Grundgesamtheit im Schluessel. Ein Kalenderpreis
+-- und ein gepruefter Live-Preis beschreiben nicht dasselbe: der eine ist der
+-- Tagesbestpreis irgendeines Flugs, der andere der Preis eines bestimmten
+-- Flugs, und Gepaeck und Zuschlaege stecken einmal drin und einmal nicht.
+-- Gegeneinander gerechnet ergibt das eine Zahl, die nichts misst.
+--
+-- Eigene Tabelle statt einer Spalte in `price_baseline`, aus demselben Grund,
+-- aus dem `hotel_baseline` daneben steht: der Primaerschluessel ist
+-- zusammengesetzt, und den erweitert SQLite nicht per `ALTER TABLE`. Eine neue
+-- Tabelle legt `CREATE TABLE IF NOT EXISTS` dagegen auch in einer bestehenden
+-- Datei an, ohne dass ein noch laufender Prozess auf der alten stolpert.
+CREATE TABLE IF NOT EXISTS flight_baseline (
+    entity_key         TEXT NOT NULL,      -- 'BER|ATH'
+    weekday            INTEGER NOT NULL,
+    leadtime_bucket    TEXT NOT NULL,
+    currency           TEXT NOT NULL,
+    is_estimate        INTEGER NOT NULL,   -- 1 = Kalenderpreis, 0 = geprueft
+    median_minor       INTEGER NOT NULL,
+    mad_minor          INTEGER NOT NULL,
+    n                  INTEGER NOT NULL,
+    computed_at        TEXT NOT NULL,
+    PRIMARY KEY(entity_key, weekday, leadtime_bucket, currency, is_estimate)
+);
+
 CREATE TABLE IF NOT EXISTS fx_rate (
     currency   TEXT PRIMARY KEY,
     rate       REAL NOT NULL,
@@ -167,6 +197,30 @@ CREATE TABLE IF NOT EXISTS api_budget (
 """
 
 
+ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("price_observation", "is_indicative", "INTEGER NOT NULL DEFAULT 0"),
+)
+"""Spalten, die spaeter dazukamen. `CREATE TABLE IF NOT EXISTS` fasst eine
+bestehende Datei nicht mehr an, eine neue Spalte muss also nachgetragen
+werden. `ALTER TABLE ADD COLUMN` kann SQLite, solange die Spalte nicht zum
+Primaerschluessel gehoert - fuer den Fall gibt es eine eigene Tabelle.
+
+Nur die Spalte entsteht hier, nicht ihr Inhalt: bestehende Zeilen bekommen den
+Vorgabewert. Was in ihnen wirklich stand, weiss das Migrationsskript."""
+
+
+def add_missing_columns(conn: sqlite3.Connection) -> list[str]:
+    """Fehlende Spalten nachtragen. Idempotent: ein zweiter Lauf findet nichts."""
+    added: list[str] = []
+    for table, column, declaration in ADDED_COLUMNS:
+        present = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column in present:
+            continue
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+        added.append(f"{table}.{column}")
+    return added
+
+
 def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -177,6 +231,7 @@ def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA busy_timeout=5000")
     conn.executescript(SCHEMA)
+    add_missing_columns(conn)
     return conn
 
 

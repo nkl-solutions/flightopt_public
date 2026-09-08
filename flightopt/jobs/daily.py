@@ -169,6 +169,9 @@ def collect_deals(conn: sqlite3.Connection, *, limit: int = 50,
             price_minor,
             observed_at=observed,
             currency=row["currency"],
+            # Der gespeicherte Treffer weiss, ob er geprueft ist. Gegen die
+            # gleiche Art Preis gehalten heisst die Aussage etwas.
+            is_estimate=bool(row["is_estimate"]),
         )
         median_minor = signal.get("median_minor")
         deals.append(

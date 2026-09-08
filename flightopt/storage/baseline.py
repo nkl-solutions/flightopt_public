@@ -1,13 +1,32 @@
 """Price baselines and simple anomaly signals.
 
-Fluege rechnen gegen `price_baseline`, unveraendert seit dem ersten Tag. Hotels
-brauchen zwei Dinge mehr, die dort nicht hineinpassen: die Belegung samt
-Naechtezahl im Schluessel und eine zweite Ebene fuer duenne Historie. Beides
-steht in `hotel_baseline` daneben statt in `price_baseline` drin. Der Grund ist
-banal und trotzdem entscheidend: `price_baseline` hat einen zusammengesetzten
-Primaerschluessel, und den erweitert SQLite nicht per `ALTER TABLE`. Eine neue
-Tabelle legt `CREATE TABLE IF NOT EXISTS` dagegen auch in einer bestehenden
-Datei an.
+Fluege rechnen gegen `flight_baseline`, Hotels gegen `hotel_baseline`, und
+`price_baseline` traegt weiter die Hotelzeilen, die es immer getragen hat.
+Drei Tabellen fuer eine Idee sehen nach zu viel aus; der Grund ist jedes Mal
+derselbe und banal: der Primaerschluessel ist zusammengesetzt, und den
+erweitert SQLite nicht per `ALTER TABLE`. Eine neue Tabelle legt
+`CREATE TABLE IF NOT EXISTS` dagegen auch in einer bestehenden Datei an.
+
+Hotels brauchen zwei Dinge mehr: die Belegung samt Naechtezahl im Schluessel
+und eine zweite Ebene fuer duenne Historie. Das steht in `hotel_baseline`.
+
+Fluege brauchen ein Drittes: die Grundgesamtheit. Zwei Regeln entscheiden, was
+ueberhaupt in eine Flug-Baseline darf, und beide sagen dasselbe - Gleiches
+gehoert zu Gleichem:
+
+1. Beobachtungen mit `is_indicative=1` bleiben draussen. Ein Vergleichsportal
+   mit bekanntem systematischem Aufschlag preist ein anderes Produkt als der
+   Direkttarif einer Airline (jede Airline, bis zu einem Umstieg, plus
+   Marge). Der Median einer gemischten Verteilung misst weder das eine noch
+   das andere.
+2. `is_estimate` steht im Schluessel. Ein Kalenderpreis ist der Tagesbestpreis
+   irgendeines Flugs, ein geprueter Preis gehoert zu einem bestimmten Flug und
+   enthaelt Gepaeck- und Zuschlagsanteile anders. Die eine Zahl gegen die
+   andere zu halten vergleicht Aepfel mit Birnen.
+
+Was uebrig bleibt, ist weniger - aber es misst etwas. Wo nach beiden Regeln zu
+wenig uebrig bleibt, gibt es keine Baseline und damit `unknown`. Das ist die
+richtige Antwort und keine Luecke.
 """
 
 from __future__ import annotations
@@ -32,6 +51,15 @@ from flightopt.hotels.signals import (
 )
 
 HOTEL = "hotel"
+FLIGHT = "flight"
+
+POPULATION_ESTIMATE = "estimate"
+POPULATION_VERIFIED = "verified"
+
+
+def population(is_estimate: bool) -> str:
+    """Der Name der Grundgesamtheit, wie ihn die Oberflaeche zeigt."""
+    return POPULATION_ESTIMATE if is_estimate else POPULATION_VERIFIED
 
 HOTEL_BASELINE_SCHEMA = """
 -- Zwei Ebenen in einer Tabelle: 'own' rechnet je Objekt, 'peer' je Stadt,
@@ -73,8 +101,25 @@ def _baseline_key(travel_date: date, observed_at: datetime) -> tuple[int, str]:
     return travel_date.weekday(), leadtime_bucket(leadtime)
 
 
+def _median_and_mad(prices: list[int]) -> tuple[int, int]:
+    med = int(median(prices))
+    return med, int(median([abs(p - med) for p in prices]))
+
+
 def refresh_baselines(conn: sqlite3.Connection, *, now: datetime | None = None,
-                      entity_type: str = "flight", min_samples: int = 5) -> int:
+                      entity_type: str = FLIGHT, min_samples: int = 5) -> int:
+    """Die Baselines eines Bereichs neu rechnen. Zurueck kommt die Zeilenzahl.
+
+    Fluege und Hotels teilen sich die Beobachtungen, aber nicht die Rechnung.
+    Fuer Hotels bleibt hier alles, wie es war - dieselbe Tabelle, dieselben
+    Gruppen, dieselbe Zahl. Fuer Fluege gelten die beiden Regeln aus dem
+    Modulkopf, und das Ergebnis steht in `flight_baseline`.
+    """
+    if entity_type != HOTEL:
+        return refresh_flight_baselines(
+            conn, now=now, entity_type=entity_type, min_samples=min_samples
+        )
+
     computed_at = (now or datetime.now()).isoformat(timespec="seconds")
     rows = conn.execute(
         "SELECT observed_at, entity_type, entity_key, travel_date, currency, "
@@ -93,9 +138,7 @@ def refresh_baselines(conn: sqlite3.Connection, *, now: datetime | None = None,
     for (etype, entity_key, weekday, bucket, currency), prices in grouped.items():
         if len(prices) < min_samples:
             continue
-        med = int(median(prices))
-        deviations = [abs(p - med) for p in prices]
-        mad = int(median(deviations))
+        med, mad = _median_and_mad(prices)
         conn.execute(
             "INSERT INTO price_baseline("
             "entity_type, entity_key, weekday, leadtime_bucket, currency, "
@@ -107,12 +150,58 @@ def refresh_baselines(conn: sqlite3.Connection, *, now: datetime | None = None,
             (etype, entity_key, weekday, bucket, currency, med, mad, len(prices), computed_at),
         )
         written += 1
-    if entity_type == HOTEL:
-        # Die Eigen- und die Peer-Ebene der Hotels haengen an derselben
-        # Auffrischung, damit kein Aufrufer sie vergessen kann. Der Rueckgabewert
-        # bleibt die Zahl der `price_baseline`-Zeilen: er bedeutet, was er
-        # immer bedeutet hat.
-        refresh_hotel_baselines(conn, now=now, min_samples=min_samples)
+    # Die Eigen- und die Peer-Ebene der Hotels haengen an derselben
+    # Auffrischung, damit kein Aufrufer sie vergessen kann. Der Rueckgabewert
+    # bleibt die Zahl der `price_baseline`-Zeilen: er bedeutet, was er
+    # immer bedeutet hat.
+    refresh_hotel_baselines(conn, now=now, min_samples=min_samples)
+    return written
+
+
+def refresh_flight_baselines(conn: sqlite3.Connection, *, now: datetime | None = None,
+                             entity_type: str = FLIGHT, min_samples: int = 5) -> int:
+    """Je Strecke, Wochentag, Vorlauf, Waehrung und Grundgesamtheit ein Median.
+
+    Richtwert-Beobachtungen bleiben schon in der Abfrage draussen, nicht erst
+    beim Rechnen: sie sollen weder den Median noch die Streuung noch `n`
+    beruehren. `n` zaehlt danach genau die Preise, die tatsaechlich verglichen
+    wurden - eine Baseline aus acht Punkten darf nicht wie eine aus zwanzig
+    aussehen.
+    """
+    computed_at = (now or datetime.now()).isoformat(timespec="seconds")
+    rows = conn.execute(
+        "SELECT observed_at, entity_key, travel_date, currency, price_total_minor, "
+        "is_estimate FROM price_observation "
+        "WHERE entity_type=? AND is_indicative=0",
+        (entity_type,),
+    ).fetchall()
+    grouped: dict[tuple[str, int, str, str, int], list[int]] = {}
+    for row in rows:
+        observed_at = datetime.fromisoformat(row["observed_at"])
+        travel_date = date.fromisoformat(row["travel_date"])
+        weekday, bucket = _baseline_key(travel_date, observed_at)
+        key = (
+            row["entity_key"], weekday, bucket, row["currency"], int(row["is_estimate"])
+        )
+        grouped.setdefault(key, []).append(int(row["price_total_minor"]))
+
+    written = 0
+    for (entity_key, weekday, bucket, currency, is_estimate), prices in grouped.items():
+        if len(prices) < min_samples:
+            continue
+        med, mad = _median_and_mad(prices)
+        conn.execute(
+            "INSERT INTO flight_baseline("
+            "entity_key, weekday, leadtime_bucket, currency, is_estimate, "
+            "median_minor, mad_minor, n, computed_at"
+            ") VALUES(?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(entity_key, weekday, leadtime_bucket, currency, is_estimate) "
+            "DO UPDATE SET median_minor=excluded.median_minor, "
+            "mad_minor=excluded.mad_minor, n=excluded.n, computed_at=excluded.computed_at",
+            (entity_key, weekday, bucket, currency, is_estimate,
+             med, mad, len(prices), computed_at),
+        )
+        written += 1
     return written
 
 
@@ -239,24 +328,27 @@ def pick_baseline(own: Baseline | None, peer: Baseline | None) -> Baseline | Non
 
 
 def _flight_signal(conn: sqlite3.Connection, entity_key: str, price_minor: int,
-                   weekday: int, bucket: str, entity_type: str,
-                   currency: str) -> dict[str, Any]:
-    """Der Detektor der Flugsuche, Zeile fuer Zeile wie bisher.
+                   weekday: int, bucket: str, currency: str,
+                   is_estimate: bool) -> dict[str, Any]:
+    """Der Detektor der Flugsuche: drei Stufen, jetzt gegen die eigene Klasse.
 
-    Nur die drei Stufen, kein `error`, keine Schranke, keine Peer-Gruppe.
-    `tier` spiegelt hier `status`, damit ein gemeinsamer Aufrufer beide
-    Domaenen gleich lesen kann, ohne dass sich am Urteil etwas aendert.
+    Weiterhin kein `error`, keine Schranke, keine Peer-Gruppe. Neu ist einzig,
+    dass die Baseline zur Art des Preises passt. Findet sich fuer diese Art
+    keine, bleibt es bei `unknown` - die Baseline der anderen Art zu nehmen
+    waere eine Antwort auf eine Frage, die niemand gestellt hat.
     """
     row = conn.execute(
-        "SELECT median_minor, mad_minor, n FROM price_baseline "
-        "WHERE entity_type=? AND entity_key=? AND weekday=? "
-        "AND leadtime_bucket=? AND currency=?",
-        (entity_type, entity_key, weekday, bucket, currency),
+        "SELECT median_minor, mad_minor, n FROM flight_baseline "
+        "WHERE entity_key=? AND weekday=? AND leadtime_bucket=? "
+        "AND currency=? AND is_estimate=?",
+        (entity_key, weekday, bucket, currency, int(is_estimate)),
     ).fetchone()
+    group = population(is_estimate)
     if row is None:
         return {
             "status": "unknown", "price_minor": price_minor,
             "tier": "unknown", "reason": "keine Baseline", "basis": "none", "n": 0,
+            "population": group, "thin": False,
         }
     baseline = Baseline(int(row["median_minor"]), int(row["mad_minor"]), int(row["n"]))
     status = band_status(price_minor, baseline)
@@ -269,29 +361,40 @@ def _flight_signal(conn: sqlite3.Connection, entity_key: str, price_minor: int,
         "tier": status,
         "reason": BAND_REASON[status],
         "basis": BASIS_OWN,
+        "population": group,
+        # Fuenf Punkte reichen fuer einen Median und sind trotzdem duenn. Wer
+        # das Urteil liest, soll sehen, worauf es steht.
+        "thin": baseline.thin,
     }
 
 
 def detect_price_signal(conn: sqlite3.Connection, entity_key: str, travel_date: date,
                         price_minor: int, *, observed_at: datetime | None = None,
-                        entity_type: str = "flight", currency: str = "EUR",
+                        entity_type: str = FLIGHT, currency: str = "EUR",
                         party_size: int = 1, nights: int = 1,
                         stars: int | None = None, name: str | None = None,
+                        is_estimate: bool = True,
                         rates: Rates | None = None,
                         limits: PlausibilityLimits = DEFAULT_LIMITS) -> dict[str, Any]:
     """Ein Preis, ein Urteil.
 
     Der Rueckgabewert traegt weiterhin `status` mit seiner alten Bedeutung und
-    zusaetzlich `tier`, `reason`, `basis` und `n`. Fuer `entity_type='flight'`
-    bleibt alles beim Alten: dieselbe Tabelle, dieselben drei Stufen. Die
-    vierte Stufe und die Vorfilter gelten nur fuer Hotels, wo sie gemessen
-    wurden.
+    zusaetzlich `tier`, `reason`, `basis` und `n`. Fuer Fluege kommen
+    `population` und `thin` dazu: gegen welche Grundgesamtheit gerechnet wurde
+    und ob sie duenn ist.
+
+    `is_estimate` sagt, welcher Art der uebergebene Preis ist - eine Schaetzung
+    aus dem Kalender oder ein gepruefter Live-Preis. Danach richtet sich, gegen
+    welche Baseline er gehalten wird. Bei Hotels bleibt der Parameter ohne
+    Wirkung: dort steckt dieselbe Unterscheidung in `hotel_baseline` gar nicht
+    erst drin, und die vierte Stufe und die Vorfilter gelten weiterhin nur
+    dort, wo sie gemessen wurden.
     """
     observed = observed_at or datetime.now()
     weekday, bucket = _baseline_key(travel_date, observed)
     if entity_type != HOTEL:
         return _flight_signal(
-            conn, entity_key, price_minor, weekday, bucket, entity_type, currency
+            conn, entity_key, price_minor, weekday, bucket, currency, is_estimate
         )
 
     ensure_hotel_baseline(conn)
