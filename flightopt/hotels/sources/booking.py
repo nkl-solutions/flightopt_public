@@ -949,14 +949,17 @@ class BookingSource(HotelSource):
                 if says_no_results(html):
                     logger.info("booking: null Treffer auf %s", url)
                     return html
-                token = "aws-waf-token gesetzt" if await has_waf_token(context) else (
-                    "kein aws-waf-token"
-                )
+                # Haelt eine Notiz fuer die Fehlermeldung, keinen Schluessel.
+                # Der Name sagt das jetzt auch, sonst schlaegt der Secret-Scan
+                # in scripts/sync_public.py bei jedem Abgleich an.
+                waf_note = "aws-waf-token gesetzt" if await has_waf_token(
+                    context
+                ) else "kein aws-waf-token"
                 self.breaker.record_block()
                 raise SourceBlocked(
                     f"booking: HTTP {status}, aber nach "
                     f"{CHALLENGE_TIMEOUT_MS // 1000}s weder Apollo-Cache noch "
-                    f"Ergebniskarte noch ein Hinweis auf null Treffer ({token}): "
+                    f"Ergebniskarte noch ein Hinweis auf null Treffer ({waf_note}): "
                     "die WAF-Challenge ist nicht durchgelaufen"
                 )
             finally:
