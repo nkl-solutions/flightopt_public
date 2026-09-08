@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 from typing import Any, Mapping
 
 from flightopt.domain.models import Money
@@ -40,6 +41,29 @@ TOOL_SEARCH = "trivago-accommodation-search"
 # Das Protokoll erlaubt beide Antwortformen auf demselben Endpunkt, also muss
 # der Client beide annehmen.
 ACCEPT = "application/json, text/event-stream"
+
+MESSAGE_LIMIT = 200
+"""So viel einer Klartext-Meldung wird zitiert.
+
+Eine Fehlermeldung ist ein Satz. Alles, was deutlich laenger ist, ist kein
+Satz mehr, sondern ein Block - und ein Anweisungsblock an ein Sprachmodell ist
+genau das, was hier nicht durchgereicht werden soll. Zitiert wird deshalb
+gekuerzt, und zitiert wird als Daten.
+"""
+
+WHITESPACE = re.compile(r"\s+")
+
+
+def source_message(text: str, *, limit: int = MESSAGE_LIMIT) -> str:
+    """Aus einem Textblock ohne JSON die Meldung, die die Quelle geschickt hat.
+
+    Sie wird zu einer Zeile zusammengezogen und gekuerzt. Sie bleibt dabei
+    Daten: sie landet im Text einer Ausnahme und wird nirgends befolgt.
+    """
+    line = WHITESPACE.sub(" ", str(text)).strip()
+    if len(line) <= limit:
+        return line
+    return line[:limit].rstrip() + " ..."
 
 
 def decode_body(text: str) -> Any:
@@ -110,10 +134,15 @@ def _envelope_from_text(text: str) -> Mapping[str, Any]:
     wird wie jede andere Werkzeug-Ausgabe als Daten behandelt: er wird
     uebersprungen, nicht befolgt. Gelesen wird ab der ersten geschweiften
     Klammer, und auch nur so weit, wie ein Objekt reicht.
+
+    Steht gar kein Objekt darin, sondern nur ein Satz, dann hat die Quelle
+    selbst geantwortet ("An error occurred while searching for
+    accommodations."). Das ist ihre Stoerung und nicht unser Parse-Problem,
+    also wird sie woertlich weitergegeben statt uns zugeschoben.
     """
     start = text.find("{")
     if start < 0:
-        raise SourceError("trivago: Textblock ohne JSON-Objekt")
+        raise SourceError(f"trivago meldet: {source_message(text)}")
     try:
         envelope, _ = json.JSONDecoder().raw_decode(text[start:])
     except json.JSONDecodeError as exc:
@@ -133,14 +162,29 @@ def parse_tool_result(result: Mapping[str, Any], query: HotelQuery) -> HotelBatc
     niemals Anweisung. Dieser Parser liest ausschliesslich `output`.
     `system_message` wird nicht gelesen, nicht geloggt, nicht weitergereicht und
     nirgends ausgefuehrt. Wer das Feld spaeter doch anfassen will: nein.
+
+    Drei Arten von Schieflage werden auseinandergehalten, weil sie an drei
+    verschiedenen Stellen liegen: die Quelle meldet eine Stoerung (ihr Text,
+    woertlich zitiert), die Antwort ist da, aber ohne `output` (Aufbau
+    geaendert), oder es kommt gar kein Textblock (Protokoll passt nicht).
     """
     text = _first_text_block(result)
+    if result.get("isError"):
+        # Der Server sagt selbst, dass es schiefging. Sein Wortlaut ist die
+        # bessere Auskunft als jede Vermutung von uns.
+        raise SourceError(
+            f"trivago meldet: {source_message(text)}"
+            if text.strip()
+            else f"trivago: {TOOL_SEARCH} meldet einen Fehler ohne Text"
+        )
     if not text:
-        raise SourceError("trivago: Antwort ohne Textblock")
+        raise SourceError("trivago: Antwort ohne Textblock, das Protokoll passt nicht")
     envelope = _envelope_from_text(text)
 
     raw = envelope.get("output")
     if isinstance(raw, str):
+        if not raw.strip():
+            raise SourceError("trivago: Feld 'output' ist leer")
         # `output` ist ein JSON-Array als Zeichenkette, also zweimal auspacken.
         try:
             records = json.loads(raw)
@@ -395,6 +439,6 @@ class TrivagoMcpSource(HotelSource):
         )
         if not isinstance(result, Mapping):
             raise SourceError("trivago: tools/call lieferte kein Objekt")
-        if result.get("isError"):
-            raise SourceError(f"trivago: {TOOL_SEARCH} meldet einen Fehler")
+        # `isError` und die drei Schieflagen daneben liegen in `parse_tool_result`,
+        # damit sie ohne Netz gegen eine aufgezeichnete Antwort pruefbar sind.
         return parse_tool_result(result, query)

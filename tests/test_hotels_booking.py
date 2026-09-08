@@ -16,20 +16,24 @@ from __future__ import annotations
 import sys
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import parse_qsl, urlsplit
 
 import pytest
 
 from flightopt.domain.models import Money
 from flightopt.hotels.models import HotelQuery
-from flightopt.hotels.sources.base import LayoutBroken, SourceError
+from flightopt.hotels.sources.base import LayoutBroken, SourceBlocked, SourceError
 from flightopt.hotels.sources.booking import (
     APARTMENT,
+    CHALLENGE_STATUS,
     FORBIDDEN_PATHS,
     HOTEL,
     MAX_RESULTS,
     ORDERS,
     PAGE_SIZE,
+    READY_SELECTOR,
+    WAF_COOKIE,
     BookingSource,
     Destination,
     PriceRange,
@@ -47,6 +51,7 @@ from flightopt.hotels.sources.booking import (
     review_bucket,
     search_node,
 )
+from flightopt.sources.base import RateLimiter
 
 FIXTURES = Path(__file__).parent / "fixtures"
 ATHENS = Destination("13914", "city", "Athen, Attika, Griechenland")
@@ -381,6 +386,136 @@ def test_a_page_that_says_it_found_nothing_is_not_a_break():
 def test_a_search_node_without_a_result_list_is_a_break():
     with pytest.raises(LayoutBroken, match="Trefferliste"):
         parse_apollo({"pagination": {"nbResultsTotal": 3}}, query())
+
+
+# --------------------------------------------------------------------------
+# Die WAF-Challenge im Browser
+# --------------------------------------------------------------------------
+
+
+class FakePage:
+    """Eine Seite, die einen Status liefert und entweder fertig wird oder nicht."""
+
+    def __init__(self, *, status: int, html: str, ready: bool = True) -> None:
+        self.status = status
+        self.html = html
+        self.ready = ready
+        self.waited: list[tuple[str, object, object]] = []
+
+    async def route(self, _pattern, _handler) -> None:
+        return None
+
+    async def goto(self, _url, **_kwargs):
+        return SimpleNamespace(status=self.status)
+
+    async def wait_for_selector(self, selector, **kwargs):
+        self.waited.append((selector, kwargs.get("state"), kwargs.get("timeout")))
+        if not self.ready:
+            raise TimeoutError("Zeit abgelaufen")
+        return object()
+
+    async def content(self) -> str:
+        return self.html
+
+
+class FakeContext:
+    def __init__(self, page: FakePage, cookies=()) -> None:
+        self.page = page
+        self._cookies = list(cookies)
+        self.closed = False
+
+    async def new_page(self) -> FakePage:
+        return self.page
+
+    async def cookies(self) -> list[dict]:
+        return list(self._cookies)
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class FakeBrowser:
+    def __init__(self, context: FakeContext) -> None:
+        self.context = context
+
+    async def new_context(self, **_kwargs) -> FakeContext:
+        return self.context
+
+
+def browser_for(page: FakePage, cookies=()) -> tuple[BookingSource, FakeBrowser, FakeContext]:
+    """Der echte Adapter, nur ohne Chromium und ohne Wartezeit im Takt."""
+    source = BookingSource()
+    source.limiter = RateLimiter(60, jitter=(0.0, 0.0))
+    context = FakeContext(page, cookies)
+    return source, FakeBrowser(context), context
+
+
+async def test_a_202_is_the_challenge_and_not_a_block():
+    """AWS WAF liefert die Challenge mit 202 aus. Ein Browser rechnet sie.
+
+    Genau hier lag der Fehler: abgebrochen wurde in dem Moment, in dem sich die
+    Challenge aufgeloest haette.
+    """
+    page = FakePage(status=CHALLENGE_STATUS, html=recorded_apollo())
+    source, browser, context = browser_for(page)
+
+    html = await source._page(browser, "https://www.booking.com/searchresults.de.html")
+
+    assert parse_search_page(html, query()).offers
+    assert context.closed is True
+    # Gewartet wird auf den Apollo-Knoten *und* auf die Karten, und zwar mit
+    # `attached`: ein `<script>` wird nie sichtbar.
+    selector, state, timeout = page.waited[0]
+    assert 'data-capla-store-data="apollo"' in selector
+    assert 'data-testid="property-card"' in selector
+    assert selector == READY_SELECTOR
+    assert state == "attached"
+    assert timeout >= 30_000
+
+
+async def test_a_403_and_a_429_stay_immediate_rejections():
+    for status in (403, 429):
+        page = FakePage(status=status, html=recorded_apollo())
+        source, browser, _ = browser_for(page)
+
+        with pytest.raises(SourceBlocked, match=f"HTTP {status}"):
+            await source._page(browser, "https://www.booking.com/searchresults.de.html")
+
+        # Eine Ablehnung wird nicht ausgesessen: gar nicht erst gewartet.
+        assert page.waited == []
+
+
+async def test_a_challenge_that_never_resolves_is_a_block_with_a_clear_message():
+    page = FakePage(
+        status=CHALLENGE_STATUS,
+        html="<html><body><script>challenge.js</script></body></html>",
+        ready=False,
+    )
+    source, browser, _ = browser_for(page, cookies=[{"name": WAF_COOKIE, "value": "x"}])
+
+    with pytest.raises(SourceBlocked) as caught:
+        await source._page(browser, "https://www.booking.com/searchresults.de.html")
+
+    message = str(caught.value)
+    assert "Challenge" in message
+    # Das Cookie ist Diagnose in der Meldung, nie eine Bedingung.
+    assert f"{WAF_COOKIE} gesetzt" in message
+    assert source.breaker.failures == 1
+
+
+async def test_a_day_without_hits_survives_the_wait_instead_of_becoming_a_block():
+    """Null Treffer ist ein Ergebnis. Es gibt dann weder Cache noch Karte."""
+    page = FakePage(
+        status=200,
+        html="<html><body><h1>Keine Unterkuenfte gefunden</h1></body></html>",
+        ready=False,
+    )
+    source, browser, _ = browser_for(page)
+
+    html = await source._page(browser, "https://www.booking.com/searchresults.de.html")
+
+    assert parse_search_page(html, query()).empty is True
+    assert source.breaker.failures == 0
 
 
 def test_availability_names_what_is_missing(monkeypatch):

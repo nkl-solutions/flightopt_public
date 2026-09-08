@@ -12,12 +12,24 @@ zusaetzlich - er ist nur reichhaltiger (Koordinaten, Waehrung als Feld,
 Gesamtzahl der Treffer) und deutlich weniger bruechig als eine Handvoll
 `data-testid`-Selektoren. Die Karten im DOM bleiben als Rueckfallebene.
 
+Vor der Seite steht eine AWS-WAF-Challenge. Die erste Antwort auf die
+Ergebnisseite ist deshalb regelmaessig ein `202` mit dem Challenge-Dokument:
+`challenge.js` (rund 1,3 MB) rechnet einen Proof-of-Work, setzt das Cookie
+`aws-waf-token` und laedt danach die echte Seite. Ein echter Browser laeuft da
+regulaer durch, also wartet dieser Adapter die Challenge ab, statt beim `202`
+abzubrechen - abgebrochen wird erst, wenn danach immer noch nichts da ist.
+Gewartet wird auf das, was die fertige Seite auszeichnet: der Apollo-Knoten
+oder die Ergebniskarten.
+
 Was dieser Adapter bewusst **nicht** tut, und zwar dauerhaft nicht:
 
 * kein Stealth-Plugin, keine gefaelschten Automatisierungs-Merkmale,
 * keine User-Agent-Rotation (ein fester, aktueller Chrome-Kennstring),
 * keine Proxy-Rotation,
 * kein Loesen von Captchas,
+* kein Ernten des `aws-waf-token`, um es einem HTTP-Client unterzuschieben:
+  die Challenge laeuft im Browser ab, der sie auch wirklich rechnet, oder gar
+  nicht,
 * keine Anfragen an `/alt_avail*` und `/monthly_minrates*` (robots.txt), und
   damit auch nicht an die GraphQL-Operation `AvailabilityCalendar`, die genau
   diese Daten liefert,
@@ -78,6 +90,25 @@ CHROME_UA = (
 BLOCKED_RESOURCE_TYPES = {"image", "media", "font"}
 # Von robots.txt gesperrt. Der Browser darf sie auch nicht nachladen.
 FORBIDDEN_PATHS = ("/alt_avail", "/monthly_minrates")
+
+CHALLENGE_STATUS = 202
+"""Die erste Antwort der AWS-WAF: das Challenge-Dokument. Im Browser ist das
+der Normalfall und kein Block - der Browser rechnet sie und wird danach auf die
+echte Seite gelassen."""
+REJECTING_STATUS = (403, 429)
+"""Echte Ablehnungen. Daran ist nichts zu loesen, also sofort Schluss."""
+
+READY_SELECTOR = (
+    'script[data-capla-store-data="apollo"], div[data-testid="property-card"]'
+)
+"""Woran die fertige Ergebnisseite zu erkennen ist. Beides zaehlt, weil der
+Apollo-Cache der Normalfall ist und die Karten die Rueckfallebene."""
+CHALLENGE_TIMEOUT_MS = 45_000
+"""Grosszuegig: die Challenge laedt ein Skript von rund 1,3 MB und rechnet
+danach. Wer hier zu knapp misst, nennt jede langsame Runde einen Block."""
+WAF_COOKIE = "aws-waf-token"
+"""Nur Diagnose in der Fehlermeldung. Nie eine Bedingung, und schon gar nichts,
+was diese Anwendung irgendwohin weiterreicht."""
 
 PAGE_SIZE = 25
 """Treffer je Seite. Booking rechnet `offset` in genau diesen Schritten."""
@@ -715,6 +746,44 @@ def says_no_results(html: str) -> bool:
     return bool(NO_RESULTS_TEXT.search(html))
 
 
+async def wait_until_ready(page: Any, *, timeout_ms: int = CHALLENGE_TIMEOUT_MS) -> bool:
+    """Warten, bis die fertige Seite da ist. Wahr, wenn sie es wurde.
+
+    `state="attached"` ist kein Detail: der Apollo-Knoten ist ein `<script>`
+    und damit nie sichtbar. Mit der Voreinstellung (`visible`) wuerde hier
+    jede Seite in den Zeitablauf laufen, auch die heile.
+
+    Ein Zeitablauf ist hier ausdruecklich noch kein Fehler, sondern eine
+    Auskunft: der Aufrufer sieht danach im HTML nach, ob die Seite vielleicht
+    einfach nichts gefunden hat.
+    """
+    try:
+        await page.wait_for_selector(READY_SELECTOR, state="attached", timeout=timeout_ms)
+    except Exception:  # noqa: BLE001 - Zeitablauf ist eine Antwort, kein Defekt
+        return False
+    return True
+
+
+async def has_waf_token(context: Any) -> bool:
+    """Steht nach der Navigation ein `aws-waf-token` im Kontext?
+
+    Ausschliesslich fuer die Fehlermeldung: "Challenge lief, aber die Seite
+    kam trotzdem nicht" liest sich anders als "die Challenge fing gar nicht
+    erst an". Der Wert selbst wird nicht gelesen und nirgends hingetragen.
+    """
+    reader = getattr(context, "cookies", None)
+    if reader is None:
+        return False
+    try:
+        cookies = await reader()
+    except Exception:  # noqa: BLE001 - Diagnose darf nie den Lauf kippen
+        return False
+    return any(
+        isinstance(cookie, Mapping) and cookie.get("name") == WAF_COOKIE
+        for cookie in cookies or ()
+    )
+
+
 class BookingSource(HotelSource):
     """Zweite Quelle, standardmaessig aus. Braucht Playwright und Chromium."""
 
@@ -786,8 +855,11 @@ class BookingSource(HotelSource):
                 timeout=30,
             )
         status = int(getattr(response, "status_code", 0))
-        if status in (202, 403, 429):
-            # 202 ist die WAF-Challenge. Daran wird nicht geruettelt.
+        if status in (CHALLENGE_STATUS, *REJECTING_STATUS):
+            # Hier laeuft kein Browser, also rechnet niemand die Challenge:
+            # ein 202 bleibt auf diesem Weg ein Abbruchgrund. Ein Token aus dem
+            # Browser hierher zu tragen waere genau das Umgehen, das wir nicht
+            # tun.
             self.breaker.record_block()
             raise SourceBlocked(f"booking: HTTP {status} bei der Zielsuche")
         if status != 200:
@@ -841,7 +913,15 @@ class BookingSource(HotelSource):
             return await self._page(own, url)
 
     async def _page(self, browser: Any, url: str) -> str:
-        """Eine Seite in eigenem Kontext. Haelt einen Platz des Limiters."""
+        """Eine Seite in eigenem Kontext. Haelt einen Platz des Limiters.
+
+        Der Status der ersten Antwort entscheidet hier **nicht** allein. `403`
+        und `429` sind Ablehnungen und damit sofort Schluss; `202` ist die
+        WAF-Challenge, also der erwartete Anfang und kein Ergebnis. Entschieden
+        wird erst, wenn die Challenge Zeit hatte durchzulaufen: entweder steht
+        dann die fertige Seite da, oder sie sagt selbst, dass sie nichts
+        gefunden hat, oder es war doch eine Sperre.
+        """
         async with self.limiter.slot():
             context = await browser.new_context(
                 user_agent=CHROME_UA,
@@ -853,17 +933,32 @@ class BookingSource(HotelSource):
                 await page.route("**/*", _gate)
                 response = await page.goto(url, wait_until="domcontentloaded", timeout=60000)
                 status = int(getattr(response, "status", 200) or 200)
-                if status in (202, 403, 429):
-                    # 202 ist die WAF-Challenge: abbrechen, nicht nachbohren.
+                if status in REJECTING_STATUS:
                     self.breaker.record_block()
                     raise SourceBlocked(f"booking: HTTP {status} auf der Ergebnisseite")
-                try:
-                    await page.wait_for_selector(
-                        'div[data-testid="property-card"]', timeout=20000
-                    )
-                except Exception:  # noqa: BLE001 - leere Trefferliste ist kein Fehler
-                    logger.info("booking: keine Karte auf %s", url)
-                return str(await page.content())
+                if status == CHALLENGE_STATUS:
+                    logger.info("booking: WAF-Challenge auf %s, warte sie ab", url)
+
+                ready = await wait_until_ready(page)
+                html = str(await page.content())
+                if ready:
+                    self.breaker.record_success()
+                    return html
+                # Kein Apollo-Knoten und keine Karte. Das kann immer noch ein
+                # ehrlicher Null-Treffer-Tag sein, und der ist ein Ergebnis.
+                if says_no_results(html):
+                    logger.info("booking: null Treffer auf %s", url)
+                    return html
+                token = "aws-waf-token gesetzt" if await has_waf_token(context) else (
+                    "kein aws-waf-token"
+                )
+                self.breaker.record_block()
+                raise SourceBlocked(
+                    f"booking: HTTP {status}, aber nach "
+                    f"{CHALLENGE_TIMEOUT_MS // 1000}s weder Apollo-Cache noch "
+                    f"Ergebniskarte noch ein Hinweis auf null Treffer ({token}): "
+                    "die WAF-Challenge ist nicht durchgelaufen"
+                )
             finally:
                 await context.close()
 
