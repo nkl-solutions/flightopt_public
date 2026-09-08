@@ -67,6 +67,14 @@ class HotelBatch:
     """Was die Quelle als Gesamtzahl nennt, unabhaengig von dieser Seite."""
     empty: bool = False
     """Wahr, wenn die Quelle ausdruecklich null Treffer meldet."""
+    retries: int = 0
+    """Wie oft die Quelle fuer dieses Ergebnis nochmal gefragt werden musste.
+
+    Null ist der Normalfall. Alles darueber ist eine Aussage ueber die Quelle
+    und nicht ueber das Ergebnis, und genau deshalb steht es hier: ein
+    Endpunkt, der schleichend unzuverlaessig wird, verschwindet sonst in
+    lauter erfolgreichen Laeufen.
+    """
 
     def extend(self, other: "HotelBatch") -> "HotelBatch":
         self.offers.extend(other.offers)
@@ -76,6 +84,7 @@ class HotelBatch:
         if self.total_results is None:
             self.total_results = other.total_results
         self.empty = self.empty and other.empty
+        self.retries += other.retries
         return self
 
 
@@ -91,6 +100,8 @@ class DayResult:
     batch: HotelBatch = field(default_factory=HotelBatch)
     status: str = OK
     error: str = ""
+    retries: int = 0
+    """Neuversuche fuer diesen Tag - auch dann, wenn er am Ende scheiterte."""
 
     @property
     def arrival(self) -> date:
@@ -120,6 +131,13 @@ class FetchReport:
     failed: int = 0
     aborted: int = 0
     offers: int = 0
+    retries: int = 0
+    """Summe der Neuversuche ueber alle Tage.
+
+    Ein Lauf, der nur mit Wiederholungen gruen wurde, sieht sonst genauso aus
+    wie einer, der es auf Anhieb war. Das ist der Unterschied zwischen "die
+    Quelle laeuft" und "die Quelle laeuft noch".
+    """
     notes: list[str] = field(default_factory=list)
 
     @classmethod
@@ -137,6 +155,7 @@ class FetchReport:
             else:
                 report.failed += 1
             report.offers += len(result.batch.offers)
+            report.retries += result.retries
             if result.error:
                 report.notes.append(f"{result.arrival}: {result.error}")
         return report
@@ -154,6 +173,7 @@ class FetchReport:
             "failed": self.failed,
             "aborted": self.aborted,
             "offers": self.offers,
+            "retries": self.retries,
             "notes": list(self.notes),
         }
 
@@ -235,17 +255,25 @@ class HotelSource:
                 try:
                     batch = await runner(query)
                 except LayoutBroken as exc:
-                    results[index] = DayResult(query, status=BROKEN, error=str(exc))
+                    results[index] = DayResult(
+                        query, status=BROKEN, error=str(exc), retries=retries_of(exc)
+                    )
                 except SourceBlocked as exc:
                     # Eine Sperre ist keine Frage der Ausdauer. Sofort Schluss.
-                    results[index] = DayResult(query, status=FAILED, error=str(exc))
+                    results[index] = DayResult(
+                        query, status=FAILED, error=str(exc), retries=retries_of(exc)
+                    )
                     abort.set()
                     return
                 except Exception as exc:  # noqa: BLE001 - ein Tag, nicht der Lauf
-                    results[index] = DayResult(query, status=FAILED, error=str(exc))
+                    results[index] = DayResult(
+                        query, status=FAILED, error=str(exc), retries=retries_of(exc)
+                    )
                 else:
                     status = EMPTY if batch.empty and not batch.offers else OK
-                    results[index] = DayResult(query, batch=batch, status=status)
+                    results[index] = DayResult(
+                        query, batch=batch, status=status, retries=batch.retries
+                    )
                     streak = 0
                     return
                 streak += 1
@@ -265,6 +293,19 @@ class HotelSource:
 
     def __repr__(self) -> str:  # pragma: no cover - Diagnose
         return f"<{type(self).__name__} {self.name}>"
+
+
+def retries_of(exc: BaseException) -> int:
+    """Wie viele Neuversuche hinter einem gescheiterten Tag stecken.
+
+    Ein Adapter, der wiederholt hat und trotzdem aufgab, haengt die Zahl an
+    die Ausnahme (`exc.retries`). Wer das nicht tut, hat null - der Bericht
+    soll nicht davon abhaengen, dass jede Quelle mitzaehlt.
+    """
+    try:
+        return max(0, int(getattr(exc, "retries", 0) or 0))
+    except (TypeError, ValueError):  # pragma: no cover - fremdes Attribut
+        return 0
 
 
 def env_flag(env: Mapping[str, str], key: str, default: str = "0") -> bool:

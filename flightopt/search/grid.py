@@ -222,7 +222,11 @@ async def build_grid(
                         report.native.pop((index, day), None)
 
             if history is not None:
-                entity = f"{leg.origin}|{leg.destination}|{source.name}"
+                # Zweiteilig, ohne Quelle: die Baseline soll sagen, was diese
+                # Strecke ueblich kostet, nicht was sie bei einer Quelle kostet.
+                # Die Quelle steht ohnehin in der Spalte `source`. Dreiteilig
+                # geschrieben und zweiteilig gelesen hiess: nie eine Baseline.
+                entity = f"{leg.origin}|{leg.destination}"
                 for day, money in usable.items():
                     await history.record(
                         source=source.name,

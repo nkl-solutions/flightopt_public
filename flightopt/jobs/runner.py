@@ -23,9 +23,19 @@ from flightopt.search.grid import build_grid
 from flightopt.search.verify import verify
 from flightopt.sources.registry import build_sources
 from flightopt.storage import db, fx_store
+from flightopt.storage.baseline import detect_price_signal, refresh_baselines
 from flightopt.storage.cache import SqliteCache, SqliteHistory
+from flightopt.trip.stays import (
+    StayOptions,
+    apply_stay_costs,
+    price_stays,
+    stays_of_rows,
+)
 
 logger = logging.getLogger(__name__)
+
+UNKNOWN_BAND = "unknown"
+"""Keine Baseline, also keine Aussage. Es wird nichts ersatzweise gerechnet."""
 
 
 class JobCancelled(Exception):
@@ -94,6 +104,73 @@ def merge_variant_payloads(payloads: Sequence[dict[str, Any]], *,
     for rank, row in enumerate(rows, 1):
         row["rank"] = rank
     return rows
+
+
+def leg_entity_key(leg: Mapping[str, Any]) -> str:
+    """'ORIGIN|DESTINATION', genau der Schluessel, den `daily.py` bildet.
+
+    Eine Baseline gilt je Teilstrecke, nicht je Kette: fuer BER-ATH-BER gibt es
+    keine Historie, fuer BER|ATH und ATH|BER jeweils schon. Beide Ansichten
+    fragen deshalb denselben Schluessel, sonst sagt die Deals-Tabelle etwas
+    anderes als die Ergebnistabelle.
+    """
+    return f"{leg.get('origin', '')}|{leg.get('destination', '')}"
+
+
+def price_band(conn: Any, leg: Mapping[str, Any], *, currency: str = "EUR",
+               observed_at: datetime | None = None) -> dict[str, Any]:
+    """Wo dieser Leg-Preis gegenueber seiner eigenen Historie steht.
+
+    Das ist eine andere Aussage als der Status der Zeile. Der sagt, wie sicher
+    ein Preis ist; das hier sagt, ob er gut ist. Ohne Baseline bleibt es bei
+    `unknown`: es gibt dann weder eine Ersatzrechnung noch eine geratene
+    Vergleichsgruppe, sondern nichts.
+
+    Die Stufen sind die drei des Detektors plus `unknown`. Eine vierte Stufe
+    kennt `detect_price_signal` fuer `entity_type='flight'` nicht.
+    """
+    raw_date = leg.get("date")
+    try:
+        travel_date = date.fromisoformat(str(raw_date))
+    except (TypeError, ValueError):
+        return {"tier": UNKNOWN_BAND, "reason": "kein Datum"}
+    price_minor = round(float(leg.get("price") or 0) * 100)
+    if price_minor <= 0:
+        return {"tier": UNKNOWN_BAND, "reason": "kein Preis"}
+
+    signal = detect_price_signal(
+        conn,
+        leg_entity_key(leg),
+        travel_date,
+        price_minor,
+        observed_at=observed_at,
+        currency=currency,
+    )
+    band: dict[str, Any] = {
+        "tier": signal.get("tier") or signal.get("status") or UNKNOWN_BAND,
+        "reason": signal.get("reason", ""),
+        "n": int(signal.get("n") or 0),
+    }
+    median_minor = signal.get("median_minor")
+    if median_minor:
+        band["median"] = median_minor / 100
+        band["deviation_pct"] = round(
+            (price_minor - median_minor) / median_minor * 100, 1
+        )
+    return band
+
+
+def apply_price_bands(conn: Any, rows: Sequence[dict[str, Any]], *,
+                      observed_at: datetime | None = None) -> list[dict[str, Any]]:
+    """Jedem Leg seine Preislage anheften. Die Zeile selbst bleibt unberuehrt."""
+    for row in rows:
+        currency = str(row.get("currency") or "EUR")
+        for leg in row.get("legs") or []:
+            if isinstance(leg, dict):
+                leg["band"] = price_band(
+                    conn, leg, currency=currency, observed_at=observed_at
+                )
+    return list(rows)
 
 
 def checked_bag_fee_minor(carriers: Sequence[str], checked_bags: int) -> int:
@@ -182,12 +259,13 @@ class JobRunner:
         return job_id
 
     def start(self, job_id: int, spec: SearchSpec | Sequence[SearchSpec],
-              airlines: list[str] | None = None) -> None:
+              airlines: list[str] | None = None,
+              stays: StayOptions | None = None) -> None:
         specs = [spec] if isinstance(spec, SearchSpec) else list(spec)
         if len(specs) == 1:
-            coro = self._run(job_id, specs[0], airlines=airlines or [])
+            coro = self._run(job_id, specs[0], airlines=airlines or [], stays=stays)
         else:
-            coro = self._run_many(job_id, specs, airlines=airlines or [])
+            coro = self._run_many(job_id, specs, airlines=airlines or [], stays=stays)
         self._tasks[job_id] = asyncio.create_task(
             coro
         )
@@ -403,6 +481,87 @@ class JobRunner:
             ),
         )
 
+    async def _add_stay_costs(self, job_id: int, rows: list[dict[str, Any]],
+                              options: StayOptions | None) -> list[dict[str, Any]]:
+        """Uebernachtungskosten nachtragen und die Gesamtsumme bilden.
+
+        Laeuft bewusst als letzter Schritt, nach `partial` und nach allen
+        `verified`: die Flugergebnisse stehen damit weiterhin sofort auf dem
+        Schirm, und die Gesamtsumme ergaenzt die Zeilen an Ort und Stelle.
+
+        Ohne Schalter kehrt die Methode sofort um, ohne einen einzigen Abruf.
+        """
+        if options is None or options.sources is None:
+            return rows
+        catalogue = options.sources
+        live = list(catalogue() if callable(catalogue) else catalogue)
+        if not live:
+            return rows
+        self._raise_if_cancelled(job_id)
+        wanted = stays_of_rows(rows)
+        if not wanted:
+            return rows
+
+        self._emit(
+            job_id,
+            Progress(
+                "staying",
+                f"{len(wanted)} Aufenthalte, Übernachtungspreise werden geholt",
+                done=0,
+                total=len(wanted),
+            ),
+        )
+
+        def report(done: int, total: int) -> None:
+            self._emit(
+                job_id,
+                Progress(
+                    "staying",
+                    f"Übernachtungspreise {done}/{total}",
+                    done=done,
+                    total=total,
+                ),
+            )
+
+        try:
+            quote = await price_stays(
+                wanted,
+                live,
+                options=options,
+                on_progress=report,
+                should_stop=lambda: self._raise_if_cancelled(job_id),
+            )
+        finally:
+            for source in live:
+                try:
+                    source.close()
+                except Exception:  # noqa: BLE001 - ein Aufraeumer bricht nichts ab
+                    logger.warning("stays: %s liess sich nicht schliessen", source.name)
+
+        apply_stay_costs(rows, quote, currency=options.currency)
+        priced = sum(1 for row in rows if row.get("grand_total") is not None)
+        message = (
+            f"{len(quote.prices)} von {quote.asked} Aufenthalten bepreist, "
+            f"{priced} von {len(rows)} Zeilen mit Gesamtsumme"
+        )
+        if quote.notes:
+            message = f"{message}. {quote.notes[0]}"
+        self._emit(
+            job_id,
+            Progress(
+                "stays",
+                message,
+                done=quote.asked,
+                total=quote.asked,
+                detail={
+                    "results": rows,
+                    "calls": quote.calls,
+                    "notes": quote.notes[:5],
+                },
+            ),
+        )
+        return rows
+
     def _emit_verified(self, job_id: int, row: dict[str, Any], done: int,
                        total: int) -> None:
         self._emit(
@@ -536,7 +695,10 @@ class JobRunner:
 
         self._emit_partial(
             job_id,
-            self._partial_payload(spec, grid, best, report, route=spec.route),
+            apply_price_bands(
+                conn,
+                self._partial_payload(spec, grid, best, report, route=spec.route),
+            ),
         )
 
         def report_verify(done: int, total: int) -> None:
@@ -592,12 +754,14 @@ class JobRunner:
                     "legs": legs,
                 }
             )
+            apply_price_bands(conn, payload[-1:])
             self._emit_verified(job_id, payload[-1], rank, len(rows))
         return payload
 
     async def _run_many(self, job_id: int, specs: Sequence[SearchSpec], *,
                         airlines: list[str] | None = None,
-                        verify_limit: int = 20) -> None:
+                        verify_limit: int = 20,
+                        stays: StayOptions | None = None) -> None:
         conn = self._conn()
         conn.execute(
             "UPDATE search_job SET status='running', started_at=? WHERE id=?",
@@ -611,6 +775,10 @@ class JobRunner:
             # breaker, one exchange rate for prices that end up in one ranking.
             sources = build_catalogue(set(airlines or []), conn=conn)
             rates = await fx_store.current_rates(conn)
+            # Einmal je Lauf, vor der ersten Beobachtung dieses Laufs: ein Preis
+            # soll nicht gegen eine Baseline gemessen werden, die er selbst
+            # gerade verschoben hat.
+            refresh_baselines(conn, entity_type="flight")
             all_payloads: list[dict[str, Any]] = []
             for done, spec in enumerate(specs, 1):
                 self._emit(
@@ -630,6 +798,7 @@ class JobRunner:
                 )
 
             payload = merge_variant_payloads(all_payloads, top_k=20)
+            payload = await self._add_stay_costs(job_id, payload, stays)
             conn.execute("DELETE FROM itinerary_result WHERE job_id=?", (job_id,))
             for row in payload:
                 conn.execute(
@@ -706,7 +875,8 @@ class JobRunner:
             conn.close()
 
     async def _run(self, job_id: int, spec: SearchSpec, *,
-                   airlines: list[str] | None = None, verify_limit: int = 20) -> None:
+                   airlines: list[str] | None = None, verify_limit: int = 20,
+                   stays: StayOptions | None = None) -> None:
         conn = self._conn()
         conn.execute(
             "UPDATE search_job SET status='running', started_at=? WHERE id=?",
@@ -753,6 +923,10 @@ class JobRunner:
             # Once per job, shared by the calendar pass and the live lookup, so
             # both price a foreign fare with the same rate.
             rates = await fx_store.current_rates(conn)
+            # Einmal je Lauf, vor der ersten Beobachtung dieses Laufs: ein Preis
+            # soll nicht gegen eine Baseline gemessen werden, die er selbst
+            # gerade verschoben hat.
+            refresh_baselines(conn, entity_type="flight")
 
             self._raise_if_cancelled(job_id)
             self._emit(job_id, Progress("routes", "Prüfe, welche Strecken bedient werden"))
@@ -826,7 +1000,10 @@ class JobRunner:
                 raise ValueError("Keine gültige Kombination aus den vorhandenen Preisen.")
 
             # Wer eine Minute auf ein leeres Feld sieht, glaubt der Suche nicht mehr.
-            self._emit_partial(job_id, self._partial_payload(spec, grid, best, report))
+            self._emit_partial(
+                job_id,
+                apply_price_bands(conn, self._partial_payload(spec, grid, best, report)),
+            )
 
             # Phase two: the shortlist gets real flights, times and booking links.
             def report_verify(done: int, total: int) -> None:
@@ -880,6 +1057,20 @@ class JobRunner:
             rows.sort(key=lambda row: row[0].minor)
 
             for rank, (total, confirmed, combo, legs, drift) in enumerate(rows, 1):
+                row = {
+                    "rank": rank,
+                    "dates": [d.isoformat() for d in combo.dates],
+                    "total": total.major,
+                    "currency": total.currency,
+                    "verified": confirmed,
+                    "estimate": combo.total.major,
+                    "drift": drift,
+                    "legs": legs,
+                }
+                # Vor dem Wegschreiben: die Preislage gehoert zu dem Preis, der
+                # an diesem Tag gemessen wurde, und ist spaeter nicht mehr
+                # nachzustellen.
+                apply_price_bands(conn, [row])
                 conn.execute(
                     "INSERT INTO itinerary_result("
                     "job_id, rank, dates, price_total_minor, currency, is_estimate, detail) "
@@ -894,19 +1085,10 @@ class JobRunner:
                         json.dumps(legs),
                     ),
                 )
-                payload.append(
-                    {
-                        "rank": rank,
-                        "dates": [d.isoformat() for d in combo.dates],
-                        "total": total.major,
-                        "currency": total.currency,
-                        "verified": confirmed,
-                        "estimate": combo.total.major,
-                        "drift": drift,
-                        "legs": legs,
-                    }
-                )
+                payload.append(row)
                 self._emit_verified(job_id, payload[-1], rank, len(rows))
+
+            payload = await self._add_stay_costs(job_id, payload, stays)
 
             # Ein Abbruch zwischen Pruefpunkt und Abschluss darf den Job nicht
             # doch noch auf fertig drehen.

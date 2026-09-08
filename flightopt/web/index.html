@@ -92,6 +92,25 @@
         </div>
       </div>
 
+      <div class="stayopts">
+        <label class="check" for="withHotels">
+          <input type="checkbox" id="withHotels"> Hotelkosten mitrechnen
+        </label>
+        <div class="row" id="hotelparty">
+          <div>
+            <label class="lab" for="hotelAdults">Erwachsene</label>
+            <input type="number" id="hotelAdults" min="1" max="12" value="2">
+          </div>
+          <div>
+            <label class="lab" for="hotelRooms">Zimmer</label>
+            <input type="number" id="hotelRooms" min="1" max="8" value="1">
+          </div>
+        </div>
+        <p class="hint" id="hotelhint">Für jeden Aufenthalt zwischen zwei Flügen wird
+          der günstigste Übernachtungspreis gesucht und zur Flugsumme addiert. Die
+          Flugergebnisse erscheinen wie bisher zuerst.</p>
+      </div>
+
       <details class="fold" id="airlinesdetails">
         <summary id="airlinescount">Airlines eingrenzen</summary>
         <div class="foldbody">
@@ -131,6 +150,7 @@
       <label class="sortlbl" for="sort">Sortieren</label>
       <select id="sort">
         <option value="price">Preis</option>
+        <option value="grand">Gesamt mit Hotel</option>
         <option value="depart">Abflugdatum</option>
         <option value="length">Reisedauer</option>
       </select>
@@ -163,7 +183,9 @@
         <tr>
           <th scope="col" class="c-rank">Rang</th>
           <th scope="col" class="c-price">Preis</th>
+          <th scope="col" class="c-price c-grand">Gesamt</th>
           <th scope="col" class="c-status">Status</th>
+          <th scope="col" class="c-status c-band">Preislage</th>
           <th scope="col" class="c-rail">Daten</th>
           <th scope="col" class="c-num">Nächte</th>
           <th scope="col" class="c-num">Umstiege</th>

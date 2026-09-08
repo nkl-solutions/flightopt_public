@@ -166,3 +166,46 @@ def test_kiwi_keeps_its_pace_when_a_carrier_filter_is_applied():
     kiwi = next(s for s in filtered if isinstance(s, KiwiSource))
     assert kiwi.per_minute == 60
     assert kiwi.concurrency == 6
+
+
+async def test_a_throttled_call_marks_one_block_not_three():
+    """Eine 429-Serie in einem Aufruf darf die Sicherung nicht oeffnen.
+
+    Die Sicherung zaehlt abgewiesene Aufrufe, nicht interne Wiederholungen.
+    Sonst nimmt ein einziger gedrosselter Abruf die Airline fuer 1800 s raus.
+    """
+    from flightopt.sources.base import HttpSource, SourceBlocked
+
+    async def noop(*a, **kw):
+        return None
+
+    class Resp:
+        status_code = 429
+        text = ""
+
+    calls = {"n": 0}
+
+    class FakeSession:
+        def get(self, *a, **kw):
+            calls["n"] += 1
+            return Resp()
+
+        post = get
+
+        def close(self):
+            pass
+
+    class Throttled(HttpSource):
+        name = "throttled"
+
+    source = Throttled()
+    source.limiter.wait = noop  # type: ignore[assignment]
+    source._backoff = noop  # type: ignore[assignment]
+    source._http_session = FakeSession()
+
+    with pytest.raises(SourceBlocked):
+        await source.fetch_json("https://example.invalid/x")
+
+    assert calls["n"] == 3, "drei interne Versuche wie bisher"
+    assert source.breaker.failures == 1, "aber nur ein Blockvermerk"
+    assert not source.breaker.is_open, "die Sicherung bleibt zu"

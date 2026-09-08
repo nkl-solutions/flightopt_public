@@ -19,6 +19,7 @@ const PROGRESS_LABELS = {
   fetching:"Preise abrufen",
   solving:"Kombinieren",
   verifying:"Live prüfen",
+  staying:"Hotelpreise holen",
   done:"Fertig",
   failed:"Fehler",
   cancelled:"Abgebrochen",
@@ -28,7 +29,8 @@ const PROGRESS_RANGES = {
   routes:[12, 16],
   fetching:[30, 30],
   solving:[64, 16],
-  verifying:[84, 12],
+  verifying:[84, 8],
+  staying:[92, 7],
   done:[100, 0],
   failed:[100, 0],
   cancelled:[100, 0],
@@ -38,6 +40,9 @@ const SEARCH_WARNINGS = {
   hugeCombinations: 100000,
   manyCells: 500,
 };
+/* Rang, Preis, Gesamt, Status, Preislage, Daten, Nächte, Umstiege, Airlines.
+   Eine Zahl an einer Stelle, sonst laufen Kopf und colspan auseinander. */
+const RESULT_COLUMNS = 9;
 
 let trip = "return";
 /* `hops` holds everything ever typed. A tab only changes how many of them are
@@ -594,6 +599,13 @@ function setStayEnabled(on){
   $("#stayrow").classList.toggle("off", !on);
 }
 
+/* Belegung und Zimmer sagen nur etwas, wenn ueberhaupt Hotels gefragt werden. */
+function setStayOptionsEnabled(on){
+  $("#hotelparty").classList.toggle("off", !on);
+  $("#hotelAdults").disabled = !on;
+  $("#hotelRooms").disabled = !on;
+}
+
 function payload(){  readStayControls();
   const count = stayCount();
   return {
@@ -602,6 +614,9 @@ function payload(){  readStayControls();
     stays: Array.from({length: count}, (_, i) => stayRanges[i] || [3, 10]),
     checked_bags: Number($("#checkedBags").value || 0),
     max_stops: $("#maxStops").value === "" ? null : Number($("#maxStops").value),
+    with_hotels: $("#withHotels").checked === true,
+    hotel_adults: Number($("#hotelAdults").value || 2),
+    hotel_rooms: Number($("#hotelRooms").value || 1),
     airlines: [...picked], adults:1, cabin:"economy", currency:"EUR"
   };
 }
@@ -804,6 +819,109 @@ function statusLabel(o){
   return quality === "indicative" ? "Richtwert" : "Schätzung";
 }
 
+/* ---------------- Preislage ---------------- */
+/* Status und Preislage sind zwei verschiedene Aussagen. Der Status sagt, wie
+   sicher ein Preis ist; die Preislage sagt, ob er fuer diese Strecke und diese
+   Saison gut ist. Beides steht nebeneinander, keines ersetzt das andere.
+   Ohne Baseline wird nichts behauptet: dann steht dort "keine Basis". */
+const BAND_LABELS = {cheap:"günstig", normal:"normal", expensive:"teuer"};
+function bandLabel(tier){
+  return BAND_LABELS[String(tier || "")] || "keine Basis";
+}
+function bandOf(leg){
+  return (leg && leg.band) || {};
+}
+/* Eine Baseline gibt es je Teilstrecke, nicht fuer die ganze Route. In der
+   Zeile steht deshalb die Teilstrecke mit der groessten Abweichung: sie sagt
+   am meisten. Worauf sie sich bezieht, steht im Titel. */
+function rowBand(o){
+  let best = null;
+  ((o && o.legs) || []).forEach(leg => {
+    const band = bandOf(leg);
+    if (!band.tier || band.tier === "unknown") return;
+    const off = Math.abs(Number(band.deviation_pct) || 0);
+    if (!best || off > best.off) best = {off, band, leg};
+  });
+  if (!best) return {tier:"unknown", band:{}, leg:null};
+  return {tier: best.band.tier, band: best.band, leg: best.leg};
+}
+function bandTitle(o){
+  const pick = rowBand(o);
+  if (!pick.leg) return "Für keine Teilstrecke gibt es genug Preishistorie.";
+  const where = `${pick.leg.origin}-${pick.leg.destination} am ${fmtDay(pick.leg.date)}`;
+  const off = deviationLabel(pick.band.deviation_pct);
+  const usual = (pick.band.median === null || pick.band.median === undefined)
+    ? "" : ` gegenüber üblichen ${money(pick.band.median)} €`;
+  return off ? `${where}: ${off}${usual}` : `${where}: ${bandLabel(pick.tier)}`;
+}
+/* In der Detailzeile steht die Preislage je Leg, denn dort gilt sie. */
+function legBandNote(leg){
+  const band = bandOf(leg);
+  if (!band.tier || band.tier === "unknown") return "Preislage: keine Basis";
+  const off = deviationLabel(band.deviation_pct);
+  return off ? `Preislage: ${bandLabel(band.tier)}, ${off}`
+             : `Preislage: ${bandLabel(band.tier)}`;
+}
+function legBandMarkup(leg){
+  const band = bandOf(leg);
+  const tier = band.tier || "unknown";
+  return `<i class="band" data-signal="${esc(tier)}">${esc(legBandNote(leg))}</i>`;
+}
+
+/* ---------------- Gesamtreise ---------------- */
+/* Flug plus Übernachtung. Das ist die eine Zahl, die kein Portal nennt, und
+   deshalb darf sie nie geraten sein: fehlt fuer einen Aufenthalt ein Preis,
+   bleibt die Spalte ohne Summe, statt eine Luecke wie einen Rabatt aussehen
+   zu lassen. */
+function nightsLabel(n){
+  const v = Number(n) || 0;
+  return v === 1 ? "1 Nacht" : `${v} Nächte`;
+}
+function hasStayCosts(o){
+  return Boolean(o) && Array.isArray(o.stays);
+}
+function grandTotal(o){
+  const v = o && o.grand_total;
+  return (v === null || v === undefined) ? null : Number(v);
+}
+function grandCell(o){
+  // Ohne Schalter gibt es diese Angabe nicht. Dann steht dort auch nichts.
+  if (!hasStayCosts(o)) return "";
+  const total = grandTotal(o);
+  if (total === null){
+    return `<span class="nogrand" title="Für mindestens einen Aufenthalt liegt`
+      + ` kein Übernachtungspreis vor. Ohne ihn gibt es keine ehrliche Summe.`
+      + `">offen</span>`;
+  }
+  return `${money(total)}<small>€</small>`;
+}
+function stayRowsMarkup(o){
+  const stays = (o && o.stays) || [];
+  if (!stays.length) return "";
+  return stays.map(s => {
+    const fare = (s.price === null || s.price === undefined)
+      ? `<span class="miss">kein Preis</span>`
+      : `ab ${money(s.price)} €`;
+    const where = s.name ? `${s.city}, ${s.name}` : s.city;
+    const src = s.source ? ` <i>${esc(s.source)}</i>` : "";
+    return `<div class="fl stay">
+      <span class="staymark" aria-hidden="true"></span>
+      <span class="pair">${esc(s.code)}</span>
+      <span class="when">${fmtDay(s.arrival)}</span>
+      <span class="times">${esc(where)} <i>${esc(nightsLabel(s.nights))}</i>${src}</span>
+      <span class="fare">${fare}</span><span></span></div>`;
+  }).join("");
+}
+function staySummaryLine(o){
+  if (!hasStayCosts(o)) return "";
+  const total = grandTotal(o);
+  if (total === null){
+    return "Für mindestens einen Aufenthalt gibt es keinen Preis, deshalb bleibt"
+      + " die Gesamtsumme offen.";
+  }
+  return `Gesamt ab <b>${money(total)} €</b> für Flug und Übernachtung.`;
+}
+
 /* ---------------- Zwischenstaende ---------------- */
 /* Route plus Datumskette ist derselbe Schluessel, mit dem der Server die
    Routenvarianten zusammenfuehrt. Rang taugt nicht: er verschiebt sich, sobald
@@ -833,6 +951,17 @@ function applyVerified(row){
   const byKey = new Map(lastResults.map(r => [resultKey(r), r]));
   const key = resultKey(row);
   byKey.set(key, Object.assign({}, byKey.get(key) || {}, row));
+  renderTable(rerank([...byKey.values()]));
+  return lastResults;
+}
+/* Die Hotelkosten kommen nach den Flugpreisen und ergaenzen die Zeilen an Ort
+   und Stelle, genau wie ein geprueftes Ergebnis es tut. */
+function applyStays(results){
+  const byKey = new Map(lastResults.map(r => [resultKey(r), r]));
+  (results || []).forEach(row => {
+    const key = resultKey(row);
+    byKey.set(key, Object.assign({}, byKey.get(key) || {}, row));
+  });
   renderTable(rerank([...byKey.values()]));
   return lastResults;
 }
@@ -903,7 +1032,8 @@ function detailRows(o){
         <span>${src?tailMark(src):""}</span>
         <span class="pair">${esc(l.origin)}-${esc(l.destination)}</span>
         <span class="when">${fmtDay(l.date)}</span>
-        <span class="miss">${why}.${bag}${nativeNote?" "+esc(nativeNote)+".":""}</span>
+        <span class="miss">${why}.${bag}${nativeNote?" "+esc(nativeNote)+".":""}
+          ${legBandMarkup(l)}</span>
         <span class="fare">${money(l.price)} €</span><span></span></div>`;
     }
     const c = (l.carriers||[])[0] || "";
@@ -928,7 +1058,7 @@ function detailRows(o){
       <span>${c?tailMark(c):""}</span>
       <span class="pair">${esc(l.origin)}-${esc(l.destination)}</span>
       <span class="when">${fmtDay(l.date)}</span>
-      <span class="times">${times}${bag}${native}</span>
+      <span class="times">${times}${bag}${native}${legBandMarkup(l)}</span>
       <span class="fare">${money(l.price)} €</span>${link}</div>`;
   }).join("");
   let foot;
@@ -944,14 +1074,26 @@ function detailRows(o){
   // erklaerungsbeduerftig, sonst zaehlt jemand eine Nacht zu wenig.
   const overnight = (o.legs || []).some(l => arrivalLabel(l.date, l.arrival_date));
   const nightNote = overnight ? " Nächte zählen ab Abflugtag." : "";
-  return rows + `<p class="dsum">${foot}${nightNote}</p>`;
+  const stay = staySummaryLine(o);
+  return rows + stayRowsMarkup(o)
+    + `<p class="dsum">${foot}${nightNote}${stay ? " " + stay : ""}</p>`;
 }
 /* Re-ordering is a view concern: the same results, read a different way.
    Sorting locally avoids running the whole search again. */
+/* Eine Zeile ohne Gesamtsumme steht am Ende, nie vorn: sonst sieht eine Luecke
+   aus wie der bessere Preis. */
+function compareGrand(a, b){
+  const av = grandTotal(a), bv = grandTotal(b);
+  if (av === null && bv === null) return a.total - b.total;
+  if (av === null) return 1;
+  if (bv === null) return -1;
+  return av - bv || a.total - b.total;
+}
 function sortResults(results){
   const how = $("#sort").value;
   const copy = [...results];
-  if (how === "depart") copy.sort((a,b) => a.dates[0].localeCompare(b.dates[0]) || a.total-b.total);
+  if (how === "grand") copy.sort(compareGrand);
+  else if (how === "depart") copy.sort((a,b) => a.dates[0].localeCompare(b.dates[0]) || a.total-b.total);
   else if (how === "length") copy.sort((a,b) => {
     const len = o => (new Date(o.dates[o.dates.length-1]) - new Date(o.dates[0])) / 864e5;
     return len(a)-len(b) || a.total-b.total;
@@ -1037,7 +1179,10 @@ function rowMarkup(o, n){
       aria-expanded="false" aria-controls="det-${n}" style="animation-delay:${n * 18}ms">
     <td class="c-rank">${esc(resultRankLabel(n))}</td>
     <td class="c-price">${money(o.total)}<small>€</small></td>
+    <td class="c-price c-grand">${grandCell(o)}</td>
     <td class="c-status">${esc(statusLabel(o))}</td>
+    <td class="c-status c-band" data-signal="${esc(rowBand(o).tier)}"
+      title="${esc(bandTitle(o))}">${esc(bandLabel(rowBand(o).tier))}</td>
     <td class="c-rail"><span class="rail"><i class="line"
       style="left:${railLeft(first)};width:${railWidth(last - first)}"></i>${dots}${gaps}</span></td>
     <td class="c-num">${nightsOf(o)}</td>
@@ -1045,7 +1190,8 @@ function rowMarkup(o, n){
     <td class="c-air">${routeBadge(o)}${carriersOf(o).map(tailMark).join("")}</td>
   </tr>
   <tr class="detrow" id="det-${n}" data-n="${n}">
-    <td colspan="7"><div class="detgrid"><div class="detinner">${detailRows(o)}</div></div></td>
+    <td colspan="${RESULT_COLUMNS}"><div class="detgrid"><div class="detinner">${
+      detailRows(o)}</div></div></td>
   </tr>`;
 }
 
@@ -1083,7 +1229,7 @@ function renderTable(results){
     $("#outtitle").textContent = "Keine passenden Kandidaten";
     $("#outsummary").textContent = resultSummaryLine(0, found, 0);
     $("#ruler").innerHTML = "";
-    body.innerHTML = `<tr class="empty"><td colspan="7">`
+    body.innerHTML = `<tr class="empty"><td colspan="${RESULT_COLUMNS}">`
       + `Die Suche hat Ergebnisse, aber keiner passt zu den aktuellen Filtern.</td></tr>`;
     $("#out").classList.add("on");
     return;
@@ -1240,6 +1386,17 @@ $("#f").onsubmit = async e => {
     const p = JSON.parse(ev.data);
     if (p.phase==="partial"){ applyPartial((p.detail&&p.detail.results)||[]); return; }
     if (p.phase==="verified"){ applyVerified((p.detail&&p.detail.result)||null); return; }
+    // Der Hotelschritt laeuft nach den Flugergebnissen. Die Schritteleiste
+    // bleibt deshalb auf "Nachprüfen" stehen, der Balken laeuft weiter.
+    if (p.phase==="staying"){
+      setProgress(p); $("#note").dataset.tone = ""; $("#note").textContent = p.message;
+      return;
+    }
+    if (p.phase==="stays"){
+      applyStays((p.detail&&p.detail.results)||[]);
+      $("#note").dataset.tone = ""; $("#note").textContent = p.message;
+      return;
+    }
     const phase = progressPhase(p.phase);
     drawSteps(phase);
     setProgress(Object.assign({}, p, {phase}));
@@ -1271,6 +1428,9 @@ function saveForm(){
       checked_bags: Number($("#checkedBags").value || 0),
       max_stops: $("#maxStops").value,
       sort: $("#sort").value,
+      with_hotels: $("#withHotels").checked === true,
+      hotel_adults: $("#hotelAdults").value,
+      hotel_rooms: $("#hotelRooms").value,
     }));
   } catch { /* private mode or full quota: not worth interrupting anyone over */ }
 }
@@ -1296,6 +1456,10 @@ function loadForm(){
   if (saved.checked_bags !== undefined) $("#checkedBags").value = String(saved.checked_bags);
   if (saved.max_stops !== undefined) $("#maxStops").value = String(saved.max_stops);
   if (saved.sort) $("#sort").value = saved.sort;
+  $("#withHotels").checked = saved.with_hotels === true;
+  if (saved.hotel_adults) $("#hotelAdults").value = String(saved.hotel_adults);
+  if (saved.hotel_rooms) $("#hotelRooms").value = String(saved.hotel_rooms);
+  setStayOptionsEnabled($("#withHotels").checked);
   return true;
 }
 
@@ -1391,6 +1555,12 @@ $("#from").value = isoDay(new Date(Date.now()+30*864e5));
 $("#to").value   = isoDay(new Date(Date.now()+87*864e5));
 const restored = loadForm();
 setStayEnabled(TRIPS.find(t=>t.id===trip).stays);
+setStayOptionsEnabled($("#withHotels").checked === true);
+$("#withHotels").onchange = () => {
+  setStayOptionsEnabled($("#withHotels").checked === true);
+  saveForm();
+};
+["#hotelAdults","#hotelRooms"].forEach(s => $(s).oninput = saveForm);
 ["#from","#to","#checkedBags","#maxStops"].forEach(s => $(s).oninput = () => {
   // `min` bleibt bei heute. Ein mitwanderndes `min` liesse den Browser eine
   // eigene Blase zeigen, und checkWindow saegte dieselbe Meldung noch einmal.

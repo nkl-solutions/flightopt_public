@@ -14,14 +14,16 @@ class RecordingRunner:
         self.created = None
         self.started = None
         self.airlines = None
+        self.stays = "ungefragt"
 
     def create(self, specs):
         self.created = specs
         return 4242
 
-    def start(self, job_id, specs, *, airlines=None):
+    def start(self, job_id, specs, *, airlines=None, stays=None):
         self.started = (job_id, specs)
         self.airlines = airlines
+        self.stays = stays
 
 
 @pytest.mark.asyncio
@@ -37,7 +39,13 @@ async def test_search_starts_every_route_variant_for_airport_groups(monkeypatch)
 
     response = await main.start_search(req)
 
-    assert response == {"job_id": 4242, "route": "3 Routenvarianten"}
+    assert response == {
+        "job_id": 4242,
+        "route": "3 Routenvarianten",
+        "with_hotels": False,
+    }
     assert sorted(s.route for s in runner.created) == ["BER-ATH", "DRS-ATH", "LEJ-ATH"]
+    # Ohne Schalter bekommt der Runner keinen Auftrag fuer Uebernachtungen.
+    assert runner.stays is None
     assert runner.started[0] == 4242
     assert sorted(s.route for s in runner.started[1]) == ["BER-ATH", "DRS-ATH", "LEJ-ATH"]

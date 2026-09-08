@@ -262,6 +262,11 @@ class HttpSource:
         client = session if session is not None else self.session
 
         last: Exception | None = None
+        # Ein Aufruf zaehlt hoechstens einen Blockvermerk, egal wie oft er intern
+        # nachfasst. Sonst oeffnet eine einzelne 429-Serie die Sicherung (Schwelle
+        # 3) und nimmt die Quelle fuer 1800 s aus dem Rennen, obwohl nur ein
+        # einziger Aufruf gedrosselt wurde.
+        blocked = False
         for attempt in range(retries):
             try:
                 # The slot is held for the request only. Back-off below happens
@@ -283,7 +288,9 @@ class HttpSource:
                 continue
 
             if resp.status_code in (429, 403):
-                self.breaker.record_block()
+                if not blocked:
+                    self.breaker.record_block()
+                    blocked = True
                 last = SourceBlocked(f"{self.name}: HTTP {resp.status_code}")
                 await self._backoff(attempt, base=5.0)
                 continue

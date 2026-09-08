@@ -222,6 +222,12 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
   border-color:var(--rule-1);cursor:not-allowed}
 .stayrow{margin-top:var(--s4)}
 .stayrow.off{opacity:.55}
+/* Hotelkosten: der Schalter steht oben, Belegung und Zimmer haengen daran. */
+.stayopts{margin-top:var(--s4)}
+.stayopts label.check{display:flex;align-items:center;gap:var(--s2);
+  font-size:var(--t14);cursor:pointer}
+.stayopts .row{margin-top:var(--s3)}
+.stayopts .row.off{opacity:.55}
 .stayhead{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s3);
   margin-bottom:var(--s1)}
 .stayhint{font-size:var(--t12);color:var(--ink-subtle)}
@@ -364,7 +370,17 @@ tr.opt.best .c-rank{color:var(--signal);font-weight:500}
   font-size:var(--t21);font-weight:700;white-space:nowrap;width:136px}
 tr.opt.best .c-price{font-size:var(--t28)}
 .c-price small{font-size:var(--t12);font-weight:400;color:var(--ink-subtle);margin-left:2px}
+/* Gesamt steht neben Preis, nicht statt ihm: die Flugsumme bleibt sichtbar. */
+.c-grand{font-size:var(--t14);font-weight:500;color:var(--ink-muted)}
+tr.opt.best .c-grand{font-size:var(--t21)}
+.nogrand{font-family:var(--sans);font-size:var(--t12);font-weight:400;
+  color:var(--ink-subtle)}
 .c-status{width:104px;color:var(--ink-muted);font-size:var(--t12)}
+/* Preislage: dieselben Stufen und dieselben Farben wie in den Deals, damit
+   niemand zwei Sprachen fuer dieselbe Aussage lernen muss. */
+#resulttable td.c-band[data-signal="cheap"]{color:var(--ok);font-weight:500}
+#resulttable td.c-band[data-signal="expensive"]{color:var(--warn)}
+#resulttable td.c-band[data-signal="unknown"]{color:var(--ink-subtle)}
 .c-num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
   width:92px;white-space:nowrap}
 .c-air{width:190px}
@@ -406,12 +422,26 @@ tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
   font-size:var(--t14)}
 .fl a:hover{background:var(--ink-muted)}
 .fl .miss{color:var(--warn);font-size:var(--t12);white-space:normal}
+.fl i.band{font-style:normal;font-size:var(--t12);color:var(--ink-subtle);
+  margin-left:var(--s2);white-space:nowrap}
+.fl i.band[data-signal="cheap"]{color:var(--ok);font-weight:500}
+.fl i.band[data-signal="expensive"]{color:var(--warn)}
+/* Ein Aufenthalt ist kein Flug und sieht deshalb auch nicht so aus. */
+.fl.stay{background:var(--wash)}
+.fl.stay .staymark{display:block;width:11px;height:11px;border-radius:var(--r);
+  border:1px solid var(--ink-subtle);margin-top:var(--s1)}
+.fl.stay .times i{font-style:normal;color:var(--ink-subtle);font-size:var(--t12);
+  margin-left:var(--s2)}
+.fl.stay .fare{white-space:nowrap}
 .dsum{margin:var(--s3) 0 0;font-size:var(--t12);color:var(--ink-subtle)}
 .dsum b{color:var(--ink);font-weight:500}
 @media(max-width:760px){
   .c-status,.c-air{display:none}
+  /* Die Preislage ist der eine Satz, der auf dem Telefon am meisten sagt. */
+  #resulttable .c-band{display:table-cell}
   .fl{grid-template-columns:1fr auto;gap:var(--s1) var(--s3)}
   .fl .times,.fl .when{grid-column:1/-1;white-space:normal}
+  .fl i.band{margin-left:0;white-space:normal}
 }
 
 /* --- Hotels ---------------------------------------------------------------

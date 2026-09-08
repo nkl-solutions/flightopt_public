@@ -51,6 +51,7 @@ from flightopt.jobs.runner import JobRunner
 from flightopt.jobs.scheduler import DailyScanScheduler
 from flightopt.search.dp import count_combinations, feasible_dates
 from flightopt.sources.registry import build_sources
+from flightopt.trip.stays import StayOptions
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +163,23 @@ class SearchRequest(BaseModel):
     """None = automatisch aus der Streckenlaenge."""
     airlines: list[str] = Field(default_factory=list)
     """Restrict to these carrier codes. Empty means every source we have."""
+    with_hotels: bool = False
+    """Uebernachtungen mitrechnen. Standard ist aus, und aus heisst wirklich
+    aus: ohne diesen Schalter laeuft die Flugsuche wie bisher und fragt keine
+    einzige Unterkunft ab."""
+    hotel_adults: int = Field(default=2, ge=1, le=12)
+    hotel_rooms: int = Field(default=1, ge=1, le=8)
+
+    def stay_options(self) -> StayOptions | None:
+        """Der Auftrag fuer den Aufenthaltsschritt, oder gar keiner."""
+        if not self.with_hotels:
+            return None
+        return StayOptions(
+            sources=build_hotel_sources,
+            adults=self.hotel_adults,
+            rooms=self.hotel_rooms,
+            currency=self.currency,
+        )
 
     def _stops(self) -> list[str]:
         codes = [a.strip().upper() for a in self.airports if a.strip()]
@@ -522,9 +540,13 @@ async def start_search(req: SearchRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     job_id = runner.create(specs)
-    runner.start(job_id, specs, airlines=[a.upper() for a in req.airlines])
+    runner.start(
+        job_id, specs,
+        airlines=[a.upper() for a in req.airlines],
+        stays=req.stay_options(),
+    )
     route = specs[0].route if len(specs) == 1 else f"{len(specs)} Routenvarianten"
-    return {"job_id": job_id, "route": route}
+    return {"job_id": job_id, "route": route, "with_hotels": req.with_hotels}
 
 
 @app.post("/api/profiles")
