@@ -10,7 +10,7 @@ from typing import Any, Sequence
 
 from flightopt.domain.models import Cabin, LegSpec, Pax, SearchSpec, StayRange
 from flightopt.jobs.runner import specs_to_dict
-from flightopt.storage.baseline import detect_price_signal
+from flightopt.storage.baseline import chain_price_signal
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +127,24 @@ def dispatch_due_profiles(conn: sqlite3.Connection, runner, *,
     return jobs
 
 
+def _leg_dates(legs: list[dict], dates: list[str]) -> list[date] | None:
+    """Der Reisetag je Teilstrecke, oder None, wenn einer fehlt.
+
+    Der Tag steht am Leg. `dates` traegt dieselben Tage in derselben
+    Reihenfolge und springt ein, falls ein Leg ihn nicht mitbringt; beide
+    stammen aus derselben Kombination. Fehlt er in beiden, gibt es kein
+    Urteil - ein geratener Reisetag trifft das falsche Vorlauf-Fenster.
+    """
+    out: list[date] = []
+    for index, leg in enumerate(legs):
+        raw = leg.get("date") or (dates[index] if index < len(dates) else None)
+        try:
+            out.append(date.fromisoformat(str(raw)))
+        except (TypeError, ValueError):
+            return None
+    return out
+
+
 def collect_deals(conn: sqlite3.Connection, *, limit: int = 50,
                   now: datetime | None = None) -> list[dict[str, Any]]:
     """Der beste Treffer je abgeschlossenem Profil-Scan, mit Abstand zur Baseline.
@@ -158,20 +176,33 @@ def collect_deals(conn: sqlite3.Connection, *, limit: int = 50,
         route = legs[0].get("route") or "-".join(
             [legs[0].get("origin", "")] + [leg.get("destination", "") for leg in legs]
         )
-        # Eine Baseline gilt je Strecke, nicht je Kette. Die erste Teilstrecke ist
-        # der einzige Schluessel, den beide Seiten sicher teilen.
-        entity_key = f"{legs[0].get('origin', '')}|{legs[0].get('destination', '')}"
         price_minor = int(row["price_minor"])
-        signal = detect_price_signal(
+        # `price_minor` ist der Preis der ganzen Kette, eine Baseline gilt je
+        # Teilstrecke. Bisher stand die eine Groesse gegen die andere: der
+        # Kettenpreis gegen die Baseline von `legs[0]`. Bei drei Legs kam
+        # daraus zwangslaeufig "teuer, rund plus 100 Prozent".
+        #
+        # Jetzt bekommt jede Teilstrecke ihren eigenen Schluessel, ihren
+        # eigenen Reisetag und ihre eigene Grundgesamtheit - `verified` steht
+        # am Leg, nicht an der Zeile -, und die Kette wird gegen die Summe der
+        # Leg-Mediane gehalten. Dass das eine Naeherung ist, steht in
+        # `chain_price_signal`.
+        leg_days = _leg_dates(legs, dates)
+        if leg_days is None:
+            continue
+        signal = chain_price_signal(
             conn,
-            entity_key,
-            date.fromisoformat(dates[0]),
+            [
+                (
+                    f"{leg.get('origin', '')}|{leg.get('destination', '')}",
+                    day,
+                    not bool(leg.get("verified")),
+                )
+                for leg, day in zip(legs, leg_days)
+            ],
             price_minor,
             observed_at=observed,
             currency=row["currency"],
-            # Der gespeicherte Treffer weiss, ob er geprueft ist. Gegen die
-            # gleiche Art Preis gehalten heisst die Aussage etwas.
-            is_estimate=bool(row["is_estimate"]),
         )
         median_minor = signal.get("median_minor")
         deals.append(
@@ -192,6 +223,10 @@ def collect_deals(conn: sqlite3.Connection, *, limit: int = 50,
                     else None
                 ),
                 "signal": signal["status"],
+                # Wahr, sobald die Preislage aus mehreren Teilstrecken
+                # zusammengerechnet ist. Wer die Zahl anzeigt, soll sagen
+                # koennen, dass sie genaehert ist.
+                "approximate": bool(signal.get("approximate")),
             }
         )
     return deals

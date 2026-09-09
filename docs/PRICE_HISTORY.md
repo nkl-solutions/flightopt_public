@@ -1,6 +1,6 @@
 # Preishistorie
 
-Stand 2026-09-08. Wer an Baselines, Preislage oder Preisfehlern arbeitet,
+Stand 2026-09-09. Wer an Baselines, Preislage oder Preisfehlern arbeitet,
 schaut zuerst hier nach. Der Code liegt in `flightopt/storage/cache.py`
 (Schreiben), `flightopt/storage/baseline.py` (Rechnen) und
 `flightopt/hotels/signals.py` (Stufen).
@@ -60,11 +60,23 @@ die Quelle steht ohnehin in `source`. Gebildet in `search/grid.py` und
 `search/verify.py`, gelesen ueber `leg_entity_key` in `jobs/runner.py` und in
 `jobs/daily.py`.
 
-**Hotels: `<cc>|<property_key>`**, gebildet in `flightopt/hotels/models.py`.
-`cc` ist der Laendercode aus einer Namenstabelle, Rueckfall `XX`.
-`property_key` ist `<quelle>:<id>`, also zum Beispiel
-`trivago:1d6fec31a3cf`. Damit rechnet die Baseline je Objekt und nicht je Stadt.
-Zerlegt wird ueber `split_entity_key` in `storage/baseline.py`.
+**Hotels: `<property_key>`**, gebildet in `flightopt/hotels/models.py`.
+`property_key` ist `<quelle>:<id>`, also zum Beispiel `trivago:1d6fec31a3cf`.
+Damit rechnet die Baseline je Objekt und nicht je Stadt.
+
+Bis zum 2026-09-09 stand der Laendercode davor: `<cc>|<property_key>`.
+Eindeutiger wurde der Schluessel dadurch nicht - `property_key` traegt Quelle
+und Objekt-ID schon -, aber instabil. Liefert eine Quelle das Land einmal
+nicht, wandert dieselbe Unterkunft nach `XX|...` und ihre Historie zerfaellt in
+zwei Grundgesamtheiten, von denen keine mehr die fuenf Beobachtungen erreicht.
+**Ein Schluessel darf nichts enthalten, was eine Antwort weglassen kann.** Das
+Land steht weiter in `hotel_property.country_code` und wird von dort gelesen;
+dort schuetzt es das `NULLIF` in `hotels/store.upsert_property`.
+
+`split_entity_key` in `storage/baseline.py` liest weiterhin beide Formen, damit
+eine Datei ohne gelaufene Migration nicht ploetzlich leere Baselines hat.
+Umgeschrieben wird der Bestand von `scripts/migrate_hotel_entity_keys.py`
+(Abschnitt 7).
 
 Wer den Schluessel anfasst, aendert die Bedeutung jeder bestehenden Zeile. Genau
 das war der Fehler, den `scripts/migrate_entity_keys.py` aufraeumt (Abschnitt 7).
@@ -92,9 +104,15 @@ jedem Direkttarif liegen. Die alte gemischte Baseline lag also zu tief und liess
 echte Tarife zu teuer aussehen. Wer sich das falsch herum merkt, baut den Fehler
 wieder ein.
 
-Hotelzeilen bleiben bei `is_indicative = 0`. Ihre Naeherung steckt in
-`is_estimate`; ein Kennzeichen hier wuerde ihnen jede Vergleichsgruppe nehmen,
-weil beide Hotelquellen Richtwerte liefern.
+Hotelzeilen tragen das Kennzeichen seit dem 2026-09-09 ebenfalls, aber es
+**filtert dort nicht**. Trivago ist ein Vergleichsportal (`indicative = True`),
+Booking nicht (`indicative = False`, es ist der Haendler selbst). Wuerde
+`refresh_hotel_baselines` indikative Zeilen ausschliessen, fiele die grosse
+Mehrheit aller Hotelbeobachtungen weg und es stuende fast ueberall `unknown`.
+Bei den Fluegen ist es umgekehrt: dort ist genau eine Quelle indikativ.
+
+Die Naeherung einer Hotelquelle steckt deshalb in `is_estimate`, und die wird
+getrennt - siehe Abschnitt 4.
 
 **`is_estimate`: welcher Grundgesamtheit gehoert die Zeile an?**
 Der Kalender nennt den Tagesbestpreis irgendeines Flugs, die Live-Pruefung den
@@ -113,7 +131,7 @@ Alle drei sind abgeleitet und jederzeit neu berechenbar. Sie halten Median, MAD,
 | Tabelle | Schluessel | Wofuer |
 |---|---|---|
 | `flight_baseline` | `entity_key, weekday, leadtime_bucket, currency, is_estimate` | die einzige Quelle fuer Flug-Preisaussagen |
-| `hotel_baseline` | `scope, group_key, weekday, leadtime_bucket, stay_key, currency` | Hotels, auf zwei Ebenen: Eigenhistorie und Peer-Gruppe |
+| `hotel_baseline` | `scope, group_key, weekday, leadtime_bucket, stay_key, currency, population` | Hotels, auf zwei Ebenen: Eigenhistorie und Peer-Gruppe |
 | `price_baseline` | `entity_type, entity_key, weekday, leadtime_bucket, currency` | Altbestand, traegt nur noch Hotelzeilen und wird von nichts gelesen |
 
 **`flight_baseline`** liegt im Schema in `storage/db.py`, geschrieben von
@@ -127,6 +145,21 @@ und wird beim ersten Zugriff angelegt. `scope` ist `own` oder `peer`;
 `group_key` ist bei `own` der `entity_key`, bei `peer`
 `<cc>|<stadt>|<sterne>`. `stay_key` ist `p<belegung>n<naechte>`, sonst laege ein
 Familienzimmer fuer drei Naechte neben einem Einzelzimmer fuer eine.
+
+`population` (`estimate` oder `verified`) steht seit dem 2026-09-09 im
+Schluessel und leitet sich aus `is_estimate` der Beobachtung ab. Vorher lagen
+Richtwerte und Haendlerpreise in derselben Verteilung, und an jedem Urteil ueber
+einen Haendlerpreis hing der Zusatz "Vergleichsgruppe enthaelt auch Richtwerte".
+Der Zusatz war ehrlich, aber ein Zusatz ist keine Trennung: der Median lag
+trotzdem daneben.
+
+`ensure_hotel_baseline` erkennt eine Datei mit der alten Form an einem
+fehlenden `population` in `PRAGMA table_info` und legt die Tabelle neu an. Die
+alten Zeilen werden dabei **verworfen und nicht uebernommen**: sie sind aus
+beiden Grundgesamtheiten gerechnet, gehoeren also beiden an, und eine davon
+auszuwaehlen waere genau die Luege, die der Umbau abstellt. Gefahrlos ist es,
+weil die Tabelle abgeleitet ist - `refresh_hotel_baselines` rechnet sie aus den
+Beobachtungen in Sekunden neu.
 
 **`price_baseline`** ist der Altbestand. Seit dem 2026-09-08 stehen die
 Flugzeilen nicht mehr darin; geschrieben wird sie nur noch auf dem Hotelpfad,
@@ -144,10 +177,14 @@ Gruppiert wird nach:
 
 - **Fluege:** Strecke (`entity_key`), Wochentag des Reisetags, Vorlauf-Fenster,
   Waehrung, `is_estimate`. Zeilen mit `is_indicative = 1` fallen vorher heraus.
-- **Hotels, `own`:** Objekt, Wochentag, Vorlauf-Fenster, `stay_key`, Waehrung.
-- **Hotels, `peer`:** Laendercode, Stadt und Sternekategorie statt des Objekts.
-  Namen, die nach Schlafsaal, Tageszimmer, Campingplatz oder Boot aussehen,
-  gehen gar nicht erst in die Peer-Verteilung.
+- **Hotels, `own`:** Objekt, Wochentag, Vorlauf-Fenster, `stay_key`, Waehrung,
+  `population`.
+- **Hotels, `peer`:** Laendercode, Stadt und Sternekategorie statt des Objekts,
+  sonst dieselben Merkmale samt `population`. Namen, die nach Schlafsaal,
+  Tageszimmer, Campingplatz oder Boot aussehen, gehen gar nicht erst in die
+  Peer-Verteilung.
+  Zeilen mit `is_indicative = 1` fallen bei Hotels **nicht** heraus, anders als
+  bei den Fluegen - siehe Abschnitt 3.
 
 Die Vorlauf-Fenster (`leadtime_bucket` in `storage/baseline.py`), gerechnet als
 Reisetag minus Beobachtungstag:
@@ -172,9 +209,10 @@ Einstieg ist `detect_price_signal(conn, entity_key, travel_date, price_minor, ..
 in `storage/baseline.py`. Alles ausser `entity_type="hotel"` geht auf den
 Flugpfad.
 
-### Fluege: drei Stufen plus `unknown`
+### Fluege: vier Stufen plus `unknown`
 
-`band_status` in `flightopt/hotels/signals.py`:
+`band_status` in `flightopt/hotels/signals.py` liefert weiter die drei alten
+Stufen, und `status` behaelt genau seine bisherige Bedeutung:
 
 ```
 band = max(BAND_FLOOR_MINOR, mad_minor * 3)      # BAND_FLOOR_MINOR = 1500, also 15 Euro
@@ -184,20 +222,100 @@ sonst                    ->  normal
 keine Baseline           ->  unknown
 ```
 
+Darueber liegt seit dem 2026-09-09 die vierte Stufe `error` aus
+`flightopt/hunt/errorfare.py`. Sie weicht von `status` nur nach unten ab
+(`error` statt `cheap`) und ist bewusst eng gefasst - Einzelheiten unten und
+in `docs/DEAL_HUNT.md`.
+
 Die Schranke ist **absolut in Cent**, keine Prozentabweichung. Der
 zurueckgegebene Eintrag traegt `status`, `tier`, `reason`, `basis`, `n`,
-`population` und `thin`; bei Fluegen sind `status` und `tier` immer gleich.
-`population` ist `estimate` oder `verified` und sagt, gegen welche
-Grundgesamtheit gemessen wurde. Eine vierte Stufe kennt der Flugpfad nicht.
+`population` und `thin`; bei Fluegen weicht `tier` von `status` nur ab, wenn
+`error` greift. `population` ist `estimate` oder `verified` und sagt, gegen
+welche Grundgesamtheit gemessen wurde. Greift `error`, kommen `distance_km`,
+`floor_minor` und `per_traveller_minor` dazu.
 
 Ohne passende Baseline kommt `{"tier": "unknown", "reason": "keine Baseline",
 "n": 0}` zurueck, ohne Median und ohne Abweichung. Es wird nichts ersatzweise
-gerechnet.
+gerechnet. Die einzige Ausnahme ist `error` ohne Historie: dort steht dann
+`status: "unknown"` neben `tier: "error"`, weil die Entfernung ein Urteil
+traegt, das die fehlende Baseline nicht traegt.
+
+### Fluege: die vierte Stufe `error`
+
+`classify_flight` in `flightopt/hunt/errorfare.py`. Zwei Winkel, und die
+Bedingung sagt, welche zusammenkommen muessen:
+
+```
+error  <=>  nicht indikativ  UND  (
+              (unter der Entfernungsschranke  UND  statistisch aussen)
+              oder (unter 60 Prozent der Schranke  UND  Entfernung >= 2500 km)
+            )
+```
+
+**Statistisch aussen** heisst `preis <= median - 6 * mad` oder
+`preis <= 25 Prozent des Medians`, beides erst ab `n >= 10`. Strenger als bei
+Hotels (30 Prozent ab `n >= 5`), weil Billigflieger regelmaessig zu einem
+Drittel des Ueblichen verkaufen; eine reine Prozentregel meldete jeden
+Aktionstag.
+
+**Die Entfernungsschranke** ersetzt die Plausibilitaetsschranke je
+Sternekategorie, die es bei Fluegen nicht geben kann. Gemessen wird je
+Reisendem und je einfacher Strecke, und nur in Euro:
+
+| Entfernung      | Schranke | ohne Historie |
+|-----------------|----------|---------------|
+| unter 1000 km   |   8 EUR  | greift nie    |
+| 1000 - 2499 km  |  12 EUR  | greift nie    |
+| 2500 - 4999 km  |  22 EUR  | 13 EUR        |
+| 5000 - 7999 km  |  55 EUR  | 33 EUR        |
+| ab 8000 km      |  75 EUR  | 45 EUR        |
+
+Unter 2500 km gibt es ohne Historie kein Urteil: dort ist der einstellige
+Preis ein Produkt und kein Versehen. **Fehltarife auf Kurzstrecken findet das
+Werkzeug erst, wenn die Strecke eine Historie hat.**
+
+Ein **indikativer** Preis erreicht die Stufe nie. Kiwi preist ein anderes
+Produkt, und ein Ein-Stopp-Preis unter jedem Direkttarif ist dort der
+Normalfall. Ein **Kalenderpreis** ist dagegen zugelassen, sonst faende die
+Beobachtungsliste nie etwas; was er ist, steht in `population` und in jeder
+Meldung.
+
+`chain_price_signal` bleibt bei drei Stufen. Der Kettenpreis steht schon gegen
+eine Summe von Medianen, also gegen eine Naeherung; ein Fehltarif steckt
+ohnehin in genau einer Teilstrecke, und dort findet ihn der Einzelpfad.
 
 In der Ergebnistabelle steht das als eigene Spalte **Preislage** neben dem
 Status: `guenstig`, `normal`, `teuer` oder `keine Basis`. Der Status sagt, wie
 sicher ein Preis ist (`geprueft`, `Richtwert`, `Schaetzung`), die Preislage sagt,
 ob er gut ist. Zwei Felder, zwei Fragen, nie eins statt des anderen.
+
+### Ketten: `chain_price_signal`
+
+Eine Baseline gilt je Teilstrecke. Die Deals-Ansicht zeigt aber den Preis der
+**ganzen Kette**, und der gehoert nicht gegen die Baseline einer Teilstrecke.
+Bis zum 2026-09-09 stand genau das im Code: `price_total_minor` gegen die
+Baseline von `legs[0]`. Bei drei Legs kam daraus zwangslaeufig "teuer, rund
+plus 100 Prozent".
+
+`chain_price_signal(conn, legs, price_minor, ...)` in `storage/baseline.py`
+nimmt die Teilstrecken als `(entity_key, travel_date, is_estimate)` und
+vergleicht gegen die **Summe der Leg-Mediane**. Das ist eine Naeherung: die
+Summe der Mediane ist nicht der Median der Summe. Sie heisst im Code so, und
+zwei Regeln halten sie ehrlich:
+
+1. Fehlt auch nur einer Teilstrecke die Baseline, gibt es kein Urteil
+   (`unknown`). Die fehlende Teilsumme wuerde die Vergleichsgroesse zu tief
+   ansetzen, und dann sieht jede Kette teuer aus.
+2. Die Bandbreite ist die Summe der Einzel-MADs. Das unterstellt gleichzeitige
+   Ausschlaege in dieselbe Richtung und faellt eher zu breit als zu eng aus.
+   Der Fehler geht damit in die vorsichtige Richtung.
+
+`n` ist das Minimum ueber die Teilstrecken, `population` ist `mixed`, wenn
+geprueft und geschaetzt gemischt sind, und `approximate` sagt, ob ueberhaupt
+genaehert wurde - bei einer Kette aus einer Teilstrecke ist die Summe exakt
+deren Baseline. Genauer als die Naeherung ginge es nur mit einer eigenen
+Historie je Kette; die gaebe es nicht und sie wuerde fuer die meisten Ketten
+nie voll genug.
 
 ### Hotels: vier Stufen plus `encoding_suspect` und `unknown`
 
@@ -212,10 +330,12 @@ mindestens eines zutrifft:
    15 / 20 / 30 / 45 / 70 Euro fuer 1 bis 5 Sterne, 15 Euro ohne Sterneangabe
    (`DEFAULT_LIMITS`).
 
-Vorgeschaltet: verglichen wird nur bei gleicher Belegung und gleicher
-Naechtezahl, und unter zehn eigenen Beobachtungen (`THIN_HISTORY_N`) rechnet die
-Peer-Baseline statt der Eigenhistorie. `basis` sagt, welche es war: `own`,
-`peer` oder `none`.
+Vorgeschaltet: verglichen wird nur bei gleicher Belegung, gleicher Naechtezahl
+und gleicher Grundgesamtheit, und unter zehn eigenen Beobachtungen
+(`THIN_HISTORY_N`) rechnet die Peer-Baseline statt der Eigenhistorie. `basis`
+sagt, welche es war: `own`, `peer` oder `none`. Gibt es fuer die Art dieses
+Preises keine Baseline, bleibt es bei `unknown` - die andere zu nehmen waere
+eine Antwort auf eine Frage, die niemand gestellt hat.
 
 Zuletzt kommt `encoding_suspect` als eigene Stufe. Sie ueberstimmt `error` und
 `expensive`, wenn `preis / median` nahe 0,01 oder 100 liegt oder in dem Band, in
@@ -228,8 +348,8 @@ fehlt.
 
 ## 7. Reparatur des Bestands
 
-Zwei Skripte, in dieser Reihenfolge. Beide sind idempotent, beide nehmen `--db`
-und arbeiten sonst auf `data/flightopt.db`.
+Vier Skripte, in dieser Reihenfolge. Alle vier sind idempotent, alle vier
+nehmen `--db` und arbeiten sonst auf `data/flightopt.db`.
 
 **`scripts/migrate_entity_keys.py`** kuerzt dreiteilige Flugschluessel
 `ORIGIN|DEST|quelle` auf `ORIGIN|DEST`. Ein zweiter Lauf findet nichts mehr, weil
@@ -244,6 +364,28 @@ und rechnet dieselben Baselines noch einmal. Das Vorher-Bild liest es auf einer
 eigenen Nur-Lese-Verbindung, damit die DDL-Nebenwirkungen von `db.connect` es
 nicht faerben.
 
+**`scripts/migrate_hotel_entity_keys.py`** entfernt den Laendercode aus den
+Hotel-Schluesseln: `GR|trivago:abc` und `XX|trivago:abc` fallen auf
+`trivago:abc` zusammen. Die `own`-Zeilen von `hotel_baseline` tragen den alten
+Schluessel als `group_key` und liest danach niemand mehr, also fliegen sie
+raus; die `peer`-Zeilen bleiben, ihr `group_key` ist ein anderer. Danach
+rechnet es die Hotel-Baselines neu. Ein zweiter Lauf findet keine Zeile mit `|`
+mehr.
+
+**`scripts/migrate_hotel_baseline_populations.py`** legt `hotel_baseline` in
+der Form mit `population` an, verwirft ihren Inhalt und rechnet ihn getrennt
+nach `is_estimate` neu. Neubau und Neurechnung stehen in **einer**
+Transaktion: brach das Neurechnen danach ab, waeren die alten Baselines weg und
+die neuen nicht da, und bis die Beobachtungen wieder zu Baselines geworden
+sind, misst kein Preis mehr gegen irgendetwas. Das Vorher-Bild liest es auf
+einer eigenen Nur-Lese-Verbindung - `ensure_hotel_baseline` wirft eine Tabelle
+der alten Form weg, sobald der erste Aufruf sie sieht.
+
+Der Bericht nennt die Verschiebung je Gruppe und die Zahl der Beobachtungen je
+Art. Die zweite Zahl ist die wichtigere: sie sagt, wie lange es dauern duerfte,
+bis die kleinere der beiden Gruppen wieder auf fuenf Beobachtungen kommt. Bis
+dahin steht dort `unknown`.
+
 ---
 
 ## 8. Ab wann eine Aussage traegt
@@ -257,13 +399,25 @@ nicht faerben.
   Live-Preise je Strecke, Wochentag und Vorlauf-Fenster zusammengekommen sind,
   steht bei geprueften Legs `keine Basis`. Das ist richtig so: die Alternative
   waere, sie gegen Kalenderschaetzungen zu messen, und genau das war der Fehler.
+- **Bei Hotels gilt seit dem 2026-09-09 dasselbe.** Ein Booking-Treffer, dessen
+  Preis Steuern und Gebuehren einschliesst, ist ein Haendlerpreis und wird nur
+  gegen Haendlerpreise gehalten. Solange die Historie fast nur Richtwerte
+  enthaelt - und das ist der heutige Stand -, steht bei genau diesen Zeilen
+  `keine Basis`. Das ist der Preis der Trennung und er ist gewollt: eine Zahl,
+  die die falsche Verteilung misst, ist schlechter als keine.
 - **Unter zehn Punkten ist die Basis duenn.** Die Oberflaeche nennt Zahl und Art
   der Vergleichspreise und schreibt "duenne Basis" dazu (`thin`). Bei Hotels
   schaltet dieselbe Schwelle auf die Peer-Baseline um.
 - **Die ersten Wochen sind schwach.** Preisfehler-Erkennung und Preislage werden
   erst mit taeglichen Beobachtungen belastbar. Bis dahin tragen bei Hotels nur
   Peer-Baseline und Plausibilitaetsschranke, bei Fluegen nur die
-  Kalender-Grundgesamtheit.
+  Kalender-Grundgesamtheit und die Entfernungsschranke - und die greift ohne
+  Historie erst ab 2500 km.
+- **Die vierte Stufe braucht zehn Punkte, nicht fuenf.** Eine Baseline
+  entsteht ab fuenf Beobachtungen und traegt dann `cheap`, `normal` und
+  `expensive`. Fuer `error` verlangen beide statistischen Bedingungen `n >=
+  10`. Zwischen fuenf und zehn Punkten gibt es also eine Preislage, aber noch
+  kein Urteil ueber einen Fehltarif.
 
 ---
 

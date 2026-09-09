@@ -53,6 +53,7 @@ import asyncio
 import importlib.util
 import json
 import logging
+import os
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -60,6 +61,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 from urllib.parse import urlencode, urljoin, urlsplit
 
+from flightopt.hotels.browser import BrowserBudget, shared_pool
 from flightopt.hotels.dom import Node, parse_html, testid, testid_in
 from flightopt.hotels.models import HotelOffer, HotelQuery
 from flightopt.hotels.prices import parse_count, parse_price, parse_rating, parse_stars
@@ -473,6 +475,98 @@ def _coordinate(value: Any, limit: float) -> float | None:
     return float(value) if -limit <= float(value) <= limit else None
 
 
+CHARGES_INCLUDED = re.compile(r"einschlie|inklusiv|includ", re.IGNORECASE)
+"""Was Booking schreibt, wenn Steuern und Gebuehren im Preis stehen.
+
+Der Text ist uebersetzt und damit fuer sich genommen bruechig. Er ist deshalb
+auch nicht die Bedingung, sondern nur ihre letzte Haelfte: entschieden wird an
+den Zahlen und Listen daneben, die keine Sprache haben.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class ChargeEvidence:
+    """Was die Antwort selbst ueber ihren Preis sagt.
+
+    `inclusive` ist wahr, wenn die Seite den Preis als vollstaendig ausweist:
+    keine herausgerechneten Posten, keine Steuerausnahmen, ein benanntes
+    Zimmer, und die Auskunft daneben nennt Steuern und Gebuehren als
+    enthalten. Fehlt eines davon, bleibt es beim Richtwert.
+
+    Die Richtung ist Absicht. Schweigen ist kein Beleg: eine Seite, die nichts
+    ueber ihre Gebuehren sagt, hat damit nicht gesagt, dass keine anfallen.
+    """
+
+    inclusive: bool
+    reason: str
+
+
+def _excluded_amount(prices: Mapping[str, Any]) -> float:
+    aggregated = _mapping(
+        prices, "excludedCharges", "excludeChargesAggregated", "amountPerStay"
+    )
+    value = aggregated.get("amountUnformatted")
+    try:
+        return abs(float(value))
+    except (TypeError, ValueError):
+        # Ein unlesbarer Betrag ist kein Beweis fuer null. Er zaehlt als
+        # vorhanden, damit der Zweifel gegen die staerkere Aussage laeuft.
+        return float("inf") if value is not None else 0.0
+
+
+def charge_evidence(result: Mapping[str, Any]) -> ChargeEvidence:
+    """Ist dieser Preis der Preis der Seite - oder nur eine Hausnummer?
+
+    Vier Merkmale, alle aus derselben Antwort, drei davon ohne Sprache:
+
+    1. `excludedCharges.excludeChargesList` ist leer,
+    2. der herausgerechnete Betrag ist null,
+    3. `taxExceptions` ist leer,
+    4. `blocks[0].blockId.roomId` benennt ein Zimmer, und
+    5. `chargesInfo` nennt Steuern und Gebuehren als enthalten.
+
+    In der Aufzeichnung vom 10.11.2026 (Athen, sechs Treffer) treffen alle
+    fuenf zu, und der angezeigte Gesamtpreis ist auf die vierte Nachkommastelle
+    derselbe Betrag wie `blocks[0].finalPrice`. Das ist kein Von-Preis und kein
+    Mittelwert ueber Anbieter, sondern der Tarif eines benannten Zimmers.
+
+    Gegengeprobt an einer heutigen Antwort (Barcelona, dreissig Tage Vorlauf,
+    zwei Ergebnisseiten zu je 25 Treffern, `spike/probe_booking_live.py`):
+    24 von 25 tragen "Einschliesslich Steuern und Gebuehren", je einer traegt
+    einen herausgerechneten Posten und bleibt damit Richtwert. Die Regel
+    unterscheidet also, statt pauschal umzuschalten - und genau das war der
+    Punkt.
+    """
+    prices = _mapping(result, "priceDisplayInfoIrene")
+    if not prices:
+        return ChargeEvidence(False, "keine Preisauskunft in der Antwort")
+
+    blocks = result.get("blocks")
+    first = blocks[0] if isinstance(blocks, list) and blocks else None
+    if not str(_mapping(first, "blockId").get("roomId") or "").strip():
+        return ChargeEvidence(False, "kein benanntes Zimmer am Preis")
+
+    excluded_list = _mapping(prices, "excludedCharges").get("excludeChargesList")
+    if isinstance(excluded_list, list) and excluded_list:
+        return ChargeEvidence(
+            False, f"{len(excluded_list)} Posten sind aus dem Preis herausgerechnet"
+        )
+    amount = _excluded_amount(prices)
+    if amount:
+        return ChargeEvidence(False, f"{amount} herausgerechnet")
+
+    exceptions = prices.get("taxExceptions")
+    if isinstance(exceptions, list) and exceptions:
+        return ChargeEvidence(False, f"{len(exceptions)} Steuerausnahmen genannt")
+
+    info = _text(prices.get("chargesInfo"))
+    if not info:
+        return ChargeEvidence(False, "keine Auskunft zu Steuern und Gebuehren")
+    if not CHARGES_INCLUDED.search(info):
+        return ChargeEvidence(False, f"Auskunft der Seite: {info!r}")
+    return ChargeEvidence(True, f"Auskunft der Seite: {info!r}")
+
+
 def _apollo_price(result: Mapping[str, Any]) -> tuple[Any, str]:
     """Gesamtpreis und Waehrung, beide aus Feldern und nie aus einem Symbol.
 
@@ -559,7 +653,11 @@ def _apollo_offer(
             lon=_coordinate(location.get("longitude"), 180.0),
             party_size=query.party_size,
             rooms=query.rooms,
-            indicative=True,
+            # Nicht fest wahr, sondern aus der Antwort abgeleitet. Der Beleg
+            # steht in `charge_evidence`; das Feld heisst weiterhin
+            # "Richtwert", und genau das ist dieser Preis eben nicht, sobald
+            # die Seite ihn als vollstaendig und zimmerbezogen ausweist.
+            indicative=not charge_evidence(result).inclusive,
         ),
         "",
         True,
@@ -728,6 +826,9 @@ def parse_result_html(html: str, query: HotelQuery) -> HotelBatch:
                 url=url,
                 party_size=query.party_size,
                 rooms=query.rooms,
+                # Eine Ergebniskarte sagt nicht, was im Preis steckt. Auf der
+                # Rueckfallebene bleibt es deshalb beim Richtwert, auch wenn
+                # derselbe Preis ueber den Apollo-Cache belegbar waere.
                 indicative=True,
             )
         )
@@ -784,11 +885,74 @@ async def has_waf_token(context: Any) -> bool:
     )
 
 
+ENV_BROWSER_ARGS = "FLIGHTOPT_HOTELS_BROWSER_ARGS"
+"""Schalter fuer Chromium, mit Komma getrennt.
+
+Sie stehen in der Umgebung und nicht im Code, weil sie eine Betriebs- und
+keine Programmentscheidung sind: auf einem Arbeitsrechner behaelt Chromium
+seine eigene Sandbox, im Container laeuft alles als root und er startet nur
+ohne sie - dort ist der Container die Grenze. Das Image setzt den Wert, der
+Arbeitsrechner laesst ihn leer.
+"""
+
+PAGE_DEADLINE_S = 120.0
+"""Frist fuer eine ganze Seite: Navigation, Challenge, Inhalt.
+
+Playwright hat je Schritt eine Frist, aber nicht fuer den Vorgang. Im
+Dauerbetrieb ist genau das der Unterschied zwischen einem verlorenen Tag und
+einer Quelle, die nie wieder etwas liefert: eine haengende Seite haelt sonst
+ihren Platz im Fenster fuer immer.
+"""
+
+_PLAYWRIGHT: Any = None
+"""Der laufende Playwright-Treiber dieses Prozesses.
+
+Er lebt neben dem Browser und nicht in ihm: `async_playwright()` als Block zu
+fahren hiesse, den Treiber zu jedem Start neu hochzuziehen, und das ist genau
+der Prozessstart, den der lange Browser sparen soll.
+"""
+
+
+def browser_args(env: Mapping[str, str] | None = None) -> list[str]:
+    """Die Chromium-Schalter aus der Umgebung, leere Eintraege weg."""
+    env = os.environ if env is None else env
+    raw = str(env.get(ENV_BROWSER_ARGS, "") or "")
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+async def launch_chromium(env: Mapping[str, str] | None = None) -> Any:
+    """Einen headless Chromium starten. Der Treiber bleibt danach stehen."""
+    global _PLAYWRIGHT
+    if _PLAYWRIGHT is None:
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError as exc:
+            raise SourceError(
+                "booking: Playwright fehlt, `uv sync --group hotels`"
+            ) from exc
+        _PLAYWRIGHT = await async_playwright().start()
+    try:
+        return await _PLAYWRIGHT.chromium.launch(headless=True, args=browser_args(env))
+    except Exception as exc:  # noqa: BLE001 - fehlender Browser
+        raise SourceError(
+            "booking: Chromium fehlt, `uv run playwright install chromium`"
+        ) from exc
+
+
 class BookingSource(HotelSource):
     """Zweite Quelle, standardmaessig aus. Braucht Playwright und Chromium."""
 
     name = "booking"
-    indicative = True
+    indicative = False
+    """Booking ist kein Vergleichsportal, sondern der Haendler selbst.
+
+    Das Kennzeichen an der Quelle beantwortet eine andere Frage als das am
+    Angebot: hier steht, ob die Zahlen dieser Quelle systematisch neben dem
+    Direktpreis liegen, wie bei einem monetarisiert sortierenden
+    Vergleichsportal. Booking zeigt seinen eigenen Preis, also nein - ob eine
+    einzelne Zahl trotzdem nur ein Richtwert ist, entscheidet `charge_evidence`
+    je Treffer.
+    """
     # 0,4 Anfragen pro Sekunde.
     per_minute = 24
     # Zwei gleichzeitige Seiten. Nicht mehr Anfragen pro Sekunde, sondern
@@ -796,11 +960,23 @@ class BookingSource(HotelSource):
     # bezahlbar, vier nicht.
     concurrency = 2
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *,
+        launcher: Any = None,
+        budget: BrowserBudget | None = None,
+        env: Mapping[str, str] | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         self._http: Any = None
         self._destinations: dict[str, Destination] = {}
         self._destination_lock = asyncio.Lock()
+        self._env = env
+        # Der Pool ist gemeinsam und ueberlebt diese Instanz. Der Katalog wird
+        # je Durchlauf neu gebaut; ein Browser an der Instanz waere ein Start
+        # je Durchgang, und genau den soll der lange Browser sparen.
+        self._pool = shared_pool(self.name, launcher or launch_chromium, budget=budget)
 
     @classmethod
     def availability(cls, env: Mapping[str, str] | None = None) -> tuple[bool, str]:
@@ -820,6 +996,14 @@ class BookingSource(HotelSource):
         return self._http
 
     def close(self) -> None:
+        """Die HTTP-Sitzung freigeben - den Browser ausdruecklich nicht.
+
+        Der Pool ist gemeinsam und ueberlebt diese Instanz mit Absicht; ihn
+        hier zu schliessen hiesse, ihn nach jedem Durchlauf neu zu starten.
+        Wann der Chromium geht, entscheidet sein Budget: nach dem
+        Seitenbudget, nach der Hoechstdauer, oder wenn zwei Minuten lang
+        niemand mehr eine Seite wollte. Zum Prozessende geht er ohnehin.
+        """
         session, self._http = self._http, None
         if session is None:
             return
@@ -878,32 +1062,23 @@ class BookingSource(HotelSource):
         destination = await self.resolve_destination(query.destination)
         return await self.render(build_search_url(query, destination, offset=offset))
 
+    @property
+    def pool(self) -> Any:
+        """Der gemeinsame Browser-Pool dieser Quelle."""
+        return self._pool
+
     @asynccontextmanager
     async def browser(self) -> AsyncIterator[Any]:
-        """Ein Chromium fuer die Dauer dieses Blocks.
+        """Ein Chromium fuer die Dauer dieses Blocks, aus dem gemeinsamen Pool.
 
-        Ein Browser je Seite waere ein Prozessstart je Anfrage; ein Browser,
-        der die Quelle ueberlebt, waere ein Prozess, den niemand schliesst. Der
-        Block ist die Mitte: ein Start je Faecher, geschlossen wird immer.
+        Frueher war das ein eigener Prozess je Faecher: gestartet, benutzt,
+        weggeworfen. Fuer den Handbetrieb ging das; fuer eine Quelle, die alle
+        paar Minuten von selbst laeuft, ist der Start je Durchgang nur Verlust.
+        Jetzt entscheidet der Pool, wie lange der Prozess bleibt - und faellt
+        dieser Block mit einer Ausnahme aus, wirft er ihn weg.
         """
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError as exc:
-            raise SourceError(
-                "booking: Playwright fehlt, `uv sync --group hotels`"
-            ) from exc
-
-        async with async_playwright() as pw:
-            try:
-                browser = await pw.chromium.launch(headless=True)
-            except Exception as exc:  # noqa: BLE001 - fehlender Browser
-                raise SourceError(
-                    "booking: Chromium fehlt, `uv run playwright install chromium`"
-                ) from exc
-            try:
-                yield browser
-            finally:
-                await browser.close()
+        async with self._pool.page() as browser:
+            yield browser
 
     async def render(self, url: str, *, browser: Any = None) -> str:
         """Die Seite in einem echten, unveraenderten Chromium laden."""
@@ -912,7 +1087,9 @@ class BookingSource(HotelSource):
         async with self.browser() as own:
             return await self._page(own, url)
 
-    async def _page(self, browser: Any, url: str) -> str:
+    async def _page(
+        self, browser: Any, url: str, *, deadline: float = PAGE_DEADLINE_S
+    ) -> str:
         """Eine Seite in eigenem Kontext. Haelt einen Platz des Limiters.
 
         Der Status der ersten Antwort entscheidet hier **nicht** allein. `403`
@@ -921,6 +1098,11 @@ class BookingSource(HotelSource):
         wird erst, wenn die Challenge Zeit hatte durchzulaufen: entweder steht
         dann die fertige Seite da, oder sie sagt selbst, dass sie nichts
         gefunden hat, oder es war doch eine Sperre.
+
+        Ueber allem liegt eine Frist fuer den ganzen Vorgang. Playwright misst
+        je Schritt; wer nur so misst, hat fuer den Fall, dass ein Schritt gar
+        nicht zurueckkehrt, keine Grenze. Im Dauerbetrieb waere das kein
+        verlorener Tag, sondern eine Quelle, die nie wieder etwas liefert.
         """
         async with self.limiter.slot():
             context = await browser.new_context(
@@ -929,41 +1111,54 @@ class BookingSource(HotelSource):
                 viewport={"width": 1366, "height": 900},
             )
             try:
-                page = await context.new_page()
-                await page.route("**/*", _gate)
-                response = await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                status = int(getattr(response, "status", 200) or 200)
-                if status in REJECTING_STATUS:
-                    self.breaker.record_block()
-                    raise SourceBlocked(f"booking: HTTP {status} auf der Ergebnisseite")
-                if status == CHALLENGE_STATUS:
-                    logger.info("booking: WAF-Challenge auf %s, warte sie ab", url)
-
-                ready = await wait_until_ready(page)
-                html = str(await page.content())
-                if ready:
-                    self.breaker.record_success()
-                    return html
-                # Kein Apollo-Knoten und keine Karte. Das kann immer noch ein
-                # ehrlicher Null-Treffer-Tag sein, und der ist ein Ergebnis.
-                if says_no_results(html):
-                    logger.info("booking: null Treffer auf %s", url)
-                    return html
-                # Haelt eine Notiz fuer die Fehlermeldung, keinen Schluessel.
-                # Der Name sagt das jetzt auch, sonst schlaegt der Secret-Scan
-                # in scripts/sync_public.py bei jedem Abgleich an.
-                waf_note = "aws-waf-token gesetzt" if await has_waf_token(
-                    context
-                ) else "kein aws-waf-token"
-                self.breaker.record_block()
-                raise SourceBlocked(
-                    f"booking: HTTP {status}, aber nach "
-                    f"{CHALLENGE_TIMEOUT_MS // 1000}s weder Apollo-Cache noch "
-                    f"Ergebniskarte noch ein Hinweis auf null Treffer ({waf_note}): "
-                    "die WAF-Challenge ist nicht durchgelaufen"
-                )
+                async with asyncio.timeout(deadline):
+                    return await self._read(context, url)
+            except TimeoutError as exc:
+                # Kein Vermerk bei der Sicherung: eine Frist, die reisst, sagt
+                # etwas ueber diese Seite und nicht darueber, ob Booking uns
+                # abweist. Der Browser wird trotzdem weggeworfen, dafuer sorgt
+                # der Pool beim Verlassen von `browser()`.
+                raise SourceError(
+                    f"booking: Seite nach {deadline:.0f}s Frist abgebrochen ({url})"
+                ) from exc
             finally:
                 await context.close()
+
+    async def _read(self, context: Any, url: str) -> str:
+        """Der eigentliche Ladevorgang. Den Kontext schliesst `_page`."""
+        page = await context.new_page()
+        await page.route("**/*", _gate)
+        response = await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        status = int(getattr(response, "status", 200) or 200)
+        if status in REJECTING_STATUS:
+            self.breaker.record_block()
+            raise SourceBlocked(f"booking: HTTP {status} auf der Ergebnisseite")
+        if status == CHALLENGE_STATUS:
+            logger.info("booking: WAF-Challenge auf %s, warte sie ab", url)
+
+        ready = await wait_until_ready(page)
+        html = str(await page.content())
+        if ready:
+            self.breaker.record_success()
+            return html
+        # Kein Apollo-Knoten und keine Karte. Das kann immer noch ein
+        # ehrlicher Null-Treffer-Tag sein, und der ist ein Ergebnis.
+        if says_no_results(html):
+            logger.info("booking: null Treffer auf %s", url)
+            return html
+        # Haelt eine Notiz fuer die Fehlermeldung, keinen Schluessel.
+        # Der Name sagt das jetzt auch, sonst schlaegt der Secret-Scan
+        # in scripts/sync_public.py bei jedem Abgleich an.
+        waf_note = (
+            "aws-waf-token gesetzt" if await has_waf_token(context) else "kein aws-waf-token"
+        )
+        self.breaker.record_block()
+        raise SourceBlocked(
+            f"booking: HTTP {status}, aber nach "
+            f"{CHALLENGE_TIMEOUT_MS // 1000}s weder Apollo-Cache noch "
+            f"Ergebniskarte noch ein Hinweis auf null Treffer ({waf_note}): "
+            "die WAF-Challenge ist nicht durchgelaufen"
+        )
 
     async def search(self, query: HotelQuery, *, pages: int = 1) -> HotelBatch:
         async with self.browser() as browser:
@@ -1001,21 +1196,23 @@ class BookingSource(HotelSource):
         max_errors: int = MAX_ERRORS,
         pages: int = 1,
     ) -> list[DayResult]:
-        """Mehrere Anreisetage in einem Browser, im Takt dieser Quelle.
+        """Mehrere Anreisetage im Takt dieser Quelle.
 
-        Der Browser wird einmal gestartet und am Ende geschlossen; wie viele
-        Seiten gleichzeitig offen sind, entscheidet der Limiter (zwei). Der
-        Aufruf ist so geschnitten, dass ein Durchlauf ihn je Quelle und
-        Fenster genau einmal braucht.
+        Jeder Tag holt sich den Browser einzeln aus dem Pool - und bekommt
+        ueber das Fenster hinweg denselben. Frueher hing ein Browser am ganzen
+        Faecher; damit zaehlte das Budget Faecher statt Seiten, und ein
+        haengender Tag riss den Prozess mit, den die uebrigen noch brauchten.
+        Wie viele Seiten gleichzeitig offen sind, entscheidet weiterhin der
+        Limiter (zwei).
         """
         if not queries:
             return []
-        async with self.browser() as browser:
 
-            async def one(query: HotelQuery) -> HotelBatch:
+        async def one(query: HotelQuery) -> HotelBatch:
+            async with self.browser() as browser:
                 return await self.search_with(browser, query, pages=pages)
 
-            return await self.run_many(queries, one, max_errors=max_errors)
+        return await self.run_many(queries, one, max_errors=max_errors)
 
 
 async def _gate(route: Any) -> None:

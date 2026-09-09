@@ -30,6 +30,7 @@ def cache_key(
     destination: str,
     day: date,
     *,
+    until: date | None = None,
     pax: int = 1,
     cabin: str = "economy",
     currency: str = "EUR",
@@ -41,8 +42,17 @@ def cache_key(
     calendar for one stop is a different calendar than one for two, but an
     airline that has no such knob would otherwise lose every cached row for a
     parameter it never saw.
+
+    `until` ist das Fensterende und gehoert nur zum Kalender: es aendert nicht
+    den Preis eines Tages, wohl aber den Umfang der Antwort. Ohne es traf eine
+    Suche ueber zwei Monate den Eintrag einer Suche ueber zwei Wochen, sah eine
+    nicht-leere Antwort und fragte gar nicht erst nach. Das Gitter bekam zwei
+    Wochen, der Bericht meldete null Abrufe und null Fehler, und die duenne
+    Abdeckung sah aus wie Angebotsmangel.
     """
     raw = f"{source}|{kind}|{origin}|{destination}|{day.isoformat()}|{pax}|{cabin}|{currency}"
+    if until is not None:
+        raw += f"|bis{until.isoformat()}"
     if max_stops is not None:
         raw += f"|stops{max_stops}"
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
@@ -52,24 +62,66 @@ class SqliteCache:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
 
-    async def get(self, key: str) -> Any | None:
+    async def get(self, key: str, *, max_age: timedelta | None = None,
+                  now: datetime | None = None) -> Any | None:
+        """Ein Eintrag, wenn er noch gilt - und wenn er jung genug ist.
+
+        Zwei verschiedene Fragen, die vorher eine waren:
+
+        * Die **TTL** sagt, wie lange eine Antwort fuer *andere* gilt. Fuer
+          eine Suche ist der Kalender von heute Morgen weiterhin gut genug.
+        * `max_age` sagt, wie alt eine Antwort fuer *diesen* Aufrufer sein
+          darf. Die Jagd auf Fehltarife braucht frische Preise; eine
+          Kalenderantwort von vor zwoelf Stunden beantwortet ihre Frage nicht.
+
+        Ohne diese Trennung waere die Jagd sinnlos: bei einer TTL von
+        vierundzwanzig Stunden und einem Takt von zwanzig Minuten fragte sie
+        nie die Quelle, sondern immer nur ihre eigene Antwort von vorhin.
+        Umgekehrt die TTL zu verkuerzen haette jedem Suchlauf die Ersparnis
+        genommen, obwohl er sie gebrauchen kann.
+
+        `now` ist die Uhr des Aufrufers. Sie steht hier aus demselben Grund
+        wie an `run_watchlist` und `refresh_baselines`: ohne sie liesse sich
+        die Beziehung zwischen Takt und Frischegrenze nur in Echtzeit pruefen,
+        also gar nicht.
+        """
         row = self.conn.execute(
-            "SELECT payload, expires_at FROM price_cache WHERE cache_key = ?", (key,)
+            "SELECT payload, expires_at, fetched_at FROM price_cache WHERE cache_key = ?",
+            (key,),
         ).fetchone()
         if row is None:
             return None
-        if db.parse_dt(row["expires_at"]) <= datetime.now():
+        moment = now or datetime.now()
+        if db.parse_dt(row["expires_at"]) <= moment:
             return None
+        if max_age is not None:
+            try:
+                fetched = db.parse_dt(row["fetched_at"])
+            except (TypeError, ValueError):
+                # Ein unlesbarer Zeitstempel heisst "Alter unbekannt", und
+                # unbekannt ist fuer einen Aufrufer mit Frischeanspruch dasselbe
+                # wie zu alt.
+                return None
+            if moment - fetched > max_age:
+                return None
         return json.loads(row["payload"])
 
-    async def put(self, key: str, value: Any, ttl: timedelta, *, source: str = "") -> None:
+    async def put(self, key: str, value: Any, ttl: timedelta, *, source: str = "",
+                  now: datetime | None = None) -> None:
+        moment = now or datetime.now()
         self.conn.execute(
             "INSERT INTO price_cache(cache_key, source, payload, fetched_at, expires_at) "
             "VALUES(?,?,?,?,?) "
             "ON CONFLICT(cache_key) DO UPDATE SET "
             "payload=excluded.payload, fetched_at=excluded.fetched_at, "
             "expires_at=excluded.expires_at",
-            (key, source, json.dumps(value, default=str), db.now(), db.expires(ttl)),
+            (
+                key,
+                source,
+                json.dumps(value, default=str),
+                moment.isoformat(timespec="seconds"),
+                (moment + ttl).isoformat(timespec="seconds"),
+            ),
         )
 
     async def purge_expired(self) -> int:
@@ -77,6 +129,25 @@ class SqliteCache:
             "DELETE FROM price_cache WHERE expires_at <= ?", (db.now(),)
         )
         return cur.rowcount
+
+
+def last_observation_by_source(conn: sqlite3.Connection) -> dict[str, str]:
+    """Wann jede Quelle zuletzt eine Beobachtung geschrieben hat.
+
+    Eine Zeile je Quelle, aus der Historie selbst. Der Katalog weiss nur, wer
+    mitspielen darf; ob eine Quelle noch etwas liefert, steht ausschliesslich
+    hier. Genau diese Frage konnte vorher niemand stellen: eine Quelle, die
+    seit Tagen an einem 403 haengt, sah im Betrieb aus wie eine, nach der
+    einfach niemand gefragt hat.
+    """
+    return {
+        str(row["source"]): str(row["last"])
+        for row in conn.execute(
+            "SELECT source, MAX(observed_at) AS last FROM price_observation "
+            "GROUP BY source"
+        )
+        if row["last"]
+    }
 
 
 class SqliteHistory:

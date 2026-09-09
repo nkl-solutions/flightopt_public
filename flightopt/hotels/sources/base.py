@@ -76,14 +76,37 @@ class HotelBatch:
     lauter erfolgreichen Laeufen.
     """
 
+    @property
+    def untouched(self) -> bool:
+        """Ob in diesem Sammler noch keine Antwort steckt.
+
+        Ein frisch angelegter `HotelBatch` ist kein Ergebnis, sondern ein
+        leeres Fach. Sein `empty=False` ist deshalb keine Auskunft, sondern nur
+        der Anfangswert - und genau diese Unterscheidung braucht `extend`.
+        """
+        return not (
+            self.offers
+            or self.skipped
+            or self.empty
+            or self.parser
+            or self.retries
+            or self.total_results is not None
+        )
+
     def extend(self, other: "HotelBatch") -> "HotelBatch":
+        # Vor dem Anhaengen gefragt: danach ist der Sammler nicht mehr leer.
+        fresh = self.untouched
         self.offers.extend(other.offers)
         self.skipped.extend(other.skipped)
         if not self.parser:
             self.parser = other.parser
         if self.total_results is None:
             self.total_results = other.total_results
-        self.empty = self.empty and other.empty
+        # Leer ist nur, was jede beteiligte Antwort leer genannt hat. Ein
+        # Sammler ohne eigene Antwort stimmt dabei nicht mit ab: sein `False`
+        # machte aus "die Quelle hat null Treffer" ein "ok mit null
+        # Angeboten", also genau den Unterschied, den `empty` festhalten soll.
+        self.empty = other.empty if fresh else (self.empty and other.empty)
         self.retries += other.retries
         return self
 
@@ -259,12 +282,19 @@ class HotelSource:
                         query, status=BROKEN, error=str(exc), retries=retries_of(exc)
                     )
                 except SourceBlocked as exc:
-                    # Eine Sperre ist keine Frage der Ausdauer. Sofort Schluss.
                     results[index] = DayResult(
                         query, status=FAILED, error=str(exc), retries=retries_of(exc)
                     )
-                    abort.set()
-                    return
+                    # Eine Sperre ist keine Frage der Ausdauer - eine einzelne
+                    # Abweisung ist aber auch keine Sperre. Eine WAF wirft mal
+                    # einen Tag ab und bedient den naechsten wieder; wer daraus
+                    # das Ende des Faechers macht, verliert dreissig Tage wegen
+                    # eines einzigen 403. Wann aus Abweisungen eine Sperre wird,
+                    # weiss die Sicherung: sie zaehlt sie mit und geht nach der
+                    # dritten in Folge zu. Ab da ist Weiterfragen nur Klopfen.
+                    if self.breaker.is_open:
+                        abort.set()
+                        return
                 except Exception as exc:  # noqa: BLE001 - ein Tag, nicht der Lauf
                     results[index] = DayResult(
                         query, status=FAILED, error=str(exc), retries=retries_of(exc)

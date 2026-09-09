@@ -217,7 +217,8 @@ def test_the_progress_meter_names_the_day_count_and_the_current_date():
 setProgress({phase:"day", done:3, total:12, detail:{date:"2026-11-12"}});
 
 assert.strictEqual($("#progresslabel").textContent, "Tage werden geholt");
-assert.strictEqual($("#progresscount").textContent, "3 von 12 Tagen, 2026-11-12");
+// Datum in deutscher Schreibweise wie in der Tabelle, nicht als ISO-Feld.
+assert.strictEqual($("#progresscount").textContent, "3 von 12 Tagen, Do., 12. Nov.");
 assert.strictEqual($("#progressbar").attributes["aria-valuenow"], "25");
 assert.strictEqual($("#progressfill").style.width, "25%");
 
@@ -286,13 +287,14 @@ const scan = {id:7, destination:"Athen", window_start:"2026-11-10",
   window_end:"2026-11-20", status:"cancelled", days_done:4, days_total:11,
   offers_found:18, created_at:"2026-09-08T11:20:31"};
 
-assert.strictEqual(scanTitle(scan), "Athen, 2026-11-10 bis 2026-11-20");
+// Daten und Uhrzeiten stehen deutsch, wie ueberall sonst auf beiden Seiten.
+assert.strictEqual(scanTitle(scan), "Athen, Di., 10. Nov. bis Fr., 20. Nov.");
 assert.strictEqual(scanSummary(scan),
-  "abgebrochen, 18 Treffer, 4 von 11 Tagen, 2026-09-08 11:20");
+  "abgebrochen, 18 Treffer, 4 von 11 Tagen, 08.09.2026, 11:20");
 // Ein einzelner Lauf liefert das Fenster verschachtelt, die Zeile bleibt gleich.
 assert.strictEqual(
   scanTitle({destination:"Athen", window:{start:"2026-11-10", end:"2026-11-10"}}),
-  "Athen, 2026-11-10");
+  "Athen, Di., 10. Nov.");
 
 drawScans([scan]);
 assert.ok($("#scanlist").innerHTML.includes('data-scan="7"'), $("#scanlist").innerHTML);
@@ -442,6 +444,34 @@ def test_saved_runs_are_listed_and_their_rows_can_be_loaded_again(client):
     assert all(row["source"] == "stub" for row in stored["rows"])
 
 
+def test_the_api_says_how_often_a_source_had_to_be_asked_again(client, monkeypatch):
+    """Ohne diese Zahl sieht ein wackliger Endpunkt aus wie ein gesunder.
+
+    Der Zaehler haengt seit jeher am Ergebnis der Quelle, kam aber nirgends
+    nach draussen. Ein Lauf, der nur mit Nachfassen gruen wurde, war von einem
+    reibungslosen nicht zu unterscheiden.
+    """
+
+    class Wobbly(StubSource):
+        async def search(self, query: HotelQuery) -> HotelBatch:
+            batch = await super().search(query)
+            batch.retries = 1
+            return batch
+
+    monkeypatch.setattr(main, "build_hotel_sources", lambda: [Wobbly()])
+    started = client.post(
+        "/api/hotels/search",
+        json={"destination": "Athen", "arrival": "2026-11-10",
+              "window_end": "2026-11-11"},
+    ).json()
+    events(client, started["scan_id"])
+    scan_id = started["scan_id"]
+
+    assert client.get(f"/api/hotels/scan/{scan_id}").json()["retries"] == 2
+    assert client.get(f"/api/hotels/scan/{scan_id}/rows").json()["retries"] == 2
+    assert client.get("/api/hotels/scans").json()["scans"][0]["retries"] == 2
+
+
 def test_the_cancel_endpoint_reports_the_new_status(client):
     scan_id = main.hotel_runner.create(
         hotel_query(), window_start=date(2026, 11, 10), window_end=date(2026, 11, 20)
@@ -468,3 +498,165 @@ def test_the_event_stream_replays_a_terminal_run_without_history(client):
     assert '"phase": "cancelled"' in body
     assert "abgebrochen" in body
     assert "fertig" not in body
+
+
+def test_a_validation_error_reads_as_german_instead_of_object_object():
+    """Ein 422 liefert `detail` als Liste. Direkt in eine Meldung geschrieben
+    ergab das woertlich "[object Object]"."""
+    result = run_hotel_assertion(
+        r"""
+assert.strictEqual(detail("Unbekannter Durchlauf"), "Unbekannter Durchlauf");
+assert.strictEqual(
+  detail([{msg: "arrival: Datum liegt in der Vergangenheit"}, {msg: "rooms: zu viele"}]),
+  "arrival: Datum liegt in der Vergangenheit; rooms: zu viele");
+assert.strictEqual(detail(undefined), "");
+assert.strictEqual(detail(null), "");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_a_price_the_detector_calls_broken_is_not_called_missing():
+    """`encoding_suspect` fehlte in der Tabelle und fiel auf "keine Basis":
+    aus einem Befund wurde damit eine Nicht-Aussage."""
+    result = run_hotel_assertion(
+        r"""
+assert.strictEqual(signalKey({tier: "encoding_suspect"}), "encoding_suspect");
+assert.strictEqual(SIGNALS.encoding_suspect.label, "Preis unklar");
+// Er steht knapp unter dem Preisfehler und weit ueber "keine Basis".
+assert.ok(SIGNALS.encoding_suspect.rank > SIGNALS.error.rank);
+assert.ok(SIGNALS.encoding_suspect.rank < SIGNALS.cheap.rank);
+assert.strictEqual(signalKey({tier: "voellig neu"}), "unknown");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_the_source_list_names_why_a_source_did_not_run():
+    """Der Grund stand bisher als eine Textzeile in einem zugeklappten Bereich."""
+    result = run_hotel_assertion(
+        r"""
+drawSources([
+  {name: "booking", active: true, reason: ""},
+  {name: "trivago", active: false, reason: "FLIGHTOPT_HOTELS_BOOKING=1 schaltet sie ein"},
+]);
+
+const html = $("#sourcehint").innerHTML;
+assert.ok(html.includes("booking"), html);
+assert.ok(html.includes("läuft"), html);
+assert.ok(html.includes("FLIGHTOPT_HOTELS_BOOKING=1"), html);
+assert.ok(html.includes('data-active="false"'), html);
+
+// Ohne Grund bleibt es bei einer klaren Aussage, nicht bei einer leeren.
+drawSources([{name: "trivago", active: false}]);
+assert.ok($("#sourcehint").innerHTML.includes("abgeschaltet"), $("#sourcehint").innerHTML);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_skipped_days_and_source_errors_reach_the_screen():
+    result = run_hotel_assertion(
+        r"""
+resetRunNotes();
+assert.strictEqual($("#runnotes").textContent, "");
+assert.strictEqual(skippedNote(0), "");
+assert.ok(skippedNote(1).startsWith("1 Tag wurde"));
+assert.ok(skippedNote(3).startsWith("3 Tage wurden"));
+
+addRunNotes([skippedNote(2), "2026-01-05: booking: HTTP 403 auf der Ergebnisseite"]);
+assert.strictEqual($("#runnotes").dataset.tone, "warn");
+assert.ok($("#runnotes").textContent.includes("HTTP 403"), $("#runnotes").textContent);
+assert.strictEqual(runNotes.length, 2);
+
+// Dieselbe Meldung zweimal ergibt eine Zeile.
+addRunNotes(["2026-01-05: booking: HTTP 403 auf der Ergebnisseite"]);
+assert.strictEqual(runNotes.length, 2);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_a_row_names_the_stay_total_and_how_many_voices_rated_it():
+    result = run_hotel_assertion(
+        r"""
+const html = rowHtml({
+  source: "booking", name: "Hotel Grande", city: "Athen", stars: 5,
+  date: "2026-11-12", nights: 3, price_per_night: 212.4, price_total: 637.2,
+  currency: "EUR", review_rating: 9.2, review_count: 3184,
+  tier: "cheap", n: 24, basis: "peer", url: "https://example.invalid/x",
+});
+
+// Bei mehreren Naechten ist der Nachtpreis nicht das, was abgebucht wird.
+assert.ok(html.includes("637,20 EUR für 3 Nächte"), html);
+// 9,2 aus acht Stimmen ist etwas anderes als 9,2 aus dreitausend.
+assert.ok(html.includes("3.184 Stimmen"), html);
+// Worauf das Signal steht, haengt am Feld statt nirgends.
+assert.ok(html.includes("24 Vergleichspreise"), html);
+assert.ok(html.includes("vergleichbare Häuser"), html);
+// Datum deutsch, nicht als ISO-Feld.
+assert.ok(html.includes("Do., 12. Nov."), html);
+
+// Eine einzelne Nacht bekommt keine doppelte Summe.
+const one = rowHtml({source: "booking", name: "X", date: "2026-11-12", nights: 1,
+  price_per_night: 61, price_total: 61, currency: "EUR"});
+assert.ok(!one.includes("für 1 Nächte"), one);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_an_empty_result_says_what_to_change_instead_of_showing_nothing():
+    result = run_hotel_assertion(
+        r"""
+$("#filterSignal").value = ""; $("#filterStars").value = ""; $("#filterSource").value = "";
+rows = [];
+running = false;
+draw();
+assert.ok($("#hotelrows").innerHTML.includes("keine Quelle ein Angebot"),
+  $("#hotelrows").innerHTML);
+
+// Waehrend der Lauf noch Tage holt, ist "nichts gefunden" eine Falschaussage.
+running = true;
+draw();
+assert.ok($("#hotelrows").innerHTML.includes("werden gerade geholt"),
+  $("#hotelrows").innerHTML);
+running = false;
+
+rows = [{source:"booking", name:"X", date:"2026-11-12", nights:1,
+         price_per_night:61, currency:"EUR", stars:3}];
+$("#filterStars").value = "5";
+draw();
+assert.ok($("#hotelrows").innerHTML.includes("keine passt zu diesen Filtern"),
+  $("#hotelrows").innerHTML);
+assert.strictEqual($("#resetfilters").hidden, false);
+
+resetFilters();
+assert.strictEqual($("#filterStars").value, "");
+assert.strictEqual($("#resetfilters").hidden, true);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_the_hotel_page_uses_the_local_day_not_the_utc_day():
+    """`toISOString` haette abends in Berlin den Vortag geliefert."""
+    result = run_hotel_assertion(
+        r"""
+const now = new Date();
+const pad = n => String(n).padStart(2, "0");
+assert.strictEqual(today(0),
+  `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
+assert.strictEqual(isoDay(new Date(2026, 0, 5)), "2026-01-05");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    # Der Aufruf ist weg, der erklaerende Kommentar darf das Wort behalten.
+    assert ".toISOString()" not in HOTELS_JS.read_text(encoding="utf-8")

@@ -191,11 +191,17 @@ def test_the_form_offers_the_switch_and_the_table_the_column():
     page = (WEB / "index.html").read_text(encoding="utf-8")
     script = (WEB / "app.js").read_text(encoding="utf-8")
 
-    assert '<input type="checkbox" id="withHotels">' in page
+    assert '<input type="checkbox" id="withHotels" aria-describedby="hotelhint">' in page
     assert '<input type="number" id="hotelAdults" min="1" max="12" value="2">' in page
     assert '<input type="number" id="hotelRooms" min="1" max="8" value="1">' in page
-    assert '<th scope="col" class="c-price c-grand">Gesamt</th>' in page
+    # "Gesamt" neben "Preis" liess offen, was da zusammengezaehlt wird.
+    assert '<th scope="col" class="c-price c-grand">Mit Hotel</th>' in page
     assert '<option value="grand">Gesamt mit Hotel</option>' in page
+    # Ohne Uebernachtungen bleibt die Spalte in jeder Zeile leer. Dann gibt es
+    # sie gar nicht erst, sonst kostet sie auf dem Telefon 136 px fuer nichts.
+    assert "#resulttable:not(.withgrand) .c-grand{display:none}" in (
+        WEB / "app.css"
+    ).read_text(encoding="utf-8")
     # Der Schalter steht im Formular, nicht in den Ergebnisfiltern.
     assert page.index('id="withHotels"') < page.index("</form>")
 

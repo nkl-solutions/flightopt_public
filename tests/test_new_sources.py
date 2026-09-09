@@ -117,6 +117,31 @@ async def test_wizz_search_leg_reports_the_market_currency(wizz, monkeypatch):
 
     assert len(offers) == 1
     assert offers[0].price == Money(2500000, "HUF")
+    assert offers[0].is_estimate is False
+
+
+@pytest.mark.asyncio
+async def test_wizz_leg_without_times_stays_an_estimate(wizz, monkeypatch):
+    """Ohne `departureDates` beschreibt die Antwort keinen Flug, nur einen Tag.
+
+    Der Preis ist echt und buchbar, deshalb bleibt das Angebot stehen. Als
+    geprueft darf es trotzdem nicht gelten: `is_estimate` steht im Schluessel
+    von `flight_baseline`, und ein Tagespreis ohne Verbindung gehoert nicht in
+    dieselbe Grundgesamtheit wie ein konkreter Flug. Bei Aegean war derselbe
+    Fehler so schwer, dass die Quelle keine Tagessuche mehr anbietet.
+    """
+    stub(wizz, {"outboundFlights": [{
+        "departureStation": "BUD", "arrivalStation": "LTN",
+        "departureDate": "2026-10-04T00:00:00",
+        "price": {"amount": 30.0, "currencyCode": "EUR"},
+    }]}, monkeypatch)
+    offers = await wizz.search_leg("BUD", "LTN", date(2026, 10, 4))
+
+    assert len(offers) == 1
+    assert offers[0].price == Money(3000, "EUR")
+    assert offers[0].segments == ()
+    assert offers[0].is_estimate is True
+    assert offers[0].deep_link
 
 
 @pytest.mark.asyncio
@@ -265,8 +290,43 @@ async def test_aegean_calendar_parses_recorded_payload(aegean, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_aegean_reports_euro_even_when_dollars_were_asked(aegean, monkeypatch):
+    """Die aufgezeichnete Antwort fuehrt `CurrencySymbol: "€"` und nur Euro.
+
+    Vorher stempelte der Adapter die angefragte Waehrung auf den Betrag. Bei
+    einer USD-Suche wurde daraus ein Preis, der rund 15 Prozent zu tief lag und
+    die Zelle gegen ehrlich umgerechnete Angebote gewann.
+    """
+    stub(aegean, load("aegean_lowfares_ATH_SKG.json"), monkeypatch)
+    prices = await aegean.calendar("ATH", "SKG", date(2026, 11, 1), currency="USD")
+
+    assert prices
+    assert {v.currency for v in prices.values()} == {"EUR"}
+
+
+@pytest.mark.asyncio
+async def test_aegean_drops_a_month_whose_symbol_is_ambiguous(aegean, monkeypatch):
+    """Das Dollarzeichen tragen USD, CAD und AUD. Raten waere der alte Fehler."""
+    stub(aegean, {"CurrencySymbol": "$", "Outbound": [
+        {"Date": "/Date(1793491200000)/", "Price": 58.62, "ServiceFee": 0.0},
+    ]}, monkeypatch)
+
+    assert await aegean.calendar("ATH", "SKG", date(2026, 11, 1)) == {}
+
+
+@pytest.mark.asyncio
+async def test_aegean_takes_a_currency_code_as_it_stands(aegean, monkeypatch):
+    stub(aegean, {"CurrencySymbol": "CHF", "Outbound": [
+        {"Date": "/Date(1793491200000)/", "Price": 58.62, "ServiceFee": 0.0},
+    ]}, monkeypatch)
+    prices = await aegean.calendar("ATH", "SKG", date(2026, 11, 1))
+
+    assert prices == {date(2026, 11, 1): Money(5862, "CHF")}
+
+
+@pytest.mark.asyncio
 async def test_aegean_adds_the_service_fee(aegean, monkeypatch):
-    stub(aegean, {"Outbound": [
+    stub(aegean, {"CurrencySymbol": "€", "Outbound": [
         {"Date": "/Date(1793491200000)/", "Price": 58.62, "ServiceFee": 8.0},
     ]}, monkeypatch)
     prices = await aegean.calendar("ATH", "SKG", date(2026, 11, 1))
@@ -276,7 +336,7 @@ async def test_aegean_adds_the_service_fee(aegean, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_aegean_skips_rows_with_an_error(aegean, monkeypatch):
-    stub(aegean, {"Outbound": [
+    stub(aegean, {"CurrencySymbol": "€", "Outbound": [
         {"Date": "/Date(1793491200000)/", "Price": 10.0, "Error": "no flights"},
         {"Date": "/Date(1793577600000)/", "Price": 55.0, "ServiceFee": 0.0},
     ]}, monkeypatch)
@@ -287,30 +347,36 @@ async def test_aegean_skips_rows_with_an_error(aegean, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_aegean_handles_an_empty_month(aegean, monkeypatch):
-    stub(aegean, {"Outbound": None, "Inbound": None}, monkeypatch)
+    stub(aegean, {"CurrencySymbol": "€", "Outbound": None, "Inbound": None},
+         monkeypatch)
     assert await aegean.calendar("ATH", "XXX", date(2026, 10, 1)) == {}
 
 
 @pytest.mark.asyncio
-async def test_aegean_offer_carries_a_booking_link(aegean, monkeypatch):
-    stub(aegean, {"Outbound": [
-        {"Date": "/Date(1793491200000)/", "Price": 58.62, "ServiceFee": 0.0},
-    ]}, monkeypatch)
-    offers = await aegean.search_leg("ATH", "SKG", date(2026, 11, 1))
+async def test_aegean_offers_no_leg_search(aegean):
+    """Der Kalender beschreibt keinen Flug, also gibt es nichts nachzupruefen.
 
-    assert len(offers) == 1
-    # No times are known, but a result the user cannot book is useless.
-    assert offers[0].segments == ()
-    assert "aegeanair.com" in offers[0].deep_link
-    assert offers[0].is_estimate is False
+    Frueher lieferte `search_leg` denselben Tagespreis noch einmal, mit
+    `is_estimate=False` und null Segmenten: ein Preis, der als geprueft galt,
+    ohne eine Verbindung zu beschreiben. Schlimmer noch, die Pruefung fragt
+    Airlines vor Sammlern - der leere Aegean-Treffer verhinderte damit die
+    einzige Pruefung, die Flugzeiten haette liefern koennen.
+    """
+    assert AegeanSource.supports_search is False
+    with pytest.raises(NotImplementedError):
+        await aegean.search_leg("ATH", "SKG", date(2026, 11, 1))
 
 
-@pytest.mark.asyncio
-async def test_aegean_offer_absent_when_the_day_has_no_fare(aegean, monkeypatch):
-    stub(aegean, {"Outbound": [
-        {"Date": "/Date(1793577600000)/", "Price": 58.62},
-    ]}, monkeypatch)
-    assert await aegean.search_leg("ATH", "SKG", date(2026, 11, 1)) == []
+def test_sources_without_flight_times_do_not_verify():
+    """Aegean steht damit dort, wo seine Artgenossen schon stehen."""
+    from flightopt.sources.britishairways import BritishAirwaysSource
+    from flightopt.sources.condor import CondorSource
+    from flightopt.sources.eurowings import EurowingsSource
+    from flightopt.sources.icelandair import IcelandairSource
+
+    timeless = [AegeanSource, BritishAirwaysSource, CondorSource,
+                EurowingsSource, IcelandairSource]
+    assert [s.supports_search for s in timeless] == [False] * len(timeless)
 
 
 # --- both --------------------------------------------------------------------
@@ -355,3 +421,51 @@ def test_kiwi_filter_is_not_the_adapter_carrier_list():
     src = KiwiSource(carriers=["XQ"])
     assert src.carrier_filter == ["XQ"]
     assert src.carriers == ()
+
+
+# --- Wizz: das Streckennetz ---------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_failed_route_map_does_not_switch_wizz_off_for_the_whole_job(
+    wizz, monkeypatch
+):
+    """Ein Fehlschlag ist keine Auskunft ueber das Streckennetz.
+
+    Gemerkt wurde bisher das leere Verzeichnis, und damit lieferte
+    `supports_route` fuer **jede** Strecke Falsch. Der Katalog wird einmal je
+    Job gebaut, also war Wizz danach fuer den ganzen Suchlauf raus - aus
+    Kalender und Pruefung, ohne Fehler und ohne Eintrag im Bericht.
+    """
+    from flightopt.sources.base import SourceError
+
+    async def boom(url, **kw):
+        raise SourceError("upstream down")
+
+    monkeypatch.setattr(wizz, "fetch_json", boom)
+    assert await wizz.load_routes("BER") == set()
+
+    assert wizz.supports_route("BER", "BEG")
+
+
+@pytest.mark.asyncio
+async def test_an_unreachable_wizz_site_ends_in_the_source_and_not_in_the_job(
+    wizz, monkeypatch
+):
+    """Die Basis-URL lag ausserhalb der Absicherung.
+
+    `preload_routes` sammelt die Aufrufe aller Quellen in einem `gather`; eine
+    Ausnahme von hier riss deshalb den ganzen Suchlauf mit, noch bevor
+    irgendeine Quelle einen Preis geholt hatte.
+    """
+    from flightopt.sources.base import SourceError
+
+    wizz._base = None
+
+    async def no_base():
+        raise SourceError("wizz: site unreachable")
+
+    monkeypatch.setattr(wizz, "base_url", no_base)
+
+    assert await wizz.load_routes("BER") == set()
+    assert wizz.supports_route("BER", "BEG")

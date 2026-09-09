@@ -55,3 +55,24 @@ class MonthlyBudget:
             (self.source, month_key(now), self.cap),
         )
         return cur.rowcount > 0
+
+    def release(self, *, now: datetime | None = None) -> None:
+        """Einen gebuchten Abruf zurueckgeben, den der Anbieter nie gezaehlt hat.
+
+        `consume` bucht vor dem Netzaufruf, und dabei bleibt es: sonst sehen
+        zwei parallele Jobs denselben letzten freien Abruf und geben ihn beide
+        aus. Der Preis dafuer war, dass jeder Fehlschlag einen bezahlten
+        Monatsabruf verbrannte - bei 250 Freianfragen im Monat ist das teuer.
+
+        Zurueckgegeben wird nur, wo feststeht, dass beim Anbieter keine Suche
+        lief: Netzfehler, abgewiesene Anfragen, Antworten ohne Suchlauf. Eine
+        Suche, die gelaufen ist und nichts gefunden hat, bleibt gebucht. Im
+        Zweifel lieber einen Abruf zu viel zaehlen als eine Rechnung bekommen.
+
+        `MAX(used - 1, 0)` statt `used - 1`: ein Zaehler unter null waere eine
+        stille Gutschrift, die der naechste Monat mit ausgibt.
+        """
+        self.conn.execute(
+            "UPDATE api_budget SET used = MAX(used - 1, 0) WHERE source=? AND month=?",
+            (self.source, month_key(now)),
+        )

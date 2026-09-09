@@ -68,6 +68,30 @@ BASIS_OWN = "own"
 BASIS_PEER = "peer"
 BASIS_NONE = "none"
 
+EVIDENCE_MAD = "streuung"
+EVIDENCE_RATIO = "anteil"
+EVIDENCE_FLOOR = "schranke"
+EVIDENCE_BAND = "band"
+EVIDENCE_ENCODING = "encoding"
+EVIDENCE_NONE = "keine"
+"""Welche Regel das Urteil getragen hat, als Kennung statt als Satz.
+
+`reason` ist Text fuer Menschen und aendert seine Formulierung; `evidence` ist
+die Regel und aendert sich nicht. Wer auswerten will, wie oft die
+Plausibilitaetsschranke allein entschieden hat - und das ist die Frage, solange
+die Historie duenn ist -, braucht das zweite und nicht das erste.
+"""
+
+WITHOUT_HISTORY = "ohne Vergleichspreise"
+"""Der Zusatz, der an ein Urteil ohne jede Historie gehoert.
+
+Die Oberflaeche zeigt das Wort "Preisfehler" und daneben `reason`; auf einem
+Telefon ist der Zusatz im `title` gar nicht erreichbar und bleibt das Wort
+allein stehen. Ein `error`, hinter dem keine einzige Vergleichsbeobachtung
+steht, sieht dort genauso aus wie einer aus zwanzig - und das ist der
+Unterschied zwischen einer Aussage und einer Vermutung.
+"""
+
 BAND_REASON: Mapping[str, str] = MappingProxyType({
     TIER_CHEAP: "unter dem Median-Band",
     TIER_NORMAL: "im Median-Band",
@@ -144,6 +168,10 @@ class Signal:
     median_minor: int | None = None
     mad_minor: int | None = None
     category_suspect: bool = False
+    evidence: str = EVIDENCE_NONE
+    """Die Regel, die entschieden hat. Siehe `EVIDENCE_*`."""
+    thin: bool = False
+    """Wahr, wenn die Vergleichsgruppe unter `THIN_HISTORY_N` Punkten liegt."""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -156,6 +184,8 @@ class Signal:
             "median_minor": self.median_minor,
             "mad_minor": self.mad_minor,
             "category_suspect": self.category_suspect,
+            "evidence": self.evidence,
+            "thin": self.thin,
         }
 
 
@@ -175,8 +205,14 @@ def band_status(price_minor: int, baseline: Baseline | None) -> str:
     return TIER_NORMAL
 
 
-def _error_reason(price_minor: int, baseline: Baseline | None) -> str | None:
-    """Welche der beiden statistischen Bedingungen greift, wenn eine greift."""
+def _error_reason(
+    price_minor: int, baseline: Baseline | None
+) -> tuple[str, str] | None:
+    """Welche der beiden statistischen Bedingungen greift, wenn eine greift.
+
+    Zurueck kommt (Regel, Satz): die Regel fuer die Auswertung, der Satz fuer
+    die Oberflaeche.
+    """
     if baseline is None:
         return None
     if (
@@ -184,10 +220,66 @@ def _error_reason(price_minor: int, baseline: Baseline | None) -> str | None:
         and baseline.n >= MAD_MIN_N
         and price_minor <= baseline.median_minor - MAD_FACTOR * baseline.mad_minor
     ):
-        return f"{MAD_FACTOR}-fache Streuung unter dem Median"
+        return EVIDENCE_MAD, f"{MAD_FACTOR}-fache Streuung unter dem Median"
     if baseline.n >= RATIO_MIN_N and price_minor <= round(baseline.median_minor * RATIO):
-        return f"unter {round(RATIO * 100)} Prozent des Medians"
+        return EVIDENCE_RATIO, f"unter {round(RATIO * 100)} Prozent des Medians"
     return None
+
+
+def qualify(reason: str, baseline: Baseline | None) -> str:
+    """Den Satz um das ergaenzen, was hinter ihm steht - oder eben nicht.
+
+    Nur dann, wenn das Urteil schwaecher ist, als es aussieht. Ein Zusatz an
+    jeder Zeile liest sich nach kurzer Zeit niemand mehr durch, und dann traegt
+    er auch dort nichts, wo er noetig waere.
+    """
+    if baseline is None or baseline.n <= 0:
+        return f"{reason}, {WITHOUT_HISTORY}"
+    if baseline.thin:
+        return f"{reason}, nur {baseline.n} Vergleichspreise"
+    return reason
+
+
+POPULATION_ESTIMATE = "estimate"
+POPULATION_VERIFIED = "verified"
+"""Die beiden Grundgesamtheiten, benannt wie bei den Fluegen.
+
+`estimate` ist ein Richtwert, `verified` der Preis, den der Haendler selbst
+anzeigt. Bei Fluegen trennt `flight_baseline` die beiden im Schluessel; bei
+Hotels liegt beides in derselben Verteilung, und deshalb gibt es hier den
+Zusatz unten statt einer zweiten Zahl.
+"""
+
+MIXED_GROUP = "Vergleichsgruppe enthaelt auch Richtwerte"
+
+REPORTED_TIERS = (TIER_ERROR, TIER_CHEAP)
+"""Die Stufen, auf die jemand hin handelt. Nur dort steht der Zusatz.
+
+An jeder Zeile wuerde er zur Tapete, und Tapete liest niemand - auch nicht
+dort, wo sie noetig waere."""
+
+
+def with_population(
+    signal: Mapping[str, Any], *, indicative: bool, split: bool = False
+) -> dict[str, Any]:
+    """Dem Urteil anhaengen, gegen welche Grundgesamtheit es gerechnet wurde.
+
+    `split` sagt, ob die Baseline die beiden ueberhaupt trennt. Solange sie es
+    nicht tut - und die Hoteltabelle tut es nicht -, ist ein Urteil ueber einen
+    Haendlerpreis gegen eine gemischte Gruppe gerechnet, und das gehoert an die
+    Zeile. "Dieser Preis weicht von den Richtwerten anderer ab" ist eine
+    schwaechere Aussage als "er weicht von Haendlerpreisen ab", und nur die
+    zweite waere ein Preisfehler im engeren Sinn.
+    """
+    out = dict(signal)
+    out["population"] = POPULATION_ESTIMATE if indicative else POPULATION_VERIFIED
+    out["population_split"] = bool(split)
+    if indicative or split:
+        return out
+    if out.get("basis") in (BASIS_OWN, BASIS_PEER) and out.get("tier") in REPORTED_TIERS:
+        reason = str(out.get("reason") or "")
+        out["reason"] = f"{reason}, {MIXED_GROUP}" if reason else MIXED_GROUP
+    return out
 
 
 def classify(
@@ -205,8 +297,11 @@ def classify(
     status = band_status(price_minor, baseline)
     suspect_category = is_category_suspect(name)
     tier: str | None = None
-    reason = _error_reason(price_minor, baseline)
-    if reason is not None:
+    reason: str | None = None
+    evidence = EVIDENCE_NONE
+    found = _error_reason(price_minor, baseline)
+    if found is not None:
+        evidence, reason = found
         tier = TIER_ERROR
 
     if tier is None and not suspect_category and currency.upper() == limits.currency:
@@ -214,7 +309,15 @@ def classify(
         floor = limits.floor_for(stars)
         if per_night < floor:
             tier = TIER_ERROR
+            evidence = EVIDENCE_FLOOR
             reason = f"unter der Schranke von {floor / 100:.0f} Euro je Nacht"
+
+    # Steht ein `error` da, gehoert dazu, worauf er sich stuetzt. Genau hier
+    # entsteht sonst die Sicherheit, die es nicht gibt: die Schranke greift am
+    # ersten Tag und ohne eine einzige Vergleichsbeobachtung, und die Zeile
+    # sieht danach aus wie eine aus zwanzig.
+    if tier == TIER_ERROR and reason:
+        reason = qualify(reason, baseline)
 
     # Das Encoding-Veto steht am Ende, weil es jedes Urteil ueberstimmt: ein
     # Faktor 100 im Datensatz ist kein Angebot. Es greift nur bei den Stufen,
@@ -225,11 +328,12 @@ def classify(
             price_minor, baseline.median_minor if baseline else None, rates=rates
         )
         if check.suspect:
-            tier, reason = ENCODING_SUSPECT, check.reason
+            tier, reason, evidence = ENCODING_SUSPECT, check.reason, EVIDENCE_ENCODING
 
     if tier is None:
         tier = status
         reason = BAND_REASON[status]
+        evidence = EVIDENCE_BAND if baseline is not None else EVIDENCE_NONE
 
     return Signal(
         tier=tier,
@@ -241,4 +345,6 @@ def classify(
         median_minor=baseline.median_minor if baseline else None,
         mad_minor=baseline.mad_minor if baseline else None,
         category_suspect=suspect_category,
+        evidence=evidence,
+        thin=bool(baseline.thin) if baseline else False,
     )

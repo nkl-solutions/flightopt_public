@@ -204,25 +204,44 @@ class SerpApiGoogleFlights(HttpSource):
         if pax.infants:
             params["infants_in_seat"] = pax.infants
 
-        # One attempt: every call is booked against the monthly budget before
-        # it leaves, so a retry inside the HTTP layer would spend quota the
-        # guard already counted.
-        data = await self.fetch_json(ENDPOINT, params=params, retries=1)
+        # Drei Versuche wie ueberall sonst. Frueher war es einer, weil der
+        # gebuchte Monatsabruf verloren war, sobald der Aufruf nicht ankam.
+        # Genau das gibt `release` jetzt zurueck - und diese Quelle ist die
+        # einzige, die eine Fernstrecke ueberhaupt pruefen kann, also darf ein
+        # einzelner Netzhaenger sie nicht aus dem Rennen nehmen.
+        #
+        # Die Wiederholungen kosten kein zusaetzliches Kontingent: die
+        # HTTP-Schicht faengt nur Netzfehler, 429/403 und 5xx auf, und keiner
+        # davon ist eine Suche, die SerpApi zaehlt. Eine Antwort mit 200 kehrt
+        # sofort zurueck.
+        try:
+            data = await self.fetch_json(ENDPOINT, params=params, retries=3)
+        except Exception:
+            self._release()
+            raise
         error = str(data.get("error") or "")
         if error:
             if "hasn't returned any results" in error:
                 # A route with no flights on that day is an answer, not a
                 # failure; raising would knock the whole leg out of the search.
+                # Der Abruf bleibt gebucht: die Suche ist gelaufen.
                 logger.info("serpapi: %s-%s am %s ohne Ergebnis", origin, destination, day)
                 return []
+            self._release()
             raise SourceError(f"serpapi: {error}")
         status = str((data.get("search_metadata") or {}).get("status") or "")
         if status and status.casefold() != "success":
+            self._release()
             raise SourceError(f"serpapi: Suche endete mit Status {status}")
         return parse_offers(
             data, origin, destination, day,
             currency=currency, source_name=self.name,
         )
+
+    def _release(self) -> None:
+        """Den gebuchten Monatsabruf zurueckgeben. Ohne Budget passiert nichts."""
+        if self.budget is not None:
+            self.budget.release()
 
 
 def from_env(env: Mapping[str, str], *, conn: Any) -> SerpApiGoogleFlights | None:

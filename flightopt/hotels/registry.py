@@ -22,6 +22,28 @@ from flightopt.hotels.sources.trivago_mcp import TrivagoMcpSource
 
 BOOKING_FLAG = "FLIGHTOPT_HOTELS_BOOKING"
 
+SOURCE_CLASSES: tuple[type[HotelSource], ...] = (TrivagoMcpSource, BookingSource)
+"""Alle Quellen, auch die gerade abgeschaltete.
+
+Der Katalog sagt, wer heute laeuft; diese Liste sagt, was eine Quelle **ist**.
+Beim Schreiben einer Beobachtung ist die zweite Frage die richtige: ob Trivago
+in diesem Lauf dabei war, aendert nichts daran, dass eine Trivago-Zeile aus
+einem Vergleichsportal stammt.
+"""
+
+
+def source_is_indicative(name: str, *, default: bool = True) -> bool:
+    """Ist diese Quelle ein Vergleichsportal mit bekanntem Aufschlag?
+
+    Voreinstellung wahr, und zwar mit Absicht: eine Quelle, die hier niemand
+    kennt, ist kein Beleg fuer einen Haendlerpreis. Der Zweifel laeuft gegen
+    die staerkere Aussage.
+    """
+    for source in SOURCE_CLASSES:
+        if source.name == name:
+            return bool(source.indicative)
+    return default
+
 
 def booking_enabled(env: Mapping[str, str] | None = None) -> bool:
     return env_flag(os.environ if env is None else env, BOOKING_FLAG)

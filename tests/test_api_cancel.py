@@ -78,9 +78,11 @@ async def test_cancelled_job_stops_before_any_source_is_touched(tmp_path):
 def test_cancel_endpoint_reports_the_new_status(monkeypatch, tmp_path):
     runner = JobRunner(str(tmp_path / "endpoint.db"))
     monkeypatch.setattr(main, "runner", runner)
-    job_id = runner.create(spec())
 
     with TestClient(main.app) as client:
+        # Erst nach dem Start anlegen: der Start schliesst Laeufe ab, die noch
+        # auf `pending` stehen, denn die gehoeren einem toten Prozess.
+        job_id = runner.create(spec())
         response = client.post(f"/api/jobs/{job_id}/cancel")
 
     assert response.status_code == 200

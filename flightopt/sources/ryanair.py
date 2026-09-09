@@ -123,8 +123,12 @@ class RyanairSource(HttpSource):
         try:
             data = await self.fetch_json(url)
         except SourceError as exc:
+            # Nicht die leere Menge merken: die hiesse "faehrt von hier nichts
+            # an" und filtert danach jede Strecke dieses Flughafens weg - fuer
+            # den ganzen Suchlauf, mit einer Logzeile, die "route not served"
+            # behauptet. Ein Fehlschlag heisst unbekannt, und unbekannt laesst
+            # `supports_route` den Aufruf entscheiden.
             logger.warning("ryanair: route lookup for %s failed: %s", origin, exc)
-            self._routes[origin] = set()
             return set()
 
         dests: set[str] = set()

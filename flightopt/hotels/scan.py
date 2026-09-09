@@ -43,7 +43,7 @@ from typing import Any, Awaitable, Callable, Iterator, Sequence
 
 from flightopt.domain.fx import Rates
 from flightopt.hotels.models import HotelOffer, HotelQuery
-from flightopt.hotels.sources.base import HotelBatch, HotelSource
+from flightopt.hotels.sources.base import HotelBatch, HotelSource, retries_of
 from flightopt.hotels.store import record_offers
 from flightopt.storage import db
 from flightopt.storage.cache import SqliteCache
@@ -63,6 +63,8 @@ class ScanProgress:
     offers: list[HotelOffer] = field(default_factory=list)
     message: str = ""
     status: str = "running"
+    retries: int = 0
+    """Nachfassen an genau diesem Tag, ueber alle Quellen zusammen."""
 
 
 @dataclass(slots=True)
@@ -75,6 +77,13 @@ class ScanResult:
     skipped: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     error: str | None = None
+    retries: int = 0
+    """Nachfassen ueber den ganzen Lauf, auch fuer am Ende verlorene Tage.
+
+    Ein Lauf, der nur mit Wiederholungen gruen wurde, sieht sonst genauso aus
+    wie einer, der es auf Anhieb war. Das ist der Unterschied zwischen "die
+    Quelle laeuft" und "die Quelle laeuft noch".
+    """
 
 
 ProgressHook = Callable[[ScanProgress], Any | Awaitable[Any]]
@@ -199,6 +208,7 @@ def _mark(
     current_day: date | None = None,
     days_done: int | None = None,
     offers_found: int | None = None,
+    retries: int | None = None,
     error: str | None = None,
     finished: bool = False,
 ) -> None:
@@ -216,12 +226,22 @@ def _mark(
     if offers_found is not None:
         sets.append("offers_found=?")
         values.append(offers_found)
+    if retries is not None:
+        sets.append("retries=?")
+        values.append(retries)
     if error is not None:
         sets.append("error=?")
         values.append(error)
     if finished:
         sets.append("finished_at=?")
         values.append(db.now())
+    elif status == "running":
+        # Ein Lauf, der wieder laeuft, ist nicht fertig. Bliebe der
+        # Endzeitpunkt des ersten Anlaufs stehen - `cancel` und die
+        # Fehlerwege nehmen ihn per COALESCE in Schutz -, dann grenzte
+        # `stored_rows` die Beobachtungen darauf ein und verwuerfe jede Zeile
+        # des zweiten Anlaufs: beobachtet nach dem "Ende".
+        sets.append("finished_at=NULL")
     values.append(scan_id)
     conn.execute(f"UPDATE hotel_scan SET {', '.join(sets)} WHERE id=?", tuple(values))
 
@@ -300,6 +320,8 @@ class _DaySlot:
     failures: int = 0
     errors: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
+    retries: int = 0
+    """Nachfassen aller Quellen an diesem Tag, auch das vergebliche."""
     ready: asyncio.Event = field(default_factory=asyncio.Event)
 
     def _tick(self) -> None:
@@ -308,6 +330,7 @@ class _DaySlot:
             self.ready.set()
 
     def keep(self, batch: HotelBatch) -> None:
+        self.retries += batch.retries
         self.batch.extend(batch)
         self._tick()
 
@@ -315,8 +338,9 @@ class _DaySlot:
         self.skipped.append(f"{self.day}: {source} heute schon geholt")
         self.keep(batch)
 
-    def fail(self, source: str, reason: str) -> None:
+    def fail(self, source: str, reason: str, *, retries: int = 0) -> None:
         self.failures += 1
+        self.retries += retries
         self.errors.append(f"{self.day}: {source}: {reason}")
         logger.warning("hotels: %s scheiterte am %s: %s", source, self.day, reason)
         self._tick()
@@ -355,7 +379,10 @@ async def _serve(
             batch = await _fetch(source, query, cache)
         except Exception as exc:  # noqa: BLE001 - `run_many` fuehrt Buch, wir melden
             served.add(query.arrival)
-            slots[query.arrival].fail(source.name, str(exc))
+            # Auch ein am Ende verlorener Tag hat etwas gekostet. Was, haengt
+            # an der Ausnahme - sonst faellt das Nachfassen genau dort unter
+            # den Tisch, wo es am meisten ueber die Quelle aussagt.
+            slots[query.arrival].fail(source.name, str(exc), retries=retries_of(exc))
             raise
         served.add(query.arrival)
         slots[query.arrival].keep(batch)
@@ -368,7 +395,9 @@ async def _serve(
         # ein Fehlversuch und kein leeres Ergebnis.
         served.add(outcome.arrival)
         slots[outcome.arrival].fail(
-            source.name, outcome.error or f"Tag {outcome.status}"
+            source.name,
+            outcome.error or f"Tag {outcome.status}",
+            retries=outcome.retries,
         )
 
 
@@ -395,7 +424,9 @@ async def _fan_source(
         for query in queries:
             if query.arrival not in served:
                 served.add(query.arrival)
-                slots[query.arrival].fail(source.name, str(exc))
+                slots[query.arrival].fail(
+                    source.name, str(exc), retries=retries_of(exc)
+                )
 
 
 async def _fan_window(
@@ -448,6 +479,8 @@ async def run_scan(
     _mark(conn, scan_id, status="running")
 
     streak = 0
+    # Der frueheste Tag dieses Laufs, den keine Quelle beantwortet hat.
+    lost: date | None = None
     for window in _windows(days, fan_width(sources)):
         slots = {day: _DaySlot(day, pending=len(sources)) for day in window}
         # Der Faecher laeuft neben der Auswertung. Sonst kaeme der Fortschritt
@@ -461,26 +494,34 @@ async def run_scan(
                 await slot.ready.wait()
                 result.errors.extend(slot.errors)
                 result.skipped.extend(slot.skipped)
+                # Vor der Fallunterscheidung: ein Tag, den die Quelle am Ende
+                # doch nicht hergab, hat trotzdem Nachfragen gekostet, und
+                # gerade der sagt etwas ueber sie aus.
+                result.retries += slot.retries
 
                 if slot.failures == len(sources):
                     # Erst wenn keine Quelle geantwortet hat, ist der Tag
                     # gescheitert.
                     streak += 1
+                    if lost is None:
+                        lost = day
                     if streak >= max_errors:
                         result.status = "failed"
                         result.error = f"{max_errors} Fehler in Folge, Lauf beendet"
                         _mark(conn, scan_id, status="failed", error=result.error,
-                              finished=True)
+                              retries=result.retries, finished=True)
                         await _notify(
                             on_progress,
                             ScanProgress(scan_id, day, result.days_done, total,
-                                         message=result.error, status="failed"),
+                                         message=result.error, status="failed",
+                                         retries=slot.retries),
                         )
                         return result
                     await _notify(
                         on_progress,
                         ScanProgress(scan_id, day, result.days_done, total,
-                                     message=f"{day}: keine Quelle hat geantwortet"),
+                                     message=f"{day}: keine Quelle hat geantwortet",
+                                     retries=slot.retries),
                     )
                     continue
 
@@ -495,9 +536,15 @@ async def run_scan(
                 _mark(
                     conn,
                     scan_id,
-                    current_day=day,
+                    # `current_day` ist der Stand der Wiederaufnahme, kein
+                    # Hochwasserstand. Sobald ein Tag ausgefallen ist, darf die
+                    # Marke nicht mehr darueber hinauswandern: sonst liegt er
+                    # dahinter und wird nie wieder gefragt - und beim naechsten
+                    # Anlauf zaehlt ihn `already` auch noch als erledigt mit.
+                    current_day=None if lost is not None else day,
                     days_done=result.days_done,
                     offers_found=len(result.offers),
+                    retries=result.retries,
                 )
                 await _notify(
                     on_progress,
@@ -505,6 +552,7 @@ async def run_scan(
                         scan_id, day, result.days_done, total,
                         offers=written.offers,
                         message=f"{day}: {len(written.offers)} Angebote",
+                        retries=slot.retries,
                     ),
                 )
         finally:
@@ -522,6 +570,7 @@ async def run_scan(
         status="done",
         days_done=result.days_done,
         offers_found=len(result.offers),
+        retries=result.retries,
         finished=True,
     )
     await _notify(

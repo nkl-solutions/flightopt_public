@@ -26,6 +26,7 @@ rechnet dieselben Baselines noch einmal.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sqlite3
 import sys
 from pathlib import Path
@@ -141,12 +142,30 @@ def report(before: BaselineMap, after: dict[tuple, tuple[int, int, int]]) -> lis
 
 
 def migrate(conn: sqlite3.Connection, before: BaselineMap) -> dict[str, object]:
+    """Alle Schreibvorgaenge in einer Transaktion, oder gar keiner.
+
+    `db.connect` stellt auf `isolation_level=None`, jede Anweisung war also
+    sofort endgueltig. Das `DELETE FROM flight_baseline` lief damit ausserhalb
+    jeder Klammer: brach das Neurechnen danach ab, waren die alten Baselines
+    weg und die neuen nicht da - dauerhaft, denn die Beobachtungen zu einer
+    Baseline zurueckzurechnen dauert, und bis dahin misst kein Preis mehr
+    gegen irgendetwas. Dasselbe gilt fuer das Kennzeichnen: halb markierte
+    Beobachtungen und alte Baselines passen nicht zusammen.
+    """
     names = indicative_source_names()
-    marked = mark_indicative(conn, names)
-    conn.execute("DELETE FROM flight_baseline")
-    written = refresh_flight_baselines(conn)
-    dropped = drop_stale_flight_rows(conn)
-    conn.commit()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        marked = mark_indicative(conn, names)
+        conn.execute("DELETE FROM flight_baseline")
+        written = refresh_flight_baselines(conn)
+        dropped = drop_stale_flight_rows(conn)
+        conn.execute("COMMIT")
+    except Exception:
+        # Auch ein gescheitertes COMMIT laesst die Transaktion offen. Ein
+        # Fehler beim Zuruecknehmen darf den urspruenglichen nicht verdecken.
+        with contextlib.suppress(sqlite3.Error):
+            conn.execute("ROLLBACK")
+        raise
 
     after = new_flight_baselines(conn)
     total = conn.execute(

@@ -101,3 +101,55 @@ async def test_every_candidate_gets_its_own_verified_event(offline, tmp_path):
     assert [p.total for p in events] == [2, 2]
     assert events[0].detail["result"]["dates"] == ["2026-10-01", "2026-10-05"]
     assert runner._history[job_id][-1].phase == "done"
+
+
+async def test_a_verification_that_could_not_run_says_so(offline, tmp_path, monkeypatch):
+    """Faellt die Pruefung aus, bleibt jede Zeile ein Schaetzpreis.
+
+    Ihr Bericht wurde bisher weggeworfen. Der Nutzer sah zwanzig graue Zeilen
+    und keinen Hinweis darauf, dass gar nicht geprueft werden konnte - eine
+    ausgefallene Quelle sah aus wie ein teurer Tag.
+    """
+
+    async def failing_verify(s, best, sources, **kwargs):
+        return [], VerifyReport(calls=2, errors=["ryanair: HTTP 403"])
+
+    monkeypatch.setattr(runner_module, "verify", failing_verify)
+    runner = JobRunner(str(tmp_path / "blind.db"))
+    s = spec()
+    job_id = runner.create(s)
+
+    await runner._run(job_id, s)
+
+    done = runner._history[job_id][-1]
+    assert done.phase == "done"
+    assert done.detail["errors"] == ["ryanair: HTTP 403"]
+
+
+async def test_the_variant_path_reports_a_failed_verification_too(
+    offline, tmp_path, monkeypatch
+):
+    """Derselbe Bericht, derselbe Verlust - nur der andere Aufrufweg."""
+
+    async def failing_verify(s, best, sources, **kwargs):
+        return [], VerifyReport(errors=["ryanair: HTTP 403"])
+
+    monkeypatch.setattr(runner_module, "verify", failing_verify)
+    runner = JobRunner(str(tmp_path / "variant.db"))
+    s = spec()
+    job_id = runner.create(s)
+
+    conn = runner._conn()
+    try:
+        await runner._run_variant_payloads(
+            job_id, conn, s, airlines=[], verify_limit=20, sources=[], rates=Rates()
+        )
+    finally:
+        conn.close()
+
+    noted = [
+        note
+        for progress in runner._history[job_id]
+        for note in (progress.detail or {}).get("errors", [])
+    ]
+    assert noted == ["ryanair: HTTP 403"]

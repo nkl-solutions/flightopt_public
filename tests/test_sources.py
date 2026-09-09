@@ -202,6 +202,28 @@ async def test_load_routes_failure_is_not_fatal(ryanair, monkeypatch):
     assert await ryanair.load_routes("BER") == set()
 
 
+@pytest.mark.asyncio
+async def test_a_failed_route_lookup_means_unknown_and_not_not_served(
+    ryanair, monkeypatch
+):
+    """Ein Fehlschlag ist keine Auskunft ueber das Streckennetz.
+
+    Gemerkt wurde bisher die leere Menge, und damit filterte `supports_route`
+    jede Strecke dieses Flughafens weg - fuer den ganzen Suchlauf, mit einer
+    Logzeile, die "route not served" behauptet. Kein Fehler, kein Eintrag im
+    Bericht, nur eine Quelle weniger in der Wertung.
+    """
+    from flightopt.sources.base import SourceError
+
+    async def boom(url, **kw):
+        raise SourceError("upstream down")
+
+    monkeypatch.setattr(ryanair, "fetch_json", boom)
+    await ryanair.load_routes("BER")
+
+    assert ryanair.supports_route("BER", "ATH")
+
+
 # --- circuit breaker ---------------------------------------------------------
 
 

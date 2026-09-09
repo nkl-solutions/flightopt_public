@@ -1,0 +1,67 @@
+# Die Testsuite laeuft sonst nur, wenn jemand daran denkt. Genau dieses Projekt
+# hatte zuletzt vier stille Fehler auf einmal: nichts stuerzte ab, es kamen nur
+# weniger Ergebnisse an. Solche Fehler findet nur ein Lauf, den niemand starten
+# muss.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+# Kleinstes Recht, das reicht: der Lauf liest den Baum und schreibt nichts.
+permissions:
+  contents: read
+
+# Ein zweiter Push macht den ersten Lauf gegenstandslos. Fuer das private Repo
+# zaehlen die Minuten gegen ein Monatskontingent, also nicht zu Ende rechnen.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    # Ein Push in einen Branch mit offenem Pull Request loest beide Ereignisse
+    # aus, und beide sehen denselben Baum. Fuer Branches aus diesem Repo faellt
+    # der PR-Lauf deshalb weg; Forks haben hier kein Push-Ereignis und laufen
+    # weiterhin ueber den Pull Request.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    # Die Suite braucht keine Minute. Alles darueber haengt und soll nicht
+    # stundenlang Kontingent verbrauchen.
+    timeout-minutes: 10
+    env:
+      # Sonst startet der Tagesplaner beim ersten TestClient und stiesse eine
+      # echte Suche gegen die echten Quellen an.
+      FLIGHTOPT_DAILY_SCANS: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          # Der Cache haengt an der Lockdatei, nicht am Commit: solange sich die
+          # Abhaengigkeiten nicht aendern, bleibt der Lauf kurz.
+          cache-dependency-glob: uv.lock
+
+      # `--frozen` wie im Dockerfile: die Lockdatei entscheidet, nicht der
+      # Tagesstand von PyPI. Sonst waere gruen hier und rot dort moeglich.
+      # Die Gruppe `hotels` bleibt aussen vor, sie zieht einen Browser nach.
+      - run: uv sync --frozen
+
+      # Die Suite arbeitet gegen aufgezeichnete Antworten unter tests/fixtures/.
+      # Einzige echte Anfrage sind die EZB-Referenzkurse: neun Tests im
+      # Job-Runner legen eine frische Datenbank an, finden keinen Kurs im Cache
+      # und fragen nach. Das Ziel wird hier ins Leere geleitet statt die Tests
+      # abzuwaehlen - sie decken genau den Runner ab, in dem die vier stillen
+      # Fehler steckten, und die Kursabfrage faellt ohnehin weich auf den
+      # mitgelieferten Snapshot zurueck. Netzsperre auf Hostebene, weil
+      # curl_cffi an Pythons socket-Modul vorbei aufloest.
+      - run: echo "127.0.0.1 www.ecb.europa.eu" | sudo tee -a /etc/hosts
+
+      - run: uv run python -m pytest -q

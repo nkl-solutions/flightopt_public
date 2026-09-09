@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import json
 import pickle
+import sqlite3
 from datetime import date, datetime
 from pathlib import Path
 
@@ -335,6 +336,43 @@ async def test_build_grid_without_rates_skips_a_foreign_calendar():
 
 
 @pytest.mark.asyncio
+async def test_a_calendar_dropped_for_want_of_a_rate_says_so_in_the_report():
+    """Ein fehlender Kurs sah aus wie ein Tag ohne Angebot.
+
+    Die Tage verschwanden nur ins Log. Ist gar kein Kurssatz geladen, verdampft
+    damit jeder Fremdwaehrungs-Kalender vollstaendig und lautlos: die Suche
+    laeuft mit einem Bruchteil des Gitters weiter und meldet null Fehler.
+    """
+    spec = one_leg_spec()
+    _, report = await grid_mod.build_grid(spec, [JapaneseCalendar()], rates=None)
+
+    assert any("Umrechnungskurs" in note for note in report.errors)
+    assert any("jpcal" in note for note in report.errors)
+
+
+@pytest.mark.asyncio
+async def test_a_calendar_that_answers_beside_the_window_says_so_too():
+    """Preise ausserhalb des gefragten Fensters sind keine Antwort auf die Frage.
+
+    Eine Quelle, die `lo` und `hi` ignoriert, sah im Bericht genauso aus wie
+    eine, die korrekt nichts gefunden hat: ein Abruf, kein Fehler, kein
+    Beitrag.
+    """
+
+    class Elsewhere(JapaneseCalendar):
+        name = "danebenkalender"
+
+        async def calendar_range(self, origin, destination, start, end, *, currency="EUR"):
+            return {end + timedelta(days=30): Money(9900, "EUR")}
+
+    spec = one_leg_spec()
+    built, report = await grid_mod.build_grid(spec, [Elsewhere()], rates=rates())
+
+    assert built[0] == {}
+    assert any("Fenster" in note for note in report.errors)
+
+
+@pytest.mark.asyncio
 async def test_verify_converts_a_foreign_offer():
     spec = one_leg_spec()
     combo = Combination(dates=(DAY,), total=Money(30000, "EUR"))
@@ -476,10 +514,10 @@ class _MemoryCache:
         self.store = dict(seed or {})
         self.written: dict = {}
 
-    async def get(self, key):
+    async def get(self, key, *, max_age=None, now=None):
         return self.store.get(key)
 
-    async def put(self, key, payload, ttl, *, source=""):
+    async def put(self, key, payload, ttl, *, source="", now=None):
         self.written[key] = payload
 
 
@@ -489,7 +527,7 @@ async def test_a_legacy_cache_entry_without_a_currency_counts_as_search_currency
 
     spec = one_leg_spec()
     key = cache_key(
-        "jpcal", "calendar", "BER", "NRT", DAY,
+        "jpcal", "calendar", "BER", "NRT", DAY, until=DAY,
         pax=spec.pax.total, cabin=spec.cabin.value, currency=spec.currency,
     )
     # Alte Eintraege hielten nur die Minor Units, ohne Waehrung daneben.
@@ -568,3 +606,42 @@ def test_saving_nothing_leaves_the_stored_rates_alone(tmp_path):
 
     assert stored is not None
     assert stored.rate("JPY") == 165.0
+
+
+class FailingCommit:
+    """Reicht alles durch, nur COMMIT nicht."""
+
+    def __init__(self, conn) -> None:
+        self.conn = conn
+        self.rolled_back = False
+
+    def execute(self, sql, *args):
+        if sql == "COMMIT":
+            raise sqlite3.OperationalError("disk I/O error")
+        if sql == "ROLLBACK":
+            self.rolled_back = True
+        return self.conn.execute(sql, *args)
+
+    def executemany(self, sql, rows):
+        return self.conn.executemany(sql, rows)
+
+
+def test_a_failed_commit_does_not_leave_the_transaction_open(tmp_path):
+    """COMMIT stand ausserhalb des try.
+
+    Scheitert es, blieb die Transaktion offen: die Verbindung hielt bis zu
+    ihrem Ende die Schreibsperre, und jeder weitere Schreibvorgang desselben
+    Laufs lief in den busy_timeout. Der Aufrufer sah nur "Kurse nicht
+    gespeichert".
+    """
+    conn = db.connect(tmp_path / "commit.db")
+    flaky = FailingCommit(conn)
+
+    with pytest.raises(sqlite3.OperationalError):
+        fx_store.save_rates(flaky, rates(), now=datetime(2026, 9, 5, 10, 0, 0))
+
+    assert flaky.rolled_back is True
+    assert conn.in_transaction is False
+    # Die Verbindung ist danach wieder benutzbar.
+    conn.execute("INSERT INTO fx_rate(currency, rate, fetched_at) VALUES('USD',1.1,?)",
+                 (db.now(),))

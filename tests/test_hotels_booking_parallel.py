@@ -18,8 +18,14 @@ from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
-from flightopt.hotels.models import HotelQuery
-from flightopt.hotels.sources.base import FetchReport, LayoutBroken, SourceBlocked
+from flightopt.domain.models import Money
+from flightopt.hotels.models import HotelOffer, HotelQuery
+from flightopt.hotels.sources.base import (
+    FetchReport,
+    HotelBatch,
+    LayoutBroken,
+    SourceBlocked,
+)
 from flightopt.hotels.sources.booking import BookingSource, Destination
 from flightopt.sources.base import RateLimiter
 from tests.test_rate_limiter import VirtualClock
@@ -126,6 +132,12 @@ class ScriptedBooking(BookingSource):
         await asyncio.sleep(0)
         outcome = self.outcomes[query.arrival]
         if isinstance(outcome, Exception):
+            if isinstance(outcome, SourceBlocked):
+                # Wie im echten Adapter (`_page`): eine Abweisung wird erst
+                # vermerkt, dann geworfen. Ohne den Vermerk erfaehrt die
+                # Sicherung nie davon, und sie ist es, die aus wiederholten
+                # Abweisungen eine Sperre macht.
+                self.breaker.record_block()
             raise outcome
         return outcome
 
@@ -160,8 +172,6 @@ async def _collect(coro, sink: list) -> None:
 
 
 async def test_empty_broken_and_ok_are_counted_apart():
-    from flightopt.hotels.sources.base import HotelBatch
-
     queries = days(3)
     source = ScriptedBooking(
         {
@@ -181,6 +191,37 @@ async def test_empty_broken_and_ok_are_counted_apart():
     assert report.days == 3
 
 
+def test_a_fresh_collector_takes_over_the_first_answers_empty_flag():
+    """Ein leerer Sammler hat zum Leer-Kennzeichen noch gar nichts zu sagen.
+
+    `HotelBatch()` steht mit `empty=False` da, das ist aber keine Auskunft,
+    sondern der Anfangswert. Wer ihn in die Und-Verknuepfung mitnimmt, loescht
+    die Auskunft der ersten echten Antwort: aus "die Quelle hat null Treffer"
+    wird "ok mit null Angeboten", also genau der Unterschied, den `empty`
+    ueberhaupt festhalten soll.
+    """
+    assert HotelBatch().extend(HotelBatch(empty=True)).empty is True
+    # Und die Und-Verknuepfung selbst bleibt: leer ist nur, was ueberall leer war.
+    assert HotelBatch(empty=True).extend(HotelBatch(empty=True)).empty is True
+    assert HotelBatch(empty=True).extend(HotelBatch(empty=False)).empty is False
+    assert HotelBatch().extend(HotelBatch(empty=False)).empty is False
+
+
+def test_a_collector_that_already_holds_offers_never_turns_empty():
+    """Die Gegenprobe: was schon Angebote traegt, ist keine Null-Treffer-Antwort."""
+    offer = HotelOffer(
+        source="booking",
+        property_key="booking:gr/melia",
+        name="Melia Athens",
+        arrival=date(2026, 11, 10),
+        departure=date(2026, 11, 11),
+        price_total=Money(11800, "EUR"),
+    )
+    first = HotelBatch(offers=[offer], parser="apollo", total_results=30)
+
+    assert first.extend(HotelBatch(parser="apollo", empty=True)).empty is False
+
+
 async def test_five_errors_in_a_row_end_the_run_instead_of_hammering_on():
     queries = days(12)
     source = ScriptedBooking(
@@ -196,18 +237,49 @@ async def test_five_errors_in_a_row_end_the_run_instead_of_hammering_on():
     assert len(source.attempts) < len(queries)
 
 
-async def test_a_block_stops_everything_at_once():
+async def test_a_single_rejection_only_costs_its_own_day():
+    """Eine Abweisung ist noch keine Sperre.
+
+    Die WAF wirft mal einen Tag ab und bedient den naechsten wieder. Wer
+    daraus das Ende des Faechers macht, verliert einen ganzen Zeitraum wegen
+    eines einzigen 403 - ohne dass an der Quelle etwas kaputt war.
+    """
+    queries = days(4)
+    source = ScriptedBooking(
+        {
+            queries[0].arrival: SourceBlocked("booking: HTTP 403 auf der Ergebnisseite"),
+            **{
+                query.arrival: HotelBatch(parser="apollo", total_results=2)
+                for query in queries[1:]
+            },
+        }
+    )
+
+    results = await source.search_many(queries)
+    report = FetchReport.of(results)
+
+    assert (report.failed, report.ok, report.aborted) == (1, 3, 0)
+    assert len(source.attempts) == len(queries)
+    assert not source.breaker.is_open
+
+
+async def test_a_source_that_keeps_rejecting_stops_the_run():
+    """Die Gegenprobe: wer dauerhaft abweist, wird nicht weiter beklopft.
+
+    Wann aus Abweisungen eine Sperre wird, weiss die Sicherung - sie zaehlt
+    sie mit und geht nach der dritten in Folge zu. Was danach noch scheitert,
+    sind hoechstens die Seiten, die schon unterwegs waren.
+    """
     queries = days(8)
     source = ScriptedBooking(
-        {query.arrival: SourceBlocked("booking: HTTP 202 auf der Ergebnisseite")
+        {query.arrival: SourceBlocked("booking: HTTP 403 auf der Ergebnisseite")
          for query in queries}
     )
 
     results = await source.search_many(queries)
     report = FetchReport.of(results)
 
-    # Eine WAF-Antwort ist keine Frage der Ausdauer: nach der ersten ist
-    # Schluss. Mehr als die schon laufenden Seiten koennen es nicht werden.
-    assert 1 <= report.failed <= source.limiter.concurrency
+    assert source.breaker.is_open
+    assert 3 <= report.failed <= 3 + source.limiter.concurrency
     assert report.aborted == len(queries) - report.failed
     assert results[0].status == "fehler"

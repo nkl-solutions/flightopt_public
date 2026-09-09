@@ -62,9 +62,16 @@ AIRLINES: dict[str, Airline] = {
                 "Bis zu 15 Monate Tagespreise in einem Aufruf. Braucht einen "
                 "Seitenaufruf vorab für das Cloudflare-Cookie.",
                 checked_bag_minor=3500),
+        # Die Notiz sagte lange "Griechenland und die Türkei ab Deutschland".
+        # Gemessen liefert dieselbe Quelle FRA-JFK mit Tagespreisen zwischen
+        # 529,99 und 629,99 EUR, und damit ist sie die einzige eigene
+        # Airline-Quelle für Transatlantik ab Deutschland. Die Notiz steht in
+        # der Oberfläche und steuert, wo jemand eine Quelle vermutet; wer
+        # Nordamerika sucht, hätte hier nie nachgesehen.
         Airline("DE", "Condor", "#ffad00", "live", "condor",
-                "Monatskalender ohne Anmeldung. Deckt Griechenland und die "
-                "Türkei ab Deutschland ab. Keine Flugzeiten.",
+                "Monatskalender ohne Anmeldung. Mittelmeer ab Deutschland und "
+                "als einzige eigene Airline-Quelle auch Nordamerika, etwa "
+                "Frankfurt nach New York. Keine Flugzeiten.",
                 checked_bag_minor=3500),
         Airline("DI", "Marabu", "#e8112d", "live", "condor",
                 "Läuft über dieselbe Buchungsmaschine wie Condor.",

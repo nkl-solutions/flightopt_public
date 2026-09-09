@@ -44,7 +44,9 @@ def test_the_plausibility_floor_finds_an_error_without_any_history():
     signal = classify(1200, None, stars=3, rates=RATES)
 
     assert signal.tier == "error"
-    assert signal.reason == "unter der Schranke von 30 Euro je Nacht"
+    # Der Zusatz gehoert dazu: ohne Historie traegt nur die Schranke, und
+    # die Oberflaeche zeigt genau diesen Satz neben dem Wort "Preisfehler".
+    assert signal.reason == "unter der Schranke von 30 Euro je Nacht, ohne Vergleichspreise"
     # Ohne Baseline gibt es keine Aussage ueber die Lage, nur ueber die Hoehe.
     assert (signal.status, signal.basis, signal.n) == ("unknown", "none", 0)
 
@@ -106,3 +108,61 @@ def test_the_ranking_puts_errors_first_and_sorted_out_rows_last():
 
 def test_the_floor_only_applies_to_the_currency_it_was_written_in():
     assert classify(1200, None, stars=3, currency="USD", rates=RATES).tier == "unknown"
+
+
+# --------------------------------------------------------------------------
+# Was ein Urteil traegt, und was es nicht traegt
+# --------------------------------------------------------------------------
+
+THIN = Baseline(median_minor=9000, mad_minor=800, n=6)
+
+
+def test_a_floor_error_without_history_says_so_in_its_reason():
+    """Am ersten Tag traegt nur die Schranke, und das muss dranstehen.
+
+    Die Oberflaeche zeigt das Wort "Preisfehler" und daneben genau diesen
+    Satz - auf dem Telefon sogar nur das Wort. Wer dort nicht liest, dass
+    keine einzige Vergleichsbeobachtung dahintersteht, liest eine Sicherheit,
+    die es nicht gibt.
+    """
+    signal = classify(1200, None, stars=3, rates=RATES)
+
+    assert signal.tier == "error"
+    assert signal.evidence == "schranke"
+    assert "ohne Vergleichspreise" in signal.reason
+    assert signal.n == 0
+
+
+def test_a_thin_baseline_names_how_thin_it_is():
+    """Fuenf Punkte reichen fuer einen Median und sind trotzdem duenn."""
+    signal = classify(900, THIN, stars=4, rates=RATES)
+
+    assert signal.tier == "error"
+    assert signal.thin is True
+    assert "6 Vergleichspreise" in signal.reason
+
+
+def test_a_thick_baseline_stays_silent_about_its_thickness():
+    """Was nicht schwach ist, braucht keinen Zusatz. Sonst liest ihn niemand."""
+    signal = classify(900, SPREAD, stars=4, rates=RATES)
+
+    assert signal.thin is False
+    assert signal.reason == "6-fache Streuung unter dem Median"
+
+
+def test_every_verdict_names_the_rule_that_carried_it():
+    """`reason` ist Text und wird uebersetzt. `evidence` ist die Regel."""
+    assert classify(900, SPREAD, stars=4, rates=RATES).evidence == "streuung"
+    assert classify(900, FLAT, stars=4, rates=RATES).evidence == "anteil"
+    assert classify(1200, None, stars=3, rates=RATES).evidence == "schranke"
+    assert classify(9000, SPREAD, stars=4, rates=RATES).evidence == "band"
+    assert classify(5000, None, stars=1, rates=RATES).evidence == "keine"
+
+
+def test_the_signal_dictionary_carries_the_new_fields():
+    """Die Oberflaeche liest ein dict, kein Objekt."""
+    data = classify(1200, None, stars=3, rates=RATES).as_dict()
+
+    assert data["evidence"] == "schranke"
+    assert data["thin"] is False
+    assert data["reason"].startswith("unter der Schranke")

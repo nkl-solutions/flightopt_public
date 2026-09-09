@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Callable
 
 from flightopt.domain import airports as airport_registry
@@ -97,11 +97,20 @@ async def build_grid(
     history: SqliteHistory | None = None,
     rates: Rates | None = None,
     on_progress: Callable[[int, int], None] | None = None,
+    max_cache_age: timedelta | None = None,
+    now: datetime | None = None,
 ) -> tuple[PriceGrid, GridReport]:
     """Query every source for every leg, keeping the cheapest price per date.
 
     Legs are fetched concurrently, but each source paces itself internally, so
     concurrency here does not translate into a burst against one host.
+
+    `max_cache_age` begrenzt, wie alt eine Cache-Antwort fuer *diesen* Aufruf
+    sein darf. Ohne Angabe gilt allein die TTL, also das bisherige Verhalten.
+    Die Jagd auf Fehltarife setzt es, weil ein Takt kuerzer als die TTL sonst
+    gar nicht die Quelle fragt, sondern die eigene Antwort von vorhin.
+    Geschrieben wird weiter mit der normalen TTL: die Antwort ist fuer eine
+    Suche genauso lange brauchbar wie bisher.
     """
     allowed = feasible_dates(spec)
     report = GridReport()
@@ -148,13 +157,14 @@ async def build_grid(
         try:
             key = cache_key(
                 source.name, "calendar", leg.origin, leg.destination, lo,
+                until=hi,
                 pax=spec.pax.total, cabin=spec.cabin.value, currency=spec.currency,
                 max_stops=stops,
             )
             prices: dict[date, Money] = {}
 
             if cache is not None:
-                cached = await cache.get(key)
+                cached = await cache.get(key, max_age=max_cache_age, now=now)
                 if cached is not None:
                     report.cache_hits += 1
                     # Der Cache haelt den Originalpreis mit seiner Waehrung, damit
@@ -195,11 +205,29 @@ async def build_grid(
                         {d.isoformat(): [m.minor, m.currency] for d, m in prices.items()},
                         TTL_CALENDAR,
                         source=source.name,
+                        now=now,
                     )
 
             converted, native = convert_prices(prices, spec.currency, rates)
+            if len(converted) < len(prices):
+                # Ein Tag ohne Kurs faellt heraus, und das ging bisher nur ins
+                # Log. Ist gar kein Kurssatz geladen, verdampft damit jeder
+                # Fremdwaehrungs-Kalender vollstaendig: die Suche laeuft mit
+                # einem Bruchteil des Gitters weiter und meldet null Fehler.
+                report.errors.append(
+                    f"{source.name} {leg.origin}-{leg.destination}: "
+                    f"{len(prices) - len(converted)} Tage ohne Umrechnungskurs"
+                )
             usable = {d: m for d, m in converted.items() if d in window}
             if not usable:
+                if converted:
+                    # Die Quelle hat geantwortet, nur nicht zum gefragten
+                    # Zeitraum. Das ist etwas anderes als "nichts gefunden" und
+                    # sah im Bericht bisher genauso aus.
+                    report.errors.append(
+                        f"{source.name} {leg.origin}-{leg.destination}: "
+                        f"{len(converted)} Preise, keiner im gefragten Fenster"
+                    )
                 return
 
             report.per_source[source.name] = report.per_source.get(source.name, 0) + len(usable)

@@ -14,3 +14,15 @@ def _no_basic_auth(monkeypatch):
     """
     monkeypatch.delenv("FLIGHTOPT_BASIC_USER", raising=False)
     monkeypatch.delenv("FLIGHTOPT_BASIC_PASSWORD", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_alert_channel(monkeypatch):
+    """Kein Test schickt je etwas nach Discord.
+
+    Das ist keine Kosmetik: `run_hunt` ohne eigenes `env` liest die
+    Prozessumgebung, und auf der Maschine des Betreibers steht dort die echte
+    Webhook-URL. Ohne diese Vorbedingung wuerde ein Testlauf in einen Kanal
+    schreiben, in dem Menschen mitlesen - und zwar mit erfundenen Preisen.
+    """
+    monkeypatch.delenv("FLIGHTOPT_DISCORD_WEBHOOK", raising=False)

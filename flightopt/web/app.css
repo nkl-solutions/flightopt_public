@@ -62,6 +62,11 @@
 
   /* Form */
   --r:2px;
+
+  /* Die Seite ist bewusst hell. Ohne diese Angabe faerbt ein Android-Browser im
+     Zwangsdunkel Felder und Datumswaehler selbst um und trifft dabei keinen der
+     gemessenen Kontraste. */
+  color-scheme:light;
 }
 
 *{box-sizing:border-box}
@@ -70,8 +75,19 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:var
   line-height:1.45;-webkit-font-smoothing:antialiased}
 ::selection{background:var(--wash)}
 button,input,select,textarea{font:inherit;color:inherit}
+/* Kein 300-ms-Warten auf einen Doppeltipp, kein blauer Blitz beim Antippen. */
+button,a,summary,label,input,select,.chip,tr.opt{touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent}
 h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
-.wrap{max-width:1180px;margin:0 auto;padding:0 var(--gut) var(--s8)}
+.wrap{max-width:1180px;margin:0 auto;
+  padding:0 max(var(--gut),env(safe-area-inset-left)) calc(var(--s8) + env(safe-area-inset-bottom))
+          max(var(--gut),env(safe-area-inset-right))}
+
+/* Vor der Marke, aber erst beim Tabben sichtbar: sonst tabbt sich jeder taeglich
+   durch Kopf und Formular, bevor die Tabelle drankommt. */
+.skip{position:absolute;left:-9999px;top:0;z-index:60;padding:var(--s2) var(--s4);
+  background:var(--ink);color:var(--bg);text-decoration:none;border-radius:var(--r)}
+.skip:focus{left:var(--s2);top:var(--s2)}
 
 /* Zahlen, Codes und Daten immer Mono mit gleichbreiten Ziffern. */
 .num,.mono,input[type=date],input[type=number],
@@ -91,7 +107,8 @@ h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
    damit der Kopf nicht ein zweites Bedienmuster einfuehrt. Der Trenner ist die
    Linie, kein Schriftzeichen. */
 .domainnav{display:inline-flex;border:1px solid var(--rule-3);border-radius:var(--r)}
-.domainnav a{padding:var(--s1) var(--s4);font-size:var(--t14);color:var(--ink-subtle);
+.domainnav a{display:flex;align-items:center;min-height:44px;padding:0 var(--s4);
+  font-size:var(--t14);color:var(--ink-subtle);
   text-decoration:none;border-right:1px solid var(--rule-3);white-space:nowrap}
 .domainnav a:last-child{border-right:0}
 .domainnav a:hover{background:var(--wash);color:var(--ink)}
@@ -103,7 +120,8 @@ h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
 .segset{display:inline-flex;border:1px solid var(--rule-3);border-radius:var(--r)}
 .segopt{position:relative;display:block}
 .segopt input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
-.segopt span{display:block;padding:var(--s2) var(--s4);font-size:var(--t14);
+.segopt span{display:flex;align-items:center;min-height:44px;padding:0 var(--s4);
+  font-size:var(--t14);
   color:var(--ink-subtle);border-right:1px solid var(--rule-3);white-space:nowrap}
 .segopt:last-child span{border-right:0}
 .segopt input:checked + span{background:var(--ink);color:var(--bg);font-weight:500}
@@ -143,7 +161,8 @@ h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
   background:var(--paper);border:1px solid var(--rule-3);border-radius:var(--r);
   font-size:var(--t14);color:var(--ink)}
 .quickactions{display:flex;gap:var(--s2);align-items:stretch}
-.quickroute button{padding:0 var(--s4);background:var(--ink);color:var(--bg);border:0;
+.quickroute button{min-height:44px;padding:0 var(--s4);background:var(--ink);
+  color:var(--bg);border:0;
   border-radius:var(--r);font-size:var(--t14);font-weight:500;cursor:pointer}
 .quickroute button:hover{background:var(--ink-muted)}
 .quickroute button:disabled{background:var(--rule-2);color:var(--ink-subtle);cursor:not-allowed}
@@ -162,7 +181,7 @@ h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
 @media(max-width:700px){
   .quickroute{grid-template-columns:1fr}
   .quickactions{display:grid;grid-template-columns:1fr 1fr}
-  .quickroute button{height:38px;justify-content:center}
+  .quickroute button{justify-content:center}
 }
 
 /* --- Route --------------------------------------------------------------- */
@@ -192,8 +211,10 @@ h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
 /* Trenner zwischen Routenfeldern: reine Dekoration, kein Pfeil, kein Textknoten. */
 .sep{align-self:center;color:var(--rule-2);user-select:none}
 .sep::before{content:"-"}
+/* rule-2 liegt bei 2.14:1 und traegt als einzige Kante eines Bedienelements zu
+   wenig. rule-3 sind 3.39:1 und damit ueber der Schwelle fuer Bedienelemente. */
 .addhop{align-self:center;height:44px;padding:0 var(--s3);background:none;
-  border:1px dashed var(--rule-2);border-radius:var(--r);font-size:var(--t14);
+  border:1px dashed var(--rule-3);border-radius:var(--r);font-size:var(--t14);
   color:var(--ink-subtle);cursor:pointer}
 .addhop:hover{border-color:var(--ink);color:var(--ink)}
 
@@ -215,19 +236,24 @@ h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
 /* --- Felder -------------------------------------------------------------- */
 .row{display:flex;gap:var(--s3);flex-wrap:wrap}
 .row>div{flex:1;min-width:130px}
+/* 44 px ist die Trefferflaeche, mit der ein Daumen ein Feld sicher erwischt.
+   Die Seite wird laut Projektnotizen vom Telefon aus bedient. */
 input[type=date],input[type=number],input[type=text],select{width:100%;
-  padding:var(--s2) var(--s3);background:var(--paper);color:var(--ink);
+  min-height:44px;padding:var(--s2) var(--s3);background:var(--paper);color:var(--ink);
   border:1px solid var(--rule-3);border-radius:var(--r)}
 input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
   border-color:var(--rule-1);cursor:not-allowed}
 .stayrow{margin-top:var(--s4)}
-.stayrow.off{opacity:.55}
-/* Hotelkosten: der Schalter steht oben, Belegung und Zimmer haengen daran. */
+/* Ohne Aufenthalt gibt es keine Felder. Eine gedaempfte Ueberschrift ueber einer
+   leeren Flaeche war nur schlechter lesbarer Platzhalter (2.28:1). */
+.stayrow.off{display:none}
+/* Hotelkosten: der Schalter steht oben, Belegung und Zimmer haengen daran.
+   Den Zustand traegt `disabled` an den Feldern, nicht eine Deckkraft ueber der
+   ganzen Zeile: die zieht auch die Beschriftungen unter die Lesbarkeitsschwelle. */
 .stayopts{margin-top:var(--s4)}
-.stayopts label.check{display:flex;align-items:center;gap:var(--s2);
+.stayopts label.check{display:flex;align-items:center;gap:var(--s2);min-height:44px;
   font-size:var(--t14);cursor:pointer}
 .stayopts .row{margin-top:var(--s3)}
-.stayopts .row.off{opacity:.55}
 .stayhead{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s3);
   margin-bottom:var(--s1)}
 .stayhint{font-size:var(--t12);color:var(--ink-subtle)}
@@ -243,14 +269,21 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
 
 /* --- Airlines ------------------------------------------------------------ */
 .chips{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s1)}
-.chip{display:inline-flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s3);
+.chip{display:inline-flex;align-items:center;gap:var(--s2);min-height:44px;
+  padding:0 var(--s3);
   background:var(--paper);border:1px solid var(--rule-3);border-radius:var(--r);
   font-size:var(--t14);cursor:pointer}
 .chip:hover{border-color:var(--ink)}
 .chip[aria-pressed=true]{border-color:var(--ink);background:var(--wash);font-weight:500}
-.chip:disabled{cursor:not-allowed;opacity:.55}
+/* Deckkraft .55 druecke den Text auf 3.82:1. Ein abgeschaltetes Bedienelement
+   darf gedaempft aussehen, aber seine Beschriftung muss lesbar bleiben. */
+.chip:disabled{cursor:not-allowed;background:var(--wash);border-color:var(--rule-1);
+  color:var(--ink-subtle)}
 .tail{width:22px;height:22px;border-radius:var(--r);display:inline-grid;place-items:center;
-  flex:none;font-size:10px;font-weight:500;letter-spacing:-.02em;font-style:normal}
+  flex:none;font-size:10px;font-weight:500;letter-spacing:-.02em;font-style:normal;
+  /* Gelbe und hellgruene Marken liegen bei 1.4:1 gegen Papier: ohne Kante schwebt
+     das Kuerzel frei. Eine Haarlinie aus der Marke selbst gibt der Flaeche Form. */
+  outline:1px solid color-mix(in oklab,var(--ink) 20%,transparent);outline-offset:-1px}
 .chip .st{font-size:var(--t12);color:var(--ink-subtle);font-weight:400}
 .hint{font-size:var(--t12);color:var(--ink-subtle);margin:var(--s3) 0 0;max-width:90ch}
 
@@ -278,16 +311,168 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
 #dealstable td.mono{font-family:var(--mono);font-size:var(--t12);color:var(--ink-muted)}
 #dealstable td[data-signal="cheap"]{color:var(--ok);font-weight:500}
 #dealstable td[data-signal="expensive"]{color:var(--warn)}
-#dealstable .c-price{font-size:var(--t21)}
+/* Nur die Zelle, nicht die Spaltenueberschrift: sonst steht "PREIS" im Kopf in
+   21 px neben lauter 12-px-Ueberschriften. */
+#dealstable td.c-price{font-size:var(--t21)}
 .saveprofile{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)}
 .saveprofile .lab{margin:0}
 .saveprofile input{width:200px}
-.saveprofile button,.scanbar button{min-height:36px;padding:0 var(--s3);background:var(--paper);
+.saveprofile button,.scanbar button{min-height:44px;padding:0 var(--s3);background:var(--paper);
   border:1px solid var(--rule-3);border-radius:var(--r);font-size:var(--t14);
   color:var(--ink-muted);cursor:pointer}
 .saveprofile button:hover,.scanbar button:hover{border-color:var(--ink);color:var(--ink)}
 .scanbar{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s3);
   font-size:var(--t12);color:var(--ink-subtle)}
+
+/* Fehltarif-Jagd: derselbe nachgeordnete Bereichsschnitt. Was sie gefunden
+   hat, steht ueber dem, was sie beobachtet - die Frage "was ist da" kommt vor
+   der Frage "was wird beobachtet". */
+.hunt{margin-top:var(--s7);padding-top:var(--s4);border-top:1px solid var(--rule-2)}
+.hunt h2{font-size:var(--t12);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-subtle);font-weight:500}
+.hunthead{display:grid;gap:var(--s2);padding-bottom:var(--s3);
+  border-bottom:1px solid var(--rule-1)}
+.hunthead .scanbar{margin-top:0}
+.hunthead label.check{display:flex;align-items:center;gap:var(--s2);min-height:44px;
+  font-size:var(--t12);color:var(--ink-subtle);cursor:pointer}
+/* Der Kanalstand ist weder Erfolg noch Fehler: er traegt nie einen Ton und
+   steht deshalb in derselben Schrift wie alles andere hier. */
+#huntchannel{font-size:var(--t14);color:var(--ink-muted);max-width:80ch}
+#hunttable td{vertical-align:top}
+#hunttable td.c-route b{display:block;font-family:var(--mono);font-weight:500}
+#hunttable td.c-price{font-size:var(--t21);vertical-align:top}
+#hunttable .c-why{min-width:230px;white-space:normal}
+#hunttable .c-act{width:118px}
+/* Eine abgehakte Zeile bleibt lesbar. Sie ist erledigt, nicht geloescht. */
+#hunttable tr.done{color:var(--ink-subtle)}
+#hunttable tr.done td.c-route b{font-weight:400}
+/* Das Alter ist die Antwort auf "ist das noch aktuell", nicht der Zeitstempel.
+   Ein Fund, der aelter ist als die Ruhezeit, tritt zurueck: nachgeprueft hat
+   ihn niemand, und ein Fehltarif haelt selten so lange. Zurueckstehen heisst
+   hier nicht ausgrauen - --ink-subtle liegt bei gemessenen 5,58:1 und bleibt
+   damit lesbar. */
+#hunttable tr.stale{color:var(--ink-subtle)}
+#hunttable tr.stale .findbasis{color:var(--ink-muted);font-weight:400}
+#hunttable tr.stale td.c-price{font-weight:500}
+.findage{display:block;font-size:var(--t12);color:var(--ink-subtle);
+  font-family:var(--sans);font-weight:400;white-space:nowrap}
+#hunttable tr.stale .findage{color:var(--warn)}
+.findbasis{display:block;font-weight:500;color:var(--ink);margin-top:var(--s1)}
+#hunttable tr.done .findbasis{color:var(--ink-muted)}
+.findwhy{display:block;font-size:var(--t12);color:var(--ink-subtle);
+  font-family:var(--sans);font-weight:400;white-space:normal;margin-top:2px}
+/* Wie der Status in der Ergebnistabelle: faellt die Spalte weg, wandert die
+   Aussage unter die Strecke, statt ersatzlos zu verschwinden. */
+.findstate{display:none}
+/* Die Knoepfe duerfen umbrechen. Eine feste Zeilenhoehe zwang die Spalte auf
+   die Breite des laengsten Wortes, und die schob auf 375 px die Begruendung
+   vom Schirm. */
+.findbook,.findack,.findcurve,.watchcurve{display:block;width:100%;min-height:32px;
+  margin-top:var(--s1);padding:var(--s1) var(--s1);background:var(--paper);
+  border:1px solid var(--rule-3);border-radius:var(--r);font-size:var(--t12);
+  color:var(--ink-muted);cursor:pointer;text-align:center;line-height:1.35;
+  text-decoration:none}
+.findbook:hover,.findack:hover,.findcurve:hover,.watchcurve:hover{
+  border-color:var(--ink);color:var(--ink)}
+.findbook{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:500}
+.findbook:hover{background:var(--ink-muted);border-color:var(--ink-muted);color:var(--bg)}
+/* Drei Striche, so viele davon voll, wie die Aussage traegt. Sie sagen nichts,
+   was der Satz daneben nicht sagt: sie sind der Blick, er ist die Aussage.
+   Deshalb `aria-hidden` im Markup und hier keine eigene Farbe je Stufe -
+   gefuellt oder leer ist der Unterschied, nicht Rot oder Gruen. */
+.strength{display:inline-flex;gap:2px;vertical-align:middle}
+.strength i{width:5px;height:12px;border-radius:1px;border:1px solid var(--rule-3);
+  background:transparent}
+.strength i.on{background:var(--ink-muted);border-color:var(--ink-muted)}
+[data-strength="floor"] .strength i.on{background:var(--warn);border-color:var(--warn)}
+
+/* --- Preisverlauf ---------------------------------------------------------
+   Handgezeichnet, kein Diagrammpaket. Der Kasten wird in der Breite gestreckt
+   (`preserveAspectRatio="none"`), deshalb steht kein Text darin und jeder
+   Strich traegt `non-scaling-stroke`. Beschriftet wird daneben, genau wie die
+   Datumsschiene ueber der Ergebnistabelle. */
+.curvewrap{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--rule-1)}
+.curvewrap[hidden]{display:none}
+.curvehead{display:flex;justify-content:space-between;align-items:baseline;
+  gap:var(--s3);flex-wrap:wrap}
+.curvehead h3{margin:0;font-size:var(--t14);font-weight:500;color:var(--ink);
+  max-width:60ch}
+.curvetools{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.curvetools select{width:auto;min-height:44px;padding:0 var(--s2);font-size:var(--t14)}
+.curvefield{position:relative;margin-top:var(--s3);padding-left:76px}
+.curvefield[hidden]{display:none}
+.curveprices{position:absolute;left:0;top:0;bottom:20px;width:70px;
+  font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:var(--t12);
+  color:var(--ink-subtle);text-align:right}
+.curveprices span{position:absolute;right:0;white-space:nowrap}
+.curveprices .chi{top:0}
+.curveprices .clo{bottom:20%}
+.curvebox{height:160px;border-left:1px solid var(--rule-2);
+  border-bottom:1px solid var(--rule-2)}
+svg.curve{display:block;width:100%;height:100%}
+/* Gemessen: --wash auf --bg sind 1,06:1 und --rule-1 als Kante 1,42:1. Die
+   Tagesspanne waere damit praktisch unsichtbar gewesen, und sie ist die
+   Haelfte der Aussage. Flaeche in --rule-1 (1,42:1 als Tinte, sichtbar als
+   Flaeche), Kante in --rule-3 mit gemessenen 3,39:1 gegen das Papier: das
+   ist die Schwelle fuer Grafik, die etwas bedeutet. */
+svg.curve .cband{fill:var(--rule-1);stroke:var(--rule-3);stroke-width:1;
+  vector-effect:non-scaling-stroke}
+/* Bei genau einem Tag ist die Spanne ein Strich und keine Flaeche. Ohne die
+   groessere Staerke waere sie eine Haarlinie neben dem Median. */
+svg.curve line.cband{stroke-width:3}
+svg.curve .cmed{fill:none;stroke:var(--ink);stroke-width:1.5;
+  vector-effect:non-scaling-stroke;stroke-linejoin:round}
+/* Ein Tag mit einer einzigen Beobachtung ist kein Preis dieses Tages, sondern
+   ein Preis. Eine durchgezogene Linie darueber behauptet mehr, als dasteht. */
+svg.curve .cmed.thin{stroke-dasharray:3 3;stroke:var(--ink-subtle)}
+/* Die Zaehlbalken tragen eine Aussage, also gelten fuer sie 3:1. --rule-2
+   lag bei 2,14:1; --ink-subtle sind 5,58:1 und bleiben trotzdem leiser als
+   die Linie darueber. */
+svg.curve .cbar{fill:var(--ink-subtle)}
+svg.curve .cfind{stroke:var(--signal);stroke-width:2;
+  vector-effect:non-scaling-stroke}
+.curvedays{height:20px;border-bottom:0}
+
+/* Beobachtungsliste: derselbe nachgeordnete Bereichsschnitt wie bei den
+   gespeicherten Scans, weil beides dasselbe ist - etwas, das ohne Zutun
+   weiterlaeuft und hier nachgesehen wird. */
+.watch{margin-top:var(--s7);padding-top:var(--s4);border-top:1px solid var(--rule-2)}
+.watch h2{font-size:var(--t12);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-subtle);font-weight:500}
+.watchhead{display:grid;gap:var(--s2);padding-bottom:var(--s3);
+  border-bottom:1px solid var(--rule-1)}
+.watchform{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)}
+/* Beschriftung und Feld umbrechen zusammen. Getrennt stand "Nach" auf 375 px
+   am Ende der Zeile ueber seinem eigenen Kasten, also neben dem falschen. */
+.watchfield{display:flex;align-items:center;gap:var(--s2)}
+.watchform .lab{margin:0;white-space:nowrap}
+.watchform input[type=text]{width:150px}
+.watchform input[type=number]{width:80px}
+.watchform button{min-height:44px;padding:0 var(--s3);background:var(--paper);
+  border:1px solid var(--rule-3);border-radius:var(--r);font-size:var(--t14);
+  color:var(--ink-muted);cursor:pointer}
+.watchform button:hover{border-color:var(--ink);color:var(--ink)}
+#watchtable td.mono{font-family:var(--mono);font-size:var(--t12);color:var(--ink-muted)}
+#watchtable td[data-signal="normal"]{color:var(--ok)}
+/* Eine abgeschaltete Zeile bleibt lesbar: ihre Historie zaehlt weiter, nur
+   kommt nichts mehr dazu. */
+#watchtable tr.off{color:var(--ink-subtle)}
+.watchtoggle{min-height:32px;padding:0 var(--s2);background:var(--paper);
+  border:1px solid var(--rule-3);border-radius:var(--r);font-size:var(--t12);
+  color:var(--ink-muted);cursor:pointer}
+.watchtoggle:hover{border-color:var(--ink);color:var(--ink)}
+/* Der Takt: erst der Zustand, dann der Knopf, der ihn wechselt. Derselbe
+   Aufbau wie die Aufzeichnungsspalte daneben. */
+.c-cadence{width:126px}
+.cadencenow{display:block;font-size:var(--t12);color:var(--ink-muted)}
+[data-cadence="hot"] .cadencenow{color:var(--signal);font-weight:700}
+.cadenceswitch{display:block;width:100%;min-height:32px;margin-top:var(--s1);
+  padding:0 var(--s2);background:var(--paper);border:1px solid var(--rule-3);
+  border-radius:var(--r);font-size:var(--t12);color:var(--ink-muted);cursor:pointer}
+.cadenceswitch:hover{border-color:var(--ink);color:var(--ink)}
+#watchhot:empty,#watchpause:empty{display:none}
+#watchhot{font-size:var(--t12)}
+#watchpause{font-size:var(--t12);max-width:80ch}
 
 /* --- Fortschritt, Leitstand ---------------------------------------------- */
 .log{display:none;padding:var(--s4) 0 var(--s5);border-top:1px solid var(--rule-2)}
@@ -295,8 +480,12 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
 .progressmeter{display:grid;gap:var(--s2);margin-bottom:var(--s3)}
 .progressbar{height:8px;background:var(--wash);border:1px solid var(--rule-2);
   border-radius:var(--r);overflow:hidden}
-.progressbar i{display:block;height:100%;width:0;background:var(--ink);transition:width .22s ease}
+.progressbar i{display:block;height:100%;width:0;background:var(--ink)}
 .progressbar.failed i{background:var(--err)}
+/* Solange niemand weiss, wie viele Tage es werden, waere ein Balken bei 0 % eine
+   Falschaussage. Ein wanderndes Stueck sagt "laeuft, Anzahl noch offen" und ist
+   das einzige, was diese Bewegung erklaert. */
+.progressbar.pending i{width:34%;background:var(--ink-subtle)}
 .progressmeta{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
   font-size:var(--t12);color:var(--ink-subtle)}
 #progresslabel{font-weight:500;color:var(--ink);font-size:var(--t14)}
@@ -313,6 +502,17 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
 .step.was{color:var(--ink);border-color:var(--rule-2)}
 .step.was::before{content:"ok ";color:var(--ok)}
 .note{font-size:var(--t14);color:var(--ink-muted);min-height:1.4em}
+/* Was der Lauf nebenbei gemeldet hat: ausgefallene Quellen, uebersprungene Tage,
+   erschoepfte Budgets. Ohne diese Zeile wird aus einem Teilausfall stillschweigend
+   ein duenneres Ergebnis. */
+#runnotes:empty{display:none}
+#runnotes{margin-top:var(--s2);white-space:pre-line}
+.sources{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s3);margin:var(--s2) 0 0;
+  padding:0;list-style:none;font-size:var(--t12);color:var(--ink-subtle)}
+.sources:empty{display:none}
+.sources li{display:flex;align-items:baseline;gap:var(--s1)}
+.sources b{color:var(--ink);font-weight:500}
+.sources li[data-active="false"]{color:var(--warn)}
 
 /* Ein Balken je Leg, fuellt sich sobald die Tage ankommen. */
 .legs{display:grid;gap:var(--s1);margin-top:var(--s3)}
@@ -320,8 +520,12 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
   align-items:center;font-size:var(--t12);color:var(--ink-subtle)}
 .legname{font-family:var(--mono);color:var(--ink-muted)}
 .legbar{height:6px;background:var(--wash);border:1px solid var(--rule-1);border-radius:var(--r)}
-.legbar i{display:block;height:100%;width:0;background:var(--ink);transition:width .22s ease}
-.legmeter.zero .legbar i{background:var(--err)}
+.legbar i{display:block;height:100%;width:0;background:var(--ink)}
+/* Ein Leg ohne einen einzigen Preis hat einen Balken der Breite 0. Eine rote
+   Fuellung von 0 px ist nicht zu sehen, also faerbt sich die Schiene selbst. */
+.legmeter.zero .legbar{background:color-mix(in oklab,var(--err) 22%,var(--bg));
+  border-color:var(--err)}
+.legmeter.zero .legdays{color:var(--err)}
 .legdays{color:var(--ink);font-weight:500}
 
 /* --- Ergebnisse ---------------------------------------------------------- */
@@ -331,12 +535,22 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
   flex-wrap:wrap;padding-bottom:var(--s2);border-bottom:1px solid var(--ink)}
 .outhead h2{font-size:var(--t16);color:var(--ink)}
 .outhead h2:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.tools{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.tools{display:flex;align-items:center;gap:var(--s2) var(--s3);flex-wrap:wrap}
 .sortlbl{font-size:var(--t12);color:var(--ink-subtle)}
-.tools select{width:auto;padding:var(--s1) var(--s2);font-size:var(--t14)}
-.tools label.check{display:flex;align-items:center;gap:var(--s1);font-size:var(--t12);
-  color:var(--ink-subtle)}
+.tools select{width:auto;min-height:44px;padding:0 var(--s2);font-size:var(--t14)}
+.tools label.check{display:flex;align-items:center;min-height:44px;gap:var(--s1);
+  font-size:var(--t12);color:var(--ink-subtle)}
 .filtercount{font-size:var(--t12);color:var(--ink-subtle)}
+/* Ein Filter, der nichts uebrig laesst, braucht einen Weg zurueck. */
+.linkbtn{min-height:44px;padding:0 var(--s2);background:none;border:0;
+  font-size:var(--t12);color:var(--ink-muted);text-decoration:underline;
+  text-underline-offset:3px;cursor:pointer}
+.linkbtn:hover{color:var(--ink)}
+.linkbtn[hidden]{display:none}
+/* Status und Preislage stehen nebeneinander und sagen Verschiedenes. Das muss
+   einmal dastehen, nicht nur in einem Tooltip, den ein Telefon nie zeigt. */
+.legend{margin:var(--s2) 0 0;font-size:var(--t12);color:var(--ink-subtle);max-width:80ch}
+.legend b{color:var(--ink-muted);font-weight:500}
 /* Legende der Tintendichte: feste Stufen, kein Verlauf. */
 .key{display:flex;align-items:center;gap:var(--s1);font-size:var(--t12);color:var(--ink-subtle)}
 .key .scale{display:flex;gap:1px}
@@ -350,7 +564,10 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
   font-size:var(--t12);color:var(--ink-subtle);white-space:nowrap}
 
 /* --- Kursbuch-Tabelle ---------------------------------------------------- */
-.tablewrap{overflow-x:auto}
+/* Ein seitlich scrollbarer Bereich ohne Tabstopp ist mit der Tastatur nicht zu
+   bewegen. Deshalb `tabindex="0"` im Markup und hier ein sichtbarer Fokus. */
+.tablewrap{overflow-x:auto;overscroll-behavior-x:contain}
+.tablewrap:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 table.kursbuch{width:100%;border-collapse:collapse;font-size:var(--t14)}
 table.kursbuch thead th{position:sticky;top:0;z-index:2;background:var(--paper);
   border-bottom:1px solid var(--ink);padding:var(--s2) var(--s3);text-align:left;
@@ -360,7 +577,15 @@ table.kursbuch td{padding:var(--s2) var(--s3);border-bottom:1px solid var(--rule
   vertical-align:middle}
 tr.opt{cursor:pointer;transition:background .12s}
 tr.opt:hover,tr.opt.open{background:var(--wash)}
-tr.opt:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+/* Die Zeile bleibt eine Zeile. Das Aufklappen macht ein echter Knopf in der
+   ersten Zelle: `role="button"` auf einem <tr> nimmt den Zellen ihren Platz in
+   der Tabelle, und dann laesst sich die Tabelle nicht mehr spaltenweise lesen. */
+.rowtoggle,.dealopen{display:flex;align-items:center;width:100%;min-height:44px;
+  padding:0;background:none;border:0;font:inherit;color:inherit;text-align:left;
+  cursor:pointer}
+.rowtoggle:focus-visible,.dealopen:focus-visible{outline:2px solid var(--ink);
+  outline-offset:2px}
+.dealopen{font-weight:500}
 /* Der Favorit bekommt eine echte Kante, keinen inset-shadow. */
 tr.opt.best td{border-top:2px solid var(--signal)}
 tr.opt.best td.c-rank{border-left:3px solid var(--signal)}
@@ -370,9 +595,19 @@ tr.opt.best .c-rank{color:var(--signal);font-weight:500}
   font-size:var(--t21);font-weight:700;white-space:nowrap;width:136px}
 tr.opt.best .c-price{font-size:var(--t28)}
 .c-price small{font-size:var(--t12);font-weight:400;color:var(--ink-subtle);margin-left:2px}
-/* Gesamt steht neben Preis, nicht statt ihm: die Flugsumme bleibt sichtbar. */
+/* Der Status wandert auf schmalen Geraeten unter den Preis, statt ersatzlos zu
+   verschwinden: er ist die halbe Aussage jeder Zeile. */
+.rowstatus{display:none}
+/* Der Preis eines Scans sagt allein nicht, ob er geprueft ist und was ueblich
+   waere. Das gehoert an die Zahl, nicht in ein Tooltip. */
+.pricenote{display:block;margin-left:0;font-family:var(--sans);font-size:var(--t12);
+  font-weight:400;color:var(--ink-subtle);white-space:nowrap}
+/* Gesamt steht neben Preis, nicht statt ihm: die Flugsumme bleibt sichtbar.
+   Ohne Hotelrechnung gibt es diese Spalte gar nicht: eine immer leere Spalte
+   kostet auf dem Telefon 136 px und sagt nichts. */
 .c-grand{font-size:var(--t14);font-weight:500;color:var(--ink-muted)}
 tr.opt.best .c-grand{font-size:var(--t21)}
+#resulttable:not(.withgrand) .c-grand{display:none}
 .nogrand{font-family:var(--sans);font-size:var(--t12);font-weight:400;
   color:var(--ink-subtle)}
 .c-status{width:104px;color:var(--ink-muted);font-size:var(--t12)}
@@ -381,6 +616,15 @@ tr.opt.best .c-grand{font-size:var(--t21)}
 #resulttable td.c-band[data-signal="cheap"]{color:var(--ok);font-weight:500}
 #resulttable td.c-band[data-signal="expensive"]{color:var(--warn)}
 #resulttable td.c-band[data-signal="unknown"]{color:var(--ink-subtle)}
+/* Die vierte Stufe. Gemessen mit denselben Funktionen, die die Airline-Marken
+   pruefen: --ok gegen --signal ergibt 1,02:1. Zwischen "guenstig" und
+   "Fehltarif" liegt farblich also nichts, was jemand mit einer Rot-Gruen-
+   Schwaeche sehen koennte. Den Unterschied traegt deshalb die Form: eine
+   gefuellte Marke statt farbiger Schrift, Weiss auf Signal bei 7,19:1.
+   Eine Stufe, die vielleicht einmal im Monat auftaucht, darf laut sein. */
+.tiermark{display:inline-block;padding:0 var(--s1);border-radius:var(--r);
+  background:var(--signal);color:var(--signal-fg);font-weight:700;
+  font-style:normal;white-space:nowrap}
 .c-num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
   width:92px;white-space:nowrap}
 .c-air{width:190px}
@@ -422,10 +666,15 @@ tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
   font-size:var(--t14)}
 .fl a:hover{background:var(--ink-muted)}
 .fl .miss{color:var(--warn);font-size:var(--t12);white-space:normal}
-.fl i.band{font-style:normal;font-size:var(--t12);color:var(--ink-subtle);
+.fl i.band,.fl i.src{font-style:normal;font-size:var(--t12);color:var(--ink-subtle);
   margin-left:var(--s2);white-space:nowrap}
 .fl i.band[data-signal="cheap"]{color:var(--ok);font-weight:500}
 .fl i.band[data-signal="expensive"]{color:var(--warn)}
+/* Im Detail steht die Begruendung dahinter, deshalb bricht diese Zeile um und
+   traegt keine Marke: eine gefuellte Flaeche ueber drei Zeilen waere ein Block
+   und kein Hinweis. */
+.fl i.band[data-signal="error"]{color:var(--signal);font-weight:700;
+  white-space:normal}
 /* Ein Aufenthalt ist kein Flug und sieht deshalb auch nicht so aus. */
 .fl.stay{background:var(--wash)}
 .fl.stay .staymark{display:block;width:11px;height:11px;border-radius:var(--r);
@@ -439,20 +688,48 @@ tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
   .c-status,.c-air{display:none}
   /* Die Preislage ist der eine Satz, der auf dem Telefon am meisten sagt. */
   #resulttable .c-band{display:table-cell}
+  /* Die Status-Spalte faellt weg, die Aussage nicht: sie steht unter dem Preis. */
+  .rowstatus{display:block;font-size:var(--t12);font-weight:400;
+    font-family:var(--sans);color:var(--ink-subtle);margin-top:1px}
+  tr.opt.best .rowstatus{font-size:var(--t12)}
   .fl{grid-template-columns:1fr auto;gap:var(--s1) var(--s3)}
   .fl .times,.fl .when{grid-column:1/-1;white-space:normal}
-  .fl i.band{margin-left:0;white-space:normal}
+  .fl i.band,.fl i.src{margin-left:0;white-space:normal}
+}
+/* 375 px ist der Arbeitsplatz, nicht der Sonderfall. Bei neun Spalten ist die
+   Tabelle dort doppelt so breit wie der Schirm und die Datumsschiene liegt
+   komplett ausserhalb. Was bleibt, ist die Frage der Reise: was kostet es,
+   wann, wie gut, wie sicher. Naechte, Umstiege und Airlines stehen weiter im
+   aufgeklappten Detail. */
+@media(max-width:560px){
+  #resulttable .c-nights,#resulttable .c-stops{display:none}
+  #dealstable .c-route,#dealstable .c-scan{display:none}
+  /* Vorlauf, Tage und der rohe Zaehler weichen: die Aussage sagt in Worten,
+     was die drei in Zahlen sagen, und sie ist die Frage der Seite. */
+  #watchtable .c-lead,#watchtable .c-days,#watchtable .c-count{display:none}
+  table.kursbuch thead th{padding:var(--s2) var(--s1)}
+  table.kursbuch td{padding:var(--s2) var(--s1)}
+  .c-rank{width:52px}
+  .c-price{width:auto;font-size:var(--t16)}
+  tr.opt.best .c-price{font-size:var(--t21)}
+  tr.opt.best .c-grand{font-size:var(--t16)}
+  .c-status{width:auto}
+  .c-rail{min-width:104px}
+  .c-num{width:auto}
+  .ruler span{font-size:10px}
 }
 
 /* --- Hotels ---------------------------------------------------------------
    Dieselbe Kursbuch-Tabelle, dieselben Tokens. Nur die Signalspalte braucht
    eigene Regeln, weil hier eine vierte Stufe dazukommen wird. */
 #hoteltable td[data-signal="error"]{color:var(--signal);font-weight:700}
+#hoteltable td[data-signal="encoding_suspect"]{color:var(--err);font-weight:500}
 #hoteltable td[data-signal="cheap"]{color:var(--ok);font-weight:500}
 #hoteltable td[data-signal="expensive"]{color:var(--warn)}
 #hoteltable td[data-signal="unknown"]{color:var(--ink-subtle)}
-#hoteltable td:first-child small{display:block;font-size:var(--t12);
-  color:var(--ink-subtle)}
+#hoteltable td:first-child small,#hoteltable small.sub{display:block;
+  font-size:var(--t12);color:var(--ink-subtle);font-family:var(--sans);
+  font-weight:400}
 .c-source{width:96px;color:var(--ink-subtle);font-size:var(--t12)}
 /* Gespeicherte Laeufe: nachgeordnete Liste unter der Tabelle, dieselben
    Flaechen wie die Deals auf der Flugseite. */
@@ -469,6 +746,53 @@ tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
   #hoteltable .c-status{display:table-cell}
   #hoteltable .c-source{display:none}
 }
+/* Dieselbe Ausnahme wie bei den Hotels: `.c-status` faellt hier global weg,
+   aber "Aussage" ist die Spalte, wegen der jemand die Beobachtungsliste
+   ueberhaupt aufschlaegt. */
+@media(max-width:760px){
+  #watchtable .c-status{display:table-cell}
+  /* Die Meldespalte der Jagd faellt mit `.c-status` weg, ihre Aussage nicht:
+     sie steht dann unter der Strecke. Dasselbe Muster wie der Status unter dem
+     Preis in der Ergebnistabelle. */
+  #hunttable .findstate{display:block;font-size:var(--t12);color:var(--ink-subtle);
+    font-family:var(--sans);font-weight:400;margin-top:2px}
+}
+@media(max-width:560px){
+  /* 375 px: Preis und Strecke tragen die Zeile, "Warum" ist der Grund, warum
+     sie ueberhaupt dasteht. Nur der Zeitpunkt weicht, und der steht in der
+     Zusammenfassung. Die Spalte "Warum" wird schmaler, statt zu verschwinden:
+     eine Zeile ohne Begruendung waere genau die Sicherheit, die hier nicht
+     behauptet werden darf. */
+  #hunttable .c-why{min-width:130px}
+  /* Der Spaltenkopf darf hier umbrechen: `nowrap` zwang die Spalte auf die
+     Breite von "Buchen und abhaken" und schob damit alles andere hinaus. */
+  #hunttable th.c-act{white-space:normal}
+  #hunttable .c-act{width:76px}
+  /* Die Notizen unter der Strecke brechen um, statt die Spalte aufzuziehen. */
+  #hunttable .pricenote,#hunttable .findage{white-space:normal}
+  /* Derselbe Preisgrad wie in der Ergebnistabelle. Die Spaltenregel dort
+     verliert gegen die eigene ID-Regel dieser Tabelle. */
+  #hunttable td.c-price{font-size:var(--t16)}
+  /* In der Tabelle reichen sonst 32 px, weil dort mit der Maus gezielt wird.
+     Auf 375 px zielt ein Daumen, und drei gestapelte 32-px-Knoepfe sind drei
+     Gelegenheiten, den falschen zu treffen. */
+  #hunttable .findbook,#hunttable .findack,#hunttable .findcurve,
+  #watchtable .watchcurve,#watchtable .watchtoggle,
+  #watchtable .cadenceswitch{min-height:44px}
+  #watchtable .c-scan{display:none}
+  .curvefield{padding-left:60px}
+  .curveprices{width:54px}
+  .curvebox{height:132px}
+}
+@media(max-width:560px){
+  /* Sterne, Bewertung und Quelle wandern unter den Namen, statt vier eigene
+     Spalten zu belegen, die den Preis vom Schirm schieben. */
+  #hoteltable .c-stars,#hoteltable .c-rating{display:none}
+  #hoteltable .c-object{max-width:44vw}
+}
+#hoteltable td.c-object{overflow-wrap:anywhere}
+#hoteltable td.c-object .facts{display:none}
+@media(max-width:560px){#hoteltable td.c-object .facts{display:block}}
 #hoteltable .c-price small.native{display:block;margin-left:0;font-weight:400}
 #hoteltable a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 #hoteltable a:hover{color:var(--signal)}
@@ -479,11 +803,22 @@ footer{margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid var(--rul
 /* --- Bewegung: Opt-in, nie Pflicht ---------------------------------------
    Nur Opazitaet und Hoehe. Kein Verschieben, kein Skalieren, nichts, was den
    Blick von der Preisspalte wegzieht. Der Versatz von 18 ms je Zeile ist gerade
-   noch als Reihenfolge lesbar und noch nicht als Warten spuerbar. */
+   noch als Reihenfolge lesbar und noch nicht als Warten spuerbar.
+
+   Jede Bewegung hier beantwortet eine Frage: Balken = wie weit, Einblenden =
+   was ist neu dazugekommen, Aufklappen = wo kommt das Detail her. Der wippende
+   Suchen-Knopf beantwortete keine und lief dabei endlos: er ist raus. */
 @media(prefers-reduced-motion:no-preference){
-  tr.opt{animation:fade .2s ease both}
+  /* Nur frisch eingetroffene Zeilen blenden ein. Sonst blinkt bei jedem
+     nachgeprueften Kandidaten die ganze Tabelle neu auf. */
+  tr.opt.fresh{animation:fade .2s ease both}
   .detgrid{transition:grid-template-rows .16s ease}
-  .go.busy{animation:pressing 1.1s ease-in-out infinite}
+  .progressbar i{transition:width .22s ease}
+  .legbar i{transition:width .22s ease}
+  .progressbar.pending i{animation:sweep 1.4s ease-in-out infinite}
   @keyframes fade{from{opacity:0}to{opacity:1}}
-  @keyframes pressing{0%,100%{transform:none}50%{transform:translateY(1px)}}
+  /* Nur transform, kein Layout: 34 % Breite legen 194 % der eigenen Breite
+     zurueck und stehen damit genau am rechten Rand der Schiene. */
+  @keyframes sweep{0%{transform:translateX(0)}50%{transform:translateX(194%)}
+                   100%{transform:translateX(0)}}
 }

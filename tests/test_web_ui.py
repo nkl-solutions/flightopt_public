@@ -746,10 +746,10 @@ def test_page_head_names_the_product_and_carries_an_inline_favicon():
 
 
 def live_region_ids(page: str) -> set[str]:
-    """Jede Live-Region im Markup, benannt ueber ihre id."""
+    """Jedes Element, das von sich aus spricht: `aria-live` oder `role="status"`."""
     found = set()
     for tag in re.findall(r"<[^>]+>", page):
-        if 'aria-live="polite"' not in tag:
+        if 'aria-live="polite"' not in tag and 'role="status"' not in tag:
             continue
         match = re.search(r'id="([^"]+)"', tag)
         found.add(match.group(1) if match else tag)
@@ -759,10 +759,20 @@ def live_region_ids(page: str) -> set[str]:
 def test_live_regions_sit_only_where_they_belong():
     page = INDEX.read_text(encoding="utf-8")
 
-    # Genau diese vier Elemente sprechen, kein Element mehr. Die Ergebnisliste
-    # selbst ist keine Live-Region, sonst liest sie sich bei jeder Sortierung neu.
-    assert live_region_ids(page) == {"voiceStatus", "progresslabel", "note", "outsummary"}
-    assert '<section class="log" id="log">' in page
+    # Genau diese Elemente sprechen, kein Element mehr. Die Ergebnisliste selbst
+    # ist keine Live-Region, sonst liest sie sich bei jeder Sortierung neu.
+    # `aiStatus`, `savedmsg`, `scanstate`, `watchmsg` und `huntmsg` sind die
+    # Antwort auf einen Knopf, den jemand gerade gedrueckt hat: ohne Ansage
+    # bleibt der Erfolg stumm. Die Zusammenfassung der Beobachtungsliste
+    # spricht dagegen nicht, genauso wenig wie die der gespeicherten Scans und
+    # die der Jagd: sie wird bei jedem Neuladen der Liste geschrieben, auch
+    # ohne Zutun. Der Kanalstand spricht ebenfalls nicht: er aendert sich nur,
+    # wenn jemand am Server eine Umgebungsvariable setzt.
+    assert live_region_ids(page) == {
+        "voiceStatus", "progresslabel", "note", "outsummary",
+        "aiStatus", "savedmsg", "scanstate", "watchmsg", "huntmsg",
+    }
+    assert '<section class="log" id="log" aria-label="Verlauf der Suche">' in page
     assert '<h2 id="outtitle" tabindex="-1">' in page
     assert '<section class="out" id="out">' in page
     assert '<p class="outsummary" id="outsummary" aria-live="polite"></p>' in page
@@ -1126,7 +1136,7 @@ def test_the_form_is_ordered_by_weight():
         '<div class="segset" id="tripoptions"></div>',
         '<div class="route" id="route"',
         '<details class="fold" id="freetext">',
-        '<input type="date" id="from" required>',
+        '<input type="date" id="from" required aria-describedby="windowmsg">',
         '<div class="stayrow" id="stayrow">',
         '<details class="fold" id="optionsdetails">',
         '<select id="maxStops">',
@@ -1267,6 +1277,65 @@ assert.ok($("#rows").innerHTML.includes("180,00"), $("#rows").innerHTML);
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_an_unverified_leg_keeps_its_booking_link():
+    """Der Link haengt am Angebot, nicht am Pruefstand.
+
+    Ein Tagesangebot ohne Flugzeiten ist nicht live geprueft und hatte trotzdem
+    einen Link. Der Zweig warf ihn weg und schrieb ein leeres <span> hin: genau
+    dort, wo der Link das einzige ist, was weiterhilft.
+    """
+    result = run_ui_assertion(
+        r"""
+const html = detailRows({
+  verified: false, drift: null, estimate: 120,
+  legs: [{origin:"BER", destination:"ATH", date:"2026-10-01", price:120,
+          verified:false, indicative:false, source:"ryanair",
+          deep_link:"https://example.invalid/buchen"}],
+});
+
+assert.ok(html.includes('href="https://example.invalid/buchen"'), html);
+assert.ok(html.includes(">buchen</a>"), html);
+
+// Ein Kalendertag ohne Angebot hat keinen Link und behaelt die leere Spalte.
+const bare = detailRows({
+  verified: false, legs: [{origin:"BER", destination:"ATH", date:"2026-10-01",
+                           price:120, verified:false}],
+});
+assert.ok(!bare.includes("<a href"), bare);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_a_live_offer_without_times_is_not_called_a_day_best_price():
+    """Drei Faelle, nicht zwei. Ein geliefertes Angebot ohne Flugzeiten ist
+    etwas anderes als ein blosser Tagesbestpreis aus dem Kalender."""
+    result = run_ui_assertion(
+        r"""
+assert.strictEqual(unverifiedNote({indicative: true}),
+  "Richtwert eines Vergleichsportals, echter Flugpreis liegt meist darunter");
+assert.strictEqual(unverifiedNote({}),
+  "Tagesbestpreis, kein konkreter Flug geprüft");
+// Ohne Link bleibt es ein Tagesbestpreis: eine Quelle allein liefert noch
+// kein Angebot, auf das jemand klicken koennte.
+assert.strictEqual(unverifiedNote({source: "ryanair"}),
+  "Tagesbestpreis, kein konkreter Flug geprüft");
+assert.strictEqual(
+  unverifiedNote({source: "ryanair", deep_link: "https://example.invalid/x"}),
+  "Angebot der Quelle mit Buchungslink, aber ohne Flugzeiten und nicht live nachgeprüft"
+);
+// Ein Richtwert bleibt ein Richtwert, auch mit Link.
+assert.strictEqual(
+  unverifiedNote({indicative: true, source: "kiwi", deep_link: "https://x.invalid"}),
+  "Richtwert eines Vergleichsportals, echter Flugpreis liegt meist darunter"
+);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_result_area_is_a_table_with_a_sticky_head():
     page = INDEX.read_text(encoding="utf-8")
     css = (WEB / "app.css").read_text(encoding="utf-8")
@@ -1353,6 +1422,13 @@ def test_motion_is_opt_in_and_hover_does_not_flicker():
     assert "transition:background .12s" in css
     assert "transition:grid-template-rows" in css
 
+    # Jede Laengen- und Breitenbewegung gehoert in den Opt-in-Block. Ausserhalb
+    # laeuft sie auch dann, wenn jemand Bewegung abbestellt hat.
+    opt_in = css.split("prefers-reduced-motion:no-preference", 1)[1]
+    for moving in ("transition:width .22s ease", "animation:sweep", "animation:fade"):
+        assert moving in opt_in, moving
+        assert moving not in css.split("prefers-reduced-motion:no-preference", 1)[0]
+
 
 def test_deals_summary_counts_what_is_below_the_usual_price():
     result = run_ui_assertion(
@@ -1389,7 +1465,10 @@ assert.strictEqual(deviationLabel(undefined), "");
 assert.strictEqual(signalLabel("cheap"), "günstig");
 assert.strictEqual(signalLabel("expensive"), "teuer");
 assert.strictEqual(signalLabel("normal"), "normal");
-assert.strictEqual(signalLabel("unknown"), "keine Baseline");
+// Dasselbe Wort wie in der Preislage-Spalte: zwei Namen fuer denselben Zustand
+// zwingen sonst jeden, sie einmal gegeneinander zu pruefen.
+assert.strictEqual(signalLabel("unknown"), "keine Basis");
+assert.strictEqual(signalLabel("unknown"), bandLabel(null));
 """
     )
 
@@ -1454,6 +1533,334 @@ assert.strictEqual(lastResults[0].total, 160);
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_a_hidden_stop_from_another_trip_type_never_rides_along():
+    """`hops` merkt sich alles Getippte. Gesucht wird nur, was sichtbar ist."""
+    result = run_ui_assertion(
+        r"""
+trip = "multi";
+hops = [
+  {code:"BER", label:"Berlin"},
+  {code:"IST", label:"Istanbul"},
+  {code:"BER", label:"Berlin"},
+];
+assert.deepStrictEqual(payload().airports, ["BER", "IST", "BER"]);
+
+// Zurueck auf die Rueckreise: der dritte Stopp bleibt gemerkt, aber er wird
+// weder mitgeschickt noch als fehlende Eingabe angemahnt.
+setTrip("return");
+assert.strictEqual(hops.length, 3);
+assert.deepStrictEqual(payload().airports, ["BER", "IST"]);
+
+// Ein halb getippter Stopp aus der Mehr-Stopp-Ansicht blockiert die Suche nicht.
+hops.push({code:"", label:"Athe"});
+assert.strictEqual(active().some(h => !h.code), false);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_a_search_without_a_hit_says_so_instead_of_vanishing():
+    result = run_ui_assertion(
+        r"""
+renderNoResults("Keine Reise gefunden.");
+
+assert.strictEqual($("#outtitle").textContent, "Keine Treffer");
+assert.strictEqual($("#outsummary").textContent, "Keine Reise gefunden.");
+assert.ok($("#rows").innerHTML.includes("Keine Reise gefunden."), $("#rows").innerHTML);
+assert.strictEqual($("#out").classList.contains("on"), true);
+assert.deepStrictEqual(lastResults, []);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_an_open_row_survives_a_verified_result_arriving():
+    """Waehrend des Nachpruefens wird die Tabelle neu geschrieben. Ein geoeffnetes
+    Detail darf dabei nicht zuklappen, und alte Zeilen blenden nicht neu ein."""
+    result = run_ui_assertion(
+        r"""
+function row(dates, total, extra){
+  return Object.assign({
+    route: "BER-ATH-BER", dates, total, currency: "EUR", verified: false,
+    legs: [{origin:"BER", destination:"ATH", date:dates[0], price:total, stops:0}],
+  }, extra || {});
+}
+
+$("#resultCarrier").value = ""; $("#resultQuality").value = "";
+$("#directOnly").checked = false; $("#sort").value = "price";
+lastResults = []; openRows = new Set(); seenRows = new Set();
+
+applyPartial([row(["2026-10-01","2026-10-05"], 210),
+              row(["2026-10-01","2026-10-06"], 230)]);
+// Beim ersten Auftauchen blendet jede Zeile ein.
+assert.ok($("#rows").innerHTML.includes("fresh"), $("#rows").innerHTML);
+
+const key = resultKey(lastResults[0]);
+openRows.add(key);
+applyVerified(row(["2026-10-01","2026-10-05"], 180, {verified: true}));
+
+const html = $("#rows").innerHTML;
+assert.ok(html.includes('aria-expanded="true"'), html);
+assert.ok(html.includes("detrow open"), html);
+// Bekannte Zeilen blenden nicht noch einmal ein.
+assert.ok(!html.includes("fresh"), html);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_the_result_row_stays_a_table_row_and_the_button_does_the_toggling():
+    """`role="button"` auf einem <tr> nimmt den Zellen ihren Platz in der Tabelle."""
+    result = run_ui_assertion(
+        r"""
+$("#resultCarrier").value = ""; $("#resultQuality").value = "";
+$("#directOnly").checked = false; $("#sort").value = "price";
+openRows = new Set(); seenRows = new Set();
+renderTable([{
+  route: "BER-ATH-BER", dates: ["2026-10-01", "2026-10-06"], total: 220,
+  currency: "EUR", verified: true,
+  legs: [{origin:"BER", destination:"ATH", date:"2026-10-01", price:220, stops:0}],
+}]);
+
+const html = $("#rows").innerHTML;
+assert.ok(!html.includes('role="button"'), html);
+assert.ok(!/<tr[^>]*tabindex/.test(html), html);
+assert.ok(html.includes('class="rowtoggle"'), html);
+assert.ok(html.includes('aria-controls="det-0"'), html);
+// Der Status steht auch dann noch da, wenn die Spalte auf dem Telefon wegfaellt.
+assert.ok(html.includes('class="rowstatus">geprüft'), html);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_the_total_column_appears_only_with_real_stay_costs():
+    result = run_ui_assertion(
+        r"""
+function row(extra){
+  return Object.assign({
+    route: "BER-ATH-BER", dates: ["2026-10-01", "2026-10-06"], total: 220,
+    currency: "EUR", verified: true,
+    legs: [{origin:"BER", destination:"ATH", date:"2026-10-01", price:220, stops:0}],
+  }, extra || {});
+}
+$("#resultCarrier").value = ""; $("#resultQuality").value = "";
+$("#directOnly").checked = false; $("#sort").value = "price";
+
+renderTable([row()]);
+assert.strictEqual($("#resulttable").classList.contains("withgrand"), false);
+
+renderTable([row({stays: [{code:"ATH", city:"Athen", nights:5, price:300,
+                           arrival:"2026-10-01"}], grand_total: 520, stay_total: 300})]);
+assert.strictEqual($("#resulttable").classList.contains("withgrand"), true);
+// Der reine Uebernachtungsanteil steht in der Detailzeile.
+assert.ok(staySummaryLine({stays: [], grand_total: 520, stay_total: 300})
+  .includes("300,00 €</b> Übernachtung"));
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_the_airline_hint_survives_an_empty_or_missing_registry():
+    result = run_ui_assertion(
+        r"""
+AIRLINES = [];
+picked = new Set();
+airlinesFailed = false;
+airHint();
+// Kein Satz, der auf einem Doppelpunkt und einem Punkt endet.
+assert.ok(!$("#airhint").textContent.includes(": ."), $("#airhint").textContent);
+assert.ok($("#airhint").textContent.includes("keine Quelle"), $("#airhint").textContent);
+
+// Eine blockierte Airline heisst blockiert, eine geplante heisst geplant.
+AIRLINES = [
+  {code:"FR", status:"live", kind:"airline", name:"Ryanair"},
+  {code:"TK", status:"planned", kind:"airline", name:"Turkish Airlines"},
+  {code:"U2", status:"blocked", kind:"airline", name:"easyJet"},
+];
+airHint();
+const text = $("#airhint").textContent;
+assert.ok(text.includes("Angeschlossen wird als nächstes Turkish Airlines."), text);
+assert.ok(text.includes("Nicht abfragbar: easyJet."), text);
+
+airlinesFailed = true;
+airHint();
+assert.strictEqual($("#airlinescount").textContent, "Airlines nicht abrufbar");
+assert.ok($("#airhint").textContent.includes("läuft trotzdem"), $("#airhint").textContent);
+airlinesFailed = false;
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_partial_failures_of_the_run_reach_the_screen():
+    """Erschoepfte Budgets und geblockte Quellen stehen im Ereignis und blieben
+    bisher unsichtbar: uebrig war nur ein duenneres Ergebnis."""
+    result = run_ui_assertion(
+        r"""
+resetRunNotes();
+assert.strictEqual($("#runnotes").textContent, "");
+
+addRunNotes(["serpapi: Budget von 250 Abrufen ist erschöpft"], "Preisabruf");
+assert.strictEqual($("#runnotes").dataset.tone, "warn");
+assert.ok($("#runnotes").textContent.includes("Preisabruf: serpapi"),
+  $("#runnotes").textContent);
+
+// Dieselbe Meldung zweimal ergibt eine Zeile, nicht zwei.
+addRunNotes(["serpapi: Budget von 250 Abrufen ist erschöpft"], "Preisabruf");
+assert.strictEqual(runNotes.length, 1);
+
+addRunNotes(["booking: HTTP 403"], "Hotelkosten");
+assert.strictEqual(runNotes.length, 2);
+
+assert.strictEqual(skippedNote(0), "");
+assert.strictEqual(skippedNote(1), "1 Abruf wurde übersprungen.");
+assert.strictEqual(skippedNote(4), "4 Abrufe wurden übersprungen.");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_an_unknown_total_shows_movement_instead_of_a_made_up_percentage():
+    result = run_ui_assertion(
+        r"""
+setProgress({phase:"planning"});
+assert.strictEqual($("#progressbar").className, "progressbar pending");
+assert.strictEqual($("#progressbar").attributes["aria-valuetext"],
+  "Läuft, Umfang noch offen");
+
+setProgress({phase:"fetching", done:3, total:6});
+assert.strictEqual($("#progressbar").className, "progressbar");
+assert.strictEqual($("#progressbar").attributes["aria-valuetext"], "45 Prozent");
+
+// Ein beendeter Lauf ohne Zaehlung ist fertig, nicht unbestimmt.
+setProgress({phase:"done"});
+assert.strictEqual($("#progressbar").className, "progressbar");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_filters_that_hide_everything_offer_a_way_back():
+    result = run_ui_assertion(
+        r"""
+$("#resultCarrier").value = ""; $("#resultQuality").value = "";
+$("#directOnly").checked = false;
+assert.strictEqual(filtersActive(), false);
+
+$("#resultQuality").value = "verified";
+assert.strictEqual(filtersActive(), true);
+$("#directOnly").checked = true;
+
+resetResultFilters();
+assert.strictEqual($("#resultQuality").value, "");
+assert.strictEqual($("#directOnly").checked, false);
+assert.strictEqual(filtersActive(), false);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_a_saved_scan_names_the_days_it_stands_for():
+    result = run_ui_assertion(
+        r"""
+assert.strictEqual(
+  dealDates({dates: ["2026-10-01", "2026-10-06"]}),
+  "Do., 01. Okt. bis Di., 06. Okt.");
+assert.strictEqual(dealDates({dates: ["2026-10-01"]}), "Do., 01. Okt.");
+assert.strictEqual(dealDates({}), "");
+
+assert.strictEqual(dealPriceNote({verified: true, median: 220}),
+  "geprüft üblich 220,00 €");
+assert.strictEqual(dealPriceNote({verified: false}), "Schätzung");
+
+const html = dealRowMarkup({job_id: 7, profile: "Athen", route: "BER-ATH-BER",
+  dates: ["2026-10-01", "2026-10-06"], price: 160, signal: "cheap",
+  verified: true, median: 220});
+assert.ok(html.includes("Do., 01. Okt."), html);
+assert.ok(html.includes('class="dealopen" data-job="7"'), html);
+assert.ok(!html.includes('role="button"'), html);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_stops_can_be_reordered_without_a_mouse():
+    """Ziehen gibt es auf einem Touchscreen nicht und auf der Tastatur erst recht."""
+    result = run_ui_assertion(
+        r"""
+trip = "multi";
+hops = [
+  {code:"BER", label:"Berlin"},
+  {code:"IST", label:"Istanbul"},
+  {code:"ATH", label:"Athen"},
+  {code:"BER", label:"Berlin"},
+];
+drawRoute();
+
+assert.strictEqual(moveHop(1, 1), true);
+assert.deepStrictEqual(hops.map(h => h.code), ["BER", "ATH", "IST", "BER"]);
+// Istanbul steht jetzt an Position 2 und wandert von dort zurueck.
+assert.strictEqual(moveHop(2, -1), true);
+assert.deepStrictEqual(hops.map(h => h.code), ["BER", "IST", "ATH", "BER"]);
+
+// Ueber die Enden hinaus bewegt sich nichts.
+assert.strictEqual(moveHop(0, -1), false);
+assert.strictEqual(moveHop(3, 1), false);
+assert.deepStrictEqual(hops.map(h => h.code), ["BER", "IST", "ATH", "BER"]);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_the_page_carries_the_landmarks_and_names_its_scroll_areas():
+    page = INDEX.read_text(encoding="utf-8")
+    css = APP_CSS.read_text(encoding="utf-8")
+
+    # Ohne Sprungmarke tabbt sich jeder taeglich durch Kopf und Formular.
+    assert '<a class="skip" href="#main">' in page
+    assert '<main id="main">' in page and "</main>" in page
+
+    # Ein seitlich scrollbarer Bereich ohne Tabstopp ist mit der Tastatur
+    # nicht zu bewegen, und ohne Namen weiss niemand, was dort scrollt.
+    # Ergebnisse, gespeicherte Scans, Funde der Jagd, Beobachtungsliste.
+    assert page.count('<div class="tablewrap" tabindex="0" role="region"') == 4
+    assert ".tablewrap:focus-visible" in css
+
+    # Ein Fortschrittsbalken ohne Namen wird als "Fortschritt" angesagt, sonst nichts.
+    assert 'aria-labelledby="progresslabel"' in page
+    # Die Schritteleiste wiederholt nur, was das Label schon sagt.
+    assert '<div class="steps" id="steps" aria-hidden="true"></div>' in page
+    # Die Fehlermeldung zum Fenster haengt an beiden Datumsfeldern.
+    assert page.count('aria-describedby="windowmsg"') == 2
+
+
+def test_the_two_status_columns_are_explained_somewhere_visible():
+    """"Status" und "Preislage" nebeneinander erklaeren sich nicht von selbst,
+    und ein title-Attribut zeigt ein Telefon nie an."""
+    page = INDEX.read_text(encoding="utf-8")
+    script = APP_JS.read_text(encoding="utf-8")
+
+    assert '<p class="legend">' in page
+    assert "wie sicher der" in page
+    assert "keine Basis" in page
+
+    # Die Erklaerung der Zeile steht im aufgeklappten Detail, nicht in `title`.
+    assert "Preislage der Zeile:" in script
+    assert 'title="${esc(bandTitle(o))}"' not in script
+
+
 def test_deals_section_replaces_the_admin_block():
     page = INDEX.read_text(encoding="utf-8")
 
@@ -1464,3 +1871,168 @@ def test_deals_section_replaces_the_admin_block():
     # Profil und Scanner sitzen in der Kopfzeile dieses Bereichs.
     assert page.index('id="deals"') < page.index('id="profileName"')
     assert page.index('id="deals"') < page.index('id="runScanner"')
+
+
+def test_watchlist_section_carries_list_form_and_switch():
+    page = INDEX.read_text(encoding="utf-8")
+
+    assert '<section class="watch" id="watch">' in page
+    assert '<tbody id="watchrows"></tbody>' in page
+    assert '<p class="msg" id="watchsummary" data-tone=""></p>' in page
+    # Eintragen, ansehen, abschalten: ein Formular, eine Liste, ein Schalter.
+    assert '<input id="watchFrom"' in page
+    assert '<input id="watchTo"' in page
+    assert 'id="watchAdd"' in page
+    assert 'id="watchRun"' in page
+    # Das Formular steht ausserhalb der Suche, Enter startet dort keine Suche.
+    assert page.index('<input id="watchFrom"') > page.index("</form>")
+
+
+def test_an_empty_watchlist_explains_itself_instead_of_being_blank():
+    """Null Zeilen sind eine Aussage, und sie sieht sonst aus wie ein Fehler."""
+    result = run_ui_assertion(
+        r"""
+const text = watchlistSummary({routes: [], summary: {routes: 0, active: 0,
+  observations: 0, last_run_at: null, min_days: 5}});
+
+assert.ok(text.includes("Noch wird nichts aufgezeichnet"), text);
+assert.ok(text.includes("täglich"), text);
+assert.ok(text.includes("5"), text);
+
+renderWatchlist({routes: [], summary: {routes: 0, active: 0, observations: 0,
+  last_run_at: null, min_days: 5}});
+const body = $("#watchrows").innerHTML;
+assert.ok(body.includes("Keine Strecke wird beobachtet"), body);
+assert.ok(body.includes("colspan"), body);
+assert.strictEqual($("#watchsummary").textContent, text);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_watchlist_summary_counts_routes_and_observations():
+    result = run_ui_assertion(
+        r"""
+const text = watchlistSummary({
+  routes: [{id: 1}, {id: 2}],
+  summary: {routes: 2, active: 1, observations: 1240,
+            last_run_at: "2026-09-05T08:00:00", min_days: 5},
+});
+
+assert.ok(text.includes("2 Strecken"), text);
+assert.ok(text.includes("1 aktiv"), text);
+assert.ok(text.includes("1.240"), text);
+assert.ok(text.includes("Zuletzt"), text);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_readiness_says_how_far_the_recording_got():
+    """"Ab wann eine Aussage traegt" ist die Frage, die die Spalte beantwortet."""
+    result = run_ui_assertion(
+        r"""
+assert.strictEqual(watchReadiness({days_recorded: 0, min_days: 5}),
+  "noch nichts aufgezeichnet");
+assert.strictEqual(watchReadiness({days_recorded: 2, min_days: 5}),
+  "noch 3 von 5 Tagen");
+assert.strictEqual(watchReadiness({days_recorded: 5, min_days: 5, ready: true}),
+  "trägt, 5 Tage aufgezeichnet");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_watch_payload_reads_the_watch_form():
+    result = run_ui_assertion(
+        r"""
+$("#watchFrom").value = " berlin ";
+$("#watchTo").value = "Athen";
+$("#watchLeadMin").value = "10";
+$("#watchLeadMax").value = "60";
+
+assert.deepStrictEqual(watchPayload(), {
+  origin: "berlin", destination: "Athen", lead_min_days: 10, lead_max_days: 60,
+});
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_a_watch_row_carries_the_switch_and_stays_dash_free():
+    result = run_ui_assertion(
+        r"""
+const on = watchRowMarkup({id: 4, route: "BER-ATH", origin: "BER",
+  destination: "ATH", lead_min_days: 14, lead_max_days: 73, enabled: true,
+  last_run_at: "2026-09-05T08:00:00", observations: 120, days_recorded: 2,
+  min_days: 5, ready: false});
+
+assert.ok(on.includes("BER-ATH"), on);
+assert.ok(on.includes('data-route="4"'), on);
+// Der Knopf sagt, was er tut, nicht in welchem Zustand die Zeile ist.
+assert.ok(on.includes("Abschalten"), on);
+assert.ok(on.includes("noch 3 von 5 Tagen"), on);
+assert.ok(!on.includes("→") && !on.includes("—") && !on.includes("–"), on);
+
+const off = watchRowMarkup({id: 5, route: "BER-FCO", enabled: false,
+  last_run_at: null, observations: 0, days_recorded: 0, min_days: 5});
+
+assert.ok(off.includes("Einschalten"), off);
+assert.ok(off.includes("aus"), off);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_the_recording_report_counts_in_german():
+    """"1 Strecken" liest sich wie ein Zaehlfehler, und danach sieht es aus."""
+    result = run_ui_assertion(
+        r"""
+assert.strictEqual(watchRunLabel({routes: 1, observations: 8}),
+  "1 Strecke abgefragt, 8 Beobachtungen");
+assert.strictEqual(watchRunLabel({routes: 3, observations: 180}),
+  "3 Strecken abgefragt, 180 Beobachtungen");
+assert.strictEqual(watchRunLabel({routes: 0, observations: 0}),
+  "Heute ist schon alles aufgezeichnet.");
+// Was liegen blieb, gehoert dazu: sonst sieht ein halber Lauf aus wie ein ganzer.
+assert.ok(watchRunLabel({routes: 8, observations: 400, due_left: 2})
+  .includes("2 bleiben fällig"));
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_the_watchlist_keeps_its_verdict_column_on_a_phone():
+    """`.c-status` faellt unter 760 px global weg, und genau diese Spalte ist
+    die, wegen der jemand die Beobachtungsliste ueberhaupt aufschlaegt."""
+    css = APP_CSS.read_text(encoding="utf-8")
+
+    assert "#watchtable .c-status{display:table-cell}" in css
+    # Der rohe Zaehler wandert dafuer weg: die Aussage sagt dasselbe in Worten.
+    assert "#watchtable .c-count" in css
+
+
+def test_a_watch_label_never_wraps_away_from_its_field():
+    """Auf 375 px stand "Nach" am Ende der Zeile ueber seinem eigenen Feld.
+
+    Wer das liest, ordnet die Beschriftung dem falschen Kasten zu.
+    """
+    page = INDEX.read_text(encoding="utf-8")
+    css = APP_CSS.read_text(encoding="utf-8")
+
+    pairs = re.findall(
+        r'<span class="watchfield">\s*<label class="lab" for="(\w+)">[^<]+</label>'
+        r'\s*<input id="(\w+)"',
+        page,
+    )
+    assert [a for a, _ in pairs] == [b for _, b in pairs]
+    assert {a for a, _ in pairs} == {
+        "watchFrom", "watchTo", "watchLeadMin", "watchLeadMax"
+    }
+    assert ".watchfield{display:flex" in css

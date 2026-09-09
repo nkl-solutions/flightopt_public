@@ -2,6 +2,11 @@ services:
   flightopt:
     build:
       context: .
+      args:
+        # `lean` ist der Standard und laesst Playwright und Chromium weg.
+        # `hotels` baut den Browser mit und schaltet Booking im Image ein.
+        # Wer umstellt, setzt `FLIGHTOPT_MEM_LIMIT` gleich mit hoch.
+        FLIGHTOPT_VARIANT: ${FLIGHTOPT_VARIANT:-lean}
     container_name: flightopt
     restart: unless-stopped
     environment:
@@ -14,13 +19,34 @@ services:
       # deckelt den bezahlten Monatsverbrauch (Standard siehe DEFAULT_CAP).
       SERPAPI_KEY: ${SERPAPI_KEY:-}
       SERPAPI_MONTHLY_CAP: ${SERPAPI_MONTHLY_CAP:-}
+      # Ohne Browser im Image bleibt die Quelle draussen, auch wenn hier eine
+      # Eins steht - der Katalog prueft beides. Der `hotels`-Bauweg setzt den
+      # Schalter selbst, diese Zeile ist der Notausschalter daneben.
+      FLIGHTOPT_HOTELS_BOOKING: ${FLIGHTOPT_HOTELS_BOOKING:-}
+      # Das Budget des langlebigen Chromium. Seiten je Prozess, Hoechstdauer
+      # und Leerlauffrist in Sekunden; leer heisst, die Voreinstellung des
+      # Codes gilt (60 Seiten, 1800 s, 120 s).
+      FLIGHTOPT_HOTELS_BROWSER_PAGES: ${FLIGHTOPT_HOTELS_BROWSER_PAGES:-}
+      FLIGHTOPT_HOTELS_BROWSER_MAX_AGE: ${FLIGHTOPT_HOTELS_BROWSER_MAX_AGE:-}
+      FLIGHTOPT_HOTELS_BROWSER_IDLE: ${FLIGHTOPT_HOTELS_BROWSER_IDLE:-}
       MALLOC_ARENA_MAX: "2"
     volumes:
       - flightopt-data:/app/data
     networks:
       - proxy-network
-    mem_limit: 512m
-    cpus: "1.0"
+    # Die harte Grenze, und sie bleibt Pflicht. Python kennt keine portable
+    # Heap-Obergrenze, ein Chromium erst recht nicht: was den Wirt schuetzt,
+    # ist dieses cgroup-Limit. Ueberschreitet der Container es, raeumt der
+    # Kernel *im Container* auf - der Dienst stirbt, der VPS nicht.
+    #
+    # 512m traegt den schlanken Bauweg. Mit Browser gehoert hier ein hoeherer
+    # Wert hin; welcher, steht gemessen in docs/DEPLOYMENT.md.
+    mem_limit: ${FLIGHTOPT_MEM_LIMIT:-512m}
+    cpus: ${FLIGHTOPT_CPUS:-1.0}
+    # Ein Prozess, der im Container startet, soll keine Rechte dazugewinnen
+    # koennen. Kostet nichts und gilt fuer beide Bauwege.
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).read()"]
       interval: 30s

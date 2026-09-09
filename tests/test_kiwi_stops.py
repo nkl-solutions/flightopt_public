@@ -169,11 +169,11 @@ class RecordingCache:
     def __init__(self) -> None:
         self.keys: list[str] = []
 
-    async def get(self, key):
+    async def get(self, key, *, max_age=None, now=None):
         self.keys.append(key)
         return None
 
-    async def put(self, key, payload, ttl, *, source=""):
+    async def put(self, key, payload, ttl, *, source="", now=None):
         self.keys.append(key)
 
 
@@ -216,13 +216,17 @@ async def test_two_stop_limits_never_share_a_cached_calendar():
 @pytest.mark.asyncio
 async def test_a_source_without_the_flag_keeps_its_old_cache_key():
     """Ihre Preise haengen nicht an Umstiegen, also darf der Schluessel nicht wandern."""
+    from flightopt.search.dp import feasible_dates
     from flightopt.storage.cache import cache_key
 
+    spec = two_leg_spec(max_stops=0)
     seen = RecordingCache()
-    await build_grid(two_leg_spec(max_stops=0), [StrictAirline()], cache=seen)
+    await build_grid(spec, [StrictAirline()], cache=seen)
 
+    # Das Fenster gehoert zum Schluessel, die Umstiegsgrenze hier nicht.
+    outbound = feasible_dates(spec)[0]
     assert cache_key(
-        "strict", "calendar", "BER", "AYT", date(2027, 3, 1),
+        "strict", "calendar", "BER", "AYT", min(outbound), until=max(outbound),
         pax=1, cabin="economy", currency="EUR",
     ) in seen.keys
 

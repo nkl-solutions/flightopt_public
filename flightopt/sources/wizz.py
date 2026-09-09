@@ -87,14 +87,19 @@ class WizzSource(HttpSource):
     async def load_routes(self, origin: str) -> set[str]:
         """Wizz publishes its whole network in one call, so fetch it once."""
         if self._routes is None:
-            base = await self.base_url()
             try:
+                base = await self.base_url()
                 data = await self.fetch_json(
                     f"{base}/asset/map", params={"languageCode": "en-gb"}
                 )
             except SourceError as exc:
+                # Nicht `{}` merken: ein leeres Verzeichnis ist eine Auskunft
+                # ("faehrt nichts an"), ein Fehlschlag ist keine. Gemerkt wurde
+                # es trotzdem, und danach filterte `supports_route` jede
+                # Strecke weg - der Katalog lebt einen ganzen Job lang, also
+                # war Wizz fuer den ganzen Suchlauf raus, ohne Fehler und ohne
+                # Eintrag im Bericht.
                 logger.warning("wizz: route map failed: %s", exc)
-                self._routes = {}
                 return set()
 
             self._routes = {}
@@ -244,7 +249,13 @@ class WizzSource(HttpSource):
                         "https://www.wizzair.com/en-gb/booking/select-flight/"
                         f"{origin}/{destination}/{day.isoformat()}"
                     ),
-                    is_estimate=False,
+                    # Ohne Flugzeiten beschreibt die Zeile keinen Flug,
+                    # sondern den guenstigsten Preis des Tages. Der Preis ist
+                    # echt, die Verbindung fehlt - also bleibt es eine
+                    # Schaetzung. `is_estimate` steht im Schluessel von
+                    # `flight_baseline`; ein Tagespreis in der gepruefen
+                    # Grundgesamtheit verschiebt deren Median.
+                    is_estimate=not segments,
                 )
             )
         # Group by currency first, exactly as `calendar_range` does: comparing

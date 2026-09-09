@@ -104,12 +104,17 @@ function routeGlance(){
   const to = $("#to").value || "offenes Enddatum";
   const carriers = picked.size ? [...picked].join(", ") : "alle verfügbaren Airlines";
   const bag = bagLabel(Number($("#checkedBags").value || 0));
-  return {route, from, to, carriers, bag, stops: maxStopsLabel()};
+  /* Der Hotelschalter steht in einem zugeklappten Bereich. Aus der letzten
+     Sitzung wiederhergestellt waere er sonst voellig unsichtbar und wuerde
+     stillschweigend die Laufzeit und die Summen aendern. */
+  const hotels = $("#withHotels").checked === true ? "mit Hotelkosten" : "";
+  return {route, from, to, carriers, bag, stops: maxStopsLabel(), hotels};
 }
 function updateRouteGlance(){
   const g = routeGlance();
   const parts = [g.bag, g.carriers];
   if (g.stops) parts.splice(1, 0, g.stops);
+  if (g.hotels) parts.push(g.hotels);
   $("#routeglance").innerHTML =
     `<b>${esc(g.route || "Route wählen")}</b> `+
     `<i>${esc(g.from)} bis ${esc(g.to)} · ${parts.map(esc).join(" · ")}</i>`;
@@ -213,7 +218,7 @@ function setupVoiceInput(){
     recognition.interimResults = true;
     recognition.onstart = () => {
       setVoiceListening(true);
-      setVoiceStatus("Höre zu...");
+      setVoiceStatus("Höre zu");
     };
     recognition.onresult = event => {
       let finalText = "", interimText = "";
@@ -369,6 +374,11 @@ function drawRoute(){  const box = $("#route"); box.innerHTML = "";
     inp.setAttribute("aria-autocomplete", "list");
     inp.setAttribute("aria-expanded", "false");
     inp.setAttribute("aria-controls", combo.listboxId);
+    /* Der Umsortier-Hinweis darf beim Oeffnen und Schliessen der Vorschlagsliste
+       nicht verloren gehen, deshalb steht er als feste Grundlage davor. */
+    const baseHelp = trip === "multi" ? "routehint" : "";
+    const describe = extra => [baseHelp, extra].filter(Boolean).join(" ");
+    inp.setAttribute("aria-describedby", describe(""));
     cell.draggable = true; cell.dataset.i = i;
     const badge = document.createElement("span"); badge.className="code";
     badge.textContent = hop.code || "";
@@ -392,7 +402,7 @@ function drawRoute(){  const box = $("#route"); box.innerHTML = "";
                           menu.innerHTML=""; items=[]; sel=-1;
                           ghost.innerHTML="";
                           inp.setAttribute("aria-expanded","false");
-                          inp.setAttribute("aria-describedby","");
+                          inp.setAttribute("aria-describedby",describe(""));
                           inp.setAttribute("aria-activedescendant",""); };
     /* Show the rest of the top suggestion in grey behind what was typed, so
        the Tab key has something visible to accept. */
@@ -416,13 +426,19 @@ function drawRoute(){  const box = $("#route"); box.innerHTML = "";
       if (found){ menu.classList.add("on"); empty.classList.remove("on"); }
       else { menu.classList.remove("on"); empty.classList.add("on"); }
       /* Der Leerkasten haengt nur am Feld, solange er auch sichtbar ist. */
-      inp.setAttribute("aria-describedby", found ? "" : empty.id);
+      inp.setAttribute("aria-describedby", describe(found ? "" : empty.id));
       paintGhost();
       inp.setAttribute("aria-expanded", String(found));
       inp.setAttribute("aria-activedescendant", activeDescendant(i, sel));
       menu.querySelectorAll("b").forEach(el => el.onmousedown = ev => {
         ev.preventDefault(); choose(items[+el.dataset.n]);
       });
+      /* Die Liste ist 264 px hoch und scrollt. Ohne das hier waehlt die
+         Pfeiltaste ab dem sechsten Eintrag etwas aus, das niemand sieht. */
+      const marked = menu.querySelector(`[aria-selected="true"]`);
+      if (marked && typeof marked.scrollIntoView === "function"){
+        marked.scrollIntoView({block:"nearest"});
+      }
     };
     const choose = a => {
       hops[i] = {code:a.code, label:a.city};
@@ -446,6 +462,11 @@ function drawRoute(){  const box = $("#route"); box.innerHTML = "";
       // Escape zuerst: ohne Treffer steht nur der Leerkasten offen, und der
       // muss sich genauso schliessen lassen wie die Liste.
       if (e.key==="Escape"){ close(); return; }
+      // Umsortieren ging bisher nur per Ziehen. Das kennt weder die Tastatur
+      // noch ein Touchscreen: HTML-Drag-and-drop feuert dort gar nicht.
+      if (e.altKey && (e.key==="ArrowLeft" || e.key==="ArrowRight")){
+        e.preventDefault(); moveHop(i, e.key==="ArrowLeft" ? -1 : 1); return;
+      }
       if (!menu.classList.contains("on")) return;
       if (e.key==="ArrowDown"){ e.preventDefault(); sel=Math.min(sel+1,items.length-1); paint(); }
       else if (e.key==="ArrowUp"){ e.preventDefault(); sel=Math.max(sel-1,0); paint(); }
@@ -488,8 +509,25 @@ function drawRoute(){  const box = $("#route"); box.innerHTML = "";
       updateRouteGlance(); $("#route").querySelectorAll("input")[hops.length-2].focus(); };
     box.append(add);
   }
+  // Nur bei mehreren Stopps gibt es ueberhaupt etwas umzusortieren.
+  $("#routehint").hidden = trip !== "multi";
   wireDrag(box);
   syncStayControls();
+}
+
+/* Dieselbe Bewegung wie das Ziehen, nur ueber die Tastatur erreichbar.
+   Der Fokus wandert mit, sonst weiss nach dem Neuaufbau niemand mehr, welches
+   Feld gerade bewegt wurde. */
+function moveHop(from, delta){
+  const list = active();
+  const to = from + delta;
+  if (to < 0 || to >= list.length) return false;
+  const [moved] = hops.splice(from, 1);
+  hops.splice(to, 0, moved);
+  drawRoute(); size(); updateRouteGlance(); saveForm();
+  const fields = $("#route").querySelectorAll("input");
+  if (fields[to] && typeof fields[to].focus === "function") fields[to].focus();
+  return true;
 }
 
 /* Reorder stops by dragging a field onto another one. */
@@ -524,9 +562,13 @@ function wireDrag(box){
 }
 
 /* ---------------- airlines ---------------- */
+let airlinesFailed = false;
 async function loadAirlines(){
-  try { AIRLINES = (await (await fetch("/api/airlines")).json()).airlines || []; }
-  catch { AIRLINES = []; }
+  try {
+    AIRLINES = (await (await fetch("/api/airlines")).json()).airlines || [];
+    airlinesFailed = false;
+  }
+  catch { AIRLINES = []; airlinesFailed = true; }
   const box = $("#chips");
   box.innerHTML = AIRLINES.filter(a => a.kind !== "comparison").map(a => `
     <button type="button" class="chip" data-code="${esc(a.code)}" aria-pressed="false"
@@ -546,18 +588,30 @@ async function loadAirlines(){
 /* Die Kopfzeile des Aufklappbereichs sagt, wie viele Airlines wirklich abgefragt
    werden. Vergleichsportale sind keine Airline und zaehlen nicht mit. */
 function airlinesSummary(){
+  if (airlinesFailed) return "Airlines nicht abrufbar";
   const live = AIRLINES.filter(a => a.status === "live" && a.kind !== "comparison").length;
   return picked.size ? `Eingegrenzt auf ${[...picked].join(", ")}` : `Alle ${live} Airlines`;
 }
+/* Eine leere Liste ergab bisher Saetze wie "Preise liefert derzeit ." und
+   behauptete ausserdem, jede ausgegraute Airline sei technisch blockiert,
+   obwohl die meisten schlicht noch nicht angeschlossen sind. */
 function airHint(){
+  if (airlinesFailed){
+    $("#airhint").textContent = "Die Airlineliste ist gerade nicht abrufbar. "
+      + "Die Suche läuft trotzdem, sie kann nur nicht eingegrenzt werden.";
+    $("#airlinescount").textContent = airlinesSummary();
+    return;
+  }
   const live = AIRLINES.filter(a=>a.status==="live").map(a=>a.name);
   const plan = AIRLINES.filter(a=>a.status==="planned").map(a=>a.name);
-  const sel = picked.size ? `Eingeschränkt auf ${[...picked].join(", ")}.`
-                          : "Es werden alle verfügbaren Airlines abgefragt.";
-  $("#airhint").textContent =
-    `${sel} Preise liefert derzeit ${live.join(", ")}. `
-  + `Als nächstes anschließbar: ${plan.join(", ")}. `
-  + `Ausgegraute Airlines lassen sich technisch nicht abfragen.`;
+  const blocked = AIRLINES.filter(a=>a.status!=="live" && a.status!=="planned").map(a=>a.name);
+  const parts = [picked.size ? `Eingeschränkt auf ${[...picked].join(", ")}.`
+                             : "Es werden alle verfügbaren Airlines abgefragt."];
+  if (live.length) parts.push(`Preise liefert derzeit ${live.join(", ")}.`);
+  else parts.push("Derzeit liefert keine Quelle Preise.");
+  if (plan.length) parts.push(`Angeschlossen wird als nächstes ${plan.join(", ")}.`);
+  if (blocked.length) parts.push(`Nicht abfragbar: ${blocked.join(", ")}.`);
+  $("#airhint").textContent = parts.join(" ");
   $("#airlinescount").textContent = airlinesSummary();
 }
 
@@ -579,10 +633,14 @@ function checkWindow(){
   if (from && to && to < from){
     msg.dataset.tone = "err";
     msg.textContent = "Das Ende des Fensters liegt vor dem Anfang.";
+    // Die Meldung haengt per aria-describedby an beiden Feldern. Ohne
+    // aria-invalid weiss ein Screenreader trotzdem nicht, welches Feld klemmt.
+    $("#to").setAttribute("aria-invalid", "true");
     return false;
   }
   msg.dataset.tone = "";
   msg.textContent = "";
+  $("#to").setAttribute("aria-invalid", "false");
   return true;
 }
 
@@ -606,10 +664,14 @@ function setStayOptionsEnabled(on){
   $("#hotelRooms").disabled = !on;
 }
 
+/* `hops` haelt auch die Stopps, die eine andere Reiseart einmal gebraucht hat.
+   Gesucht wird aber nur, was gerade im Formular steht: sonst schickt eine
+   Rueckreise die dritte Station von vorhin mit, und der Fehler "Bitte alle
+   Flughaefen waehlen" zeigt auf ein Feld, das niemand sieht. */
 function payload(){  readStayControls();
   const count = stayCount();
   return {
-    airports: hops.map(h=>h.code), trip,
+    airports: active().map(h=>h.code), trip,
     window_start: $("#from").value, window_end: $("#to").value,
     stays: Array.from({length: count}, (_, i) => stayRanges[i] || [3, 10]),
     checked_bags: Number($("#checkedBags").value || 0),
@@ -670,7 +732,12 @@ function size(){
       const summary = estimateSummary(d, trip);
       el.innerHTML = summary.html;
       el.dataset.tone = summary.warn ? "warn" : "";
-  } catch { el.textContent=""; }
+  } catch {
+    // Ein leerer Kasten sieht aus wie "passt schon". Er heisst aber: der Server
+    // hat nicht geantwortet, und wie gross die Suche wird, weiss gerade niemand.
+    el.textContent = "Größe der Suche nicht abrufbar. Starten geht trotzdem.";
+    el.dataset.tone = "warn";
+  }
   }, 200);
 }
 
@@ -761,8 +828,10 @@ function inkShade(price, total, legs){
   return `color-mix(in oklab, var(--ink) ${pct}%, var(--bg))`;
 }
 function fmtDay(s){
-  return new Date(s+"T00:00:00").toLocaleDateString("de-DE",
-    {weekday:"short",day:"2-digit",month:"short"});
+  const d = new Date(s+"T00:00:00");
+  // Ein "Invalid Date" in einer Tabellenzelle ist schlimmer als eine leere Zelle.
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("de-DE", {weekday:"short",day:"2-digit",month:"short"});
 }
 
 /* ---------------- Beschriftungen ---------------- */
@@ -824,12 +893,42 @@ function statusLabel(o){
    sicher ein Preis ist; die Preislage sagt, ob er fuer diese Strecke und diese
    Saison gut ist. Beides steht nebeneinander, keines ersetzt das andere.
    Ohne Baseline wird nichts behauptet: dann steht dort "keine Basis". */
-const BAND_LABELS = {cheap:"günstig", normal:"normal", expensive:"teuer"};
+/* Vier Stufen. "Fehltarif" ist nicht die Steigerung von "günstig", sondern
+   eine andere Aussage: günstig heißt, der Preis liegt unter dem Üblichen;
+   Fehltarif heißt, er liegt so weit darunter, dass er vermutlich nicht
+   gewollt ist. Dasselbe Wort wie in der Discord-Meldung, die derselbe Fund
+   auslöst, damit niemand zwei Namen für eine Sache lernt. */
+const BAND_LABELS = {error:"Fehltarif", cheap:"günstig", normal:"normal",
+                     expensive:"teuer"};
 function bandLabel(tier){
   return BAND_LABELS[String(tier || "")] || "keine Basis";
 }
+/* Gemessen mit contrastRatio weiter unten: --ok und --signal liegen bei
+   1,02:1 zueinander. Farbe allein trennt "günstig" und "Fehltarif" also für
+   niemanden, der Rot und Grün nicht auseinanderhält. Den Unterschied trägt
+   die Form: eine gefüllte Marke statt farbiger Schrift. */
+function bandCell(tier){
+  const label = bandLabel(tier);
+  return String(tier) === "error"
+    ? `<b class="tiermark">${esc(label)}</b>`
+    : esc(label);
+}
 function bandOf(leg){
   return (leg && leg.band) || {};
+}
+/* Der Server schreibt Begründungen und Fehlertexte in ASCII, weil dieselben
+   Sätze auch in Logs und in der Discord-Meldung stehen. Der Schirm ist der
+   einzige Ort, an dem "fuer" schlicht falsch geschrieben ist. Ersetzt werden
+   ganze Wörter aus einer kurzen Liste, umformuliert wird nichts: der Satz
+   bleibt der des Servers, nur die Schreibung wird die des Bildschirms.
+   Ein Wort, das hier fehlt, geht unverändert durch. */
+const GERMAN_WORDS = {
+  fuer:"für", hoechstens:"höchstens", heissen:"heißen", groesser:"größer",
+  naechsten:"nächsten", moeglich:"möglich", waehrung:"Währung",
+};
+function readableGerman(text){
+  return String(text || "").replace(/[A-Za-zÄÖÜäöüß]+/g,
+    w => GERMAN_WORDS[w] || w);
 }
 /* Worauf die Stufe steht. Geschaetzte und geprüfte Preise sind zwei getrennte
    Grundgesamtheiten, und fünf Vergleichspreise sind etwas anderes als zwanzig.
@@ -844,13 +943,24 @@ function bandBasis(band){
 /* Eine Baseline gibt es je Teilstrecke, nicht fuer die ganze Route. In der
    Zeile steht deshalb die Teilstrecke mit der groessten Abweichung: sie sagt
    am meisten. Worauf sie sich bezieht, steht im Titel. */
+/* Ein Fehltarif ohne Historie trägt keine Abweichung, weil es nichts gibt,
+   wovon er abweicht. Nach Abweichung sortiert wäre er von jeder gewöhnlichen
+   Teilstrecke verdrängt worden, die zufällig zehn Prozent daneben liegt.
+   Deshalb entscheidet zuerst die Stufe und erst dann die Abweichung. */
+const BAND_RANK = {error:0, cheap:1, expensive:1, normal:1};
+function bandRank(tier){
+  const rank = BAND_RANK[String(tier || "")];
+  return rank === undefined ? 2 : rank;
+}
 function rowBand(o){
   let best = null;
   ((o && o.legs) || []).forEach(leg => {
     const band = bandOf(leg);
     if (!band.tier || band.tier === "unknown") return;
     const off = Math.abs(Number(band.deviation_pct) || 0);
-    if (!best || off > best.off) best = {off, band, leg};
+    const rank = bandRank(band.tier);
+    const better = !best || rank < best.rank || (rank === best.rank && off > best.off);
+    if (better) best = {rank, off, band, leg};
   });
   if (!best) return {tier:"unknown", band:{}, leg:null};
   return {tier: best.band.tier, band: best.band, leg: best.leg};
@@ -864,7 +974,16 @@ function bandTitle(o){
     ? "" : ` gegenüber üblichen ${money(pick.band.median)} €`;
   const basis = bandBasis(pick.band);
   const head = off ? `${where}: ${off}${usual}` : `${where}: ${bandLabel(pick.tier)}`;
-  return basis ? `${head} (${basis})` : head;
+  return (basis ? `${head} (${basis})` : head) + bandWhy(pick.band);
+}
+/* Nur die vierte Stufe nennt ihren Grund. Bei "günstig" wäre er die
+   Wiederholung der Abweichung, die schon dasteht; bei einem Fehltarif steht
+   in ihm die Schranke, an der er gemessen wurde, und ohne die ist die Stufe
+   eine Behauptung. */
+function bandWhy(band){
+  const b = band || {};
+  if (String(b.tier) !== "error" || !b.reason) return "";
+  return `. Warum: ${readableGerman(b.reason)}`;
 }
 /* In der Detailzeile steht die Preislage je Leg, denn dort gilt sie. */
 function legBandNote(leg){
@@ -874,12 +993,12 @@ function legBandNote(leg){
   const head = off ? `Preislage: ${bandLabel(band.tier)}, ${off}`
                    : `Preislage: ${bandLabel(band.tier)}`;
   const basis = bandBasis(band);
-  return basis ? `${head} (${basis})` : head;
+  return (basis ? `${head} (${basis})` : head) + bandWhy(band);
 }
 function legBandMarkup(leg){
   const band = bandOf(leg);
   const tier = band.tier || "unknown";
-  return `<i class="band" data-signal="${esc(tier)}">${esc(legBandNote(leg))}</i>`;
+  return ` <i class="band" data-signal="${esc(tier)}">${esc(legBandNote(leg))}</i>`;
 }
 
 /* ---------------- Gesamtreise ---------------- */
@@ -933,7 +1052,10 @@ function staySummaryLine(o){
     return "Für mindestens einen Aufenthalt gibt es keinen Preis, deshalb bleibt"
       + " die Gesamtsumme offen.";
   }
-  return `Gesamt ab <b>${money(total)} €</b> für Flug und Übernachtung.`;
+  // Der reine Uebernachtungsanteil kommt vom Server mit, wurde aber nie gezeigt.
+  const stayOnly = (o.stay_total === null || o.stay_total === undefined)
+    ? "" : ` Davon <b>${money(o.stay_total)} €</b> Übernachtung.`;
+  return `Gesamt ab <b>${money(total)} €</b> für Flug und Übernachtung.${stayOnly}`;
 }
 
 /* ---------------- Zwischenstaende ---------------- */
@@ -1031,12 +1153,40 @@ function drawRuler(){
     r.append(s);
   }
 }
+/* Wer den Preis geliefert hat, ist nicht dasselbe wie wer fliegt. Ein Ryanair-Flug
+   aus dem Kiwi-Kalender ist ein anderer Beleg als einer vom Ryanair-Kalender. */
+function legSourceNote(leg){
+  const src = (leg && leg.source) || "";
+  if (!src) return "";
+  // Das Leerzeichen steht im Markup, nicht im Rand: auf schmalen Geraeten faellt
+  // der Rand weg und die Notizen klebten aneinander.
+  return ` <i class="src">Quelle ${esc(src)}</i>`;
+}
+/* Warum dieser Preis nicht live geprueft ist. Drei Faelle, nicht zwei: ein
+   Richtwert, ein blosser Tagesbestpreis aus dem Kalender, und dazwischen das
+   Angebot, das eine Quelle wirklich geliefert hat, nur ohne Flugzeiten. Das
+   dritte hat einen Buchungslink, und "kein konkreter Flug geprueft" wuerde
+   darueber hinwegreden. Erkennbar ist es genau daran: eine benannte Quelle
+   und ein Link auf ein Angebot. */
+function unverifiedNote(leg){
+  const l = leg || {};
+  if (l.indicative)
+    return "Richtwert eines Vergleichsportals, echter Flugpreis liegt meist darunter";
+  if (l.source && l.deep_link)
+    return "Angebot der Quelle mit Buchungslink, aber ohne Flugzeiten und nicht"
+      + " live nachgeprüft";
+  return "Tagesbestpreis, kein konkreter Flug geprüft";
+}
 function detailRows(o){
   const rows = o.legs.map(l => {
+    /* Der Link haengt am Angebot, nicht am Pruefstand. Er stand bisher nur im
+       geprueften Zweig, und damit fiel er ausgerechnet dort weg, wo er das
+       einzige ist, was weiterhilft: bei einem Tagesangebot ohne Flugzeiten. */
+    const link = l.deep_link
+      ? `<a href="${esc(l.deep_link)}" target="_blank" rel="noopener noreferrer">buchen</a>`
+      : `<span></span>`;
     if (!l.verified) {
-      const why = l.indicative
-        ? "Richtwert eines Vergleichsportals, echter Flugpreis liegt meist darunter"
-        : "Tagesbestpreis, kein konkreter Flug geprüft";
+      const why = unverifiedNote(l);
       const src = (l.carriers||[])[0];
       const bag = l.bag_fee
         ? ` Grundtarif ${money(l.base_price)} € + Gepäck ${money(l.bag_fee)} €.`
@@ -1047,13 +1197,10 @@ function detailRows(o){
         <span class="pair">${esc(l.origin)}-${esc(l.destination)}</span>
         <span class="when">${fmtDay(l.date)}</span>
         <span class="miss">${why}.${bag}${nativeNote?" "+esc(nativeNote)+".":""}
-          ${legBandMarkup(l)}</span>
-        <span class="fare">${money(l.price)} €</span><span></span></div>`;
+          ${legSourceNote(l)}${legBandMarkup(l)}</span>
+        <span class="fare">${money(l.price)} €</span>${link}</div>`;
     }
     const c = (l.carriers||[])[0] || "";
-    const link = l.deep_link
-      ? `<a href="${esc(l.deep_link)}" target="_blank" rel="noopener noreferrer">buchen</a>`
-      : `<span></span>`;
     // Some sources price a day without naming a flight; say that rather than
     // printing an empty time range.
     const arrival = arrivalLabel(l.date, l.arrival_date);
@@ -1072,7 +1219,7 @@ function detailRows(o){
       <span>${c?tailMark(c):""}</span>
       <span class="pair">${esc(l.origin)}-${esc(l.destination)}</span>
       <span class="when">${fmtDay(l.date)}</span>
-      <span class="times">${times}${bag}${native}${legBandMarkup(l)}</span>
+      <span class="times">${times}${bag}${native}${legSourceNote(l)}${legBandMarkup(l)}</span>
       <span class="fare">${money(l.price)} €</span>${link}</div>`;
   }).join("");
   let foot;
@@ -1089,8 +1236,11 @@ function detailRows(o){
   const overnight = (o.legs || []).some(l => arrivalLabel(l.date, l.arrival_date));
   const nightNote = overnight ? " Nächte zählen ab Abflugtag." : "";
   const stay = staySummaryLine(o);
+  /* Worauf sich die Preislage der Zeile stuetzt, stand bisher nur in einem
+     title-Attribut. Ein Telefon zeigt das nie. */
+  const band = `<p class="dsum">Preislage der Zeile: ${esc(bandTitle(o))}</p>`;
   return rows + stayRowsMarkup(o)
-    + `<p class="dsum">${foot}${nightNote}${stay ? " " + stay : ""}</p>`;
+    + `<p class="dsum">${foot}${nightNote}${stay ? " " + stay : ""}</p>` + band;
 }
 /* Re-ordering is a view concern: the same results, read a different way.
    Sorting locally avoids running the whole search again. */
@@ -1134,6 +1284,10 @@ function resultFilterSummary(visible, total){
   if (visible === total) return `${visible} Varianten sichtbar`;
   return `${visible} von ${total} Varianten sichtbar`;
 }
+/* Waehrend einer laufenden Suche wird die Tabelle staendig neu geschrieben.
+   Ein jedes Mal neu gebautes <select> wirft die Auswahl weg, auf der gerade
+   jemand steht. Also nur bauen, wenn sich die Liste wirklich geaendert hat. */
+let carrierOptions = "";
 function updateResultFilters(results){
   const sel = $("#resultCarrier");
   const current = sel.value;
@@ -1142,11 +1296,27 @@ function updateResultFilters(results){
     const bn = (AIRLINES.find(x=>x.code===b)||{}).name || b;
     return an.localeCompare(bn, "de");
   });
-  sel.innerHTML = `<option value="">Alle</option>` + codes.map(c => {
-    const a = AIRLINES.find(x=>x.code===c);
-    return `<option value="${esc(c)}">${esc(a ? a.name : c)}</option>`;
-  }).join("");
+  const signature = codes.join(",");
+  if (signature !== carrierOptions){
+    carrierOptions = signature;
+    sel.innerHTML = `<option value="">Alle</option>` + codes.map(c => {
+      const a = AIRLINES.find(x=>x.code===c);
+      return `<option value="${esc(c)}">${esc(a ? a.name : c)}</option>`;
+    }).join("");
+  }
   sel.value = codes.includes(current) ? current : "";
+}
+/* Ein Filter, der alles wegnimmt, braucht einen sichtbaren Weg zurueck. */
+function filtersActive(){
+  return Boolean($("#resultCarrier").value) || Boolean($("#resultQuality").value)
+      || $("#directOnly").checked === true;
+}
+function resetResultFilters(){
+  $("#resultCarrier").value = "";
+  $("#resultQuality").value = "";
+  $("#directOnly").checked = false;
+  saveForm();
+  if (lastResults.length) renderTable(lastResults);
 }
 function airlineSummary(results){
   const cheapest = new Map();
@@ -1177,6 +1347,11 @@ function resultSummaryLine(visible, total, cheapest){
 function routeBadge(o){
   return o.route ? `<span class="routepill">${esc(o.route)}</span>` : "";
 }
+/* Welche Zeilen aufgeklappt sind und welche schon einmal dastanden. Beides
+   haengt am Routen-Datums-Schluessel, nicht am Rang: waehrend des Nachpruefens
+   wird die Tabelle mehrmals pro Sekunde neu geschrieben, und dabei darf weder
+   ein geoeffnetes Detail zuklappen noch die ganze Liste neu aufblinken. */
+let openRows = new Set(), seenRows = new Set();
 function rowMarkup(o, n){
   const dots = o.dates.map((d, i) => {
     const l = o.legs[i] || {};
@@ -1189,62 +1364,110 @@ function rowMarkup(o, n){
     return `<i class="gap" style="left:${railLeft((pos(d) + pos(o.dates[i+1])) / 2)}">${nights}N</i>`;
   }).join("");
   const first = pos(o.dates[0]), last = pos(o.dates[o.dates.length - 1]);
-  return `<tr class="opt${n === 0 ? " best" : ""}" data-n="${n}" tabindex="0" role="button"
-      aria-expanded="false" aria-controls="det-${n}" style="animation-delay:${n * 18}ms">
-    <td class="c-rank">${esc(resultRankLabel(n))}</td>
-    <td class="c-price">${money(o.total)}<small>€</small></td>
+  const key = resultKey(o);
+  const open = openRows.has(key);
+  const fresh = seenRows.has(key) ? "" : " fresh";
+  const band = rowBand(o);
+  const status = statusLabel(o);
+  return `<tr class="opt${n === 0 ? " best" : ""}${open ? " open" : ""}${fresh}"
+      data-n="${n}" data-key="${esc(key)}" style="animation-delay:${n * 18}ms">
+    <td class="c-rank"><button type="button" class="rowtoggle" data-n="${n}"
+      aria-expanded="${open}" aria-controls="det-${n}"
+      >${esc(resultRankLabel(n))}</button></td>
+    <td class="c-price">${money(o.total)}<small>€</small
+      ><small class="rowstatus">${esc(status)}</small></td>
     <td class="c-price c-grand">${grandCell(o)}</td>
-    <td class="c-status">${esc(statusLabel(o))}</td>
-    <td class="c-status c-band" data-signal="${esc(rowBand(o).tier)}"
-      title="${esc(bandTitle(o))}">${esc(bandLabel(rowBand(o).tier))}</td>
+    <td class="c-status">${esc(status)}</td>
+    <td class="c-status c-band" data-signal="${esc(band.tier)}"
+      >${bandCell(band.tier)}</td>
     <td class="c-rail"><span class="rail"><i class="line"
       style="left:${railLeft(first)};width:${railWidth(last - first)}"></i>${dots}${gaps}</span></td>
-    <td class="c-num">${nightsOf(o)}</td>
-    <td class="c-num">${esc(stopsLabel(stopsOf(o)))}</td>
+    <td class="c-num c-nights">${nightsOf(o)}</td>
+    <td class="c-num c-stops">${esc(stopsLabel(stopsOf(o)))}</td>
     <td class="c-air">${routeBadge(o)}${carriersOf(o).map(tailMark).join("")}</td>
   </tr>
-  <tr class="detrow" id="det-${n}" data-n="${n}">
+  <tr class="detrow${open ? " open" : ""}" id="det-${n}" data-n="${n}">
     <td colspan="${RESULT_COLUMNS}"><div class="detgrid"><div class="detinner">${
       detailRows(o)}</div></div></td>
   </tr>`;
 }
 
+/* Die Tastatur bedient den Knopf in der Rangspalte, die Maus darf weiter die
+   ganze Zeile treffen. Der Knopf traegt den Zustand, damit beide Wege dieselbe
+   Wahrheit melden. */
 function wireRows(body){
   body.querySelectorAll("tr.opt").forEach(tr => {
     const det = body.querySelector(`#det-${tr.dataset.n}`);
+    const button = tr.querySelector(".rowtoggle");
     const toggle = () => {
       const open = tr.classList.toggle("open");
       if (det) det.classList.toggle("open", open);
-      tr.setAttribute("aria-expanded", String(open));
+      if (button) button.setAttribute("aria-expanded", String(open));
+      if (tr.dataset.key){
+        if (open) openRows.add(tr.dataset.key); else openRows.delete(tr.dataset.key);
+      }
     };
-    tr.onclick = e => { if (e.target.tagName !== "A") toggle(); };
-    tr.onkeydown = e => {
-      // Leertaste auf einem Link im Detail darf die Zeile nicht zuklappen.
-      if (e.target.tagName === "A") return;
-      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); }
+    if (button) button.onclick = e => { e.stopPropagation(); toggle(); };
+    tr.onclick = e => {
+      // Der Knopf hat schon umgeschaltet, ein Link fuehrt woanders hin.
+      if (e.target.tagName === "A" || e.target.closest(".rowtoggle")) return;
+      toggle();
     };
   });
 }
 
+/* Eine Live-Region, die bei jedem Zwischenstand denselben Satz noch einmal
+   bekommt, laesst einen Screenreader waehrend der Suche durchgehend reden. */
+function announceSummary(text){
+  const el = $("#outsummary");
+  if (el.textContent !== text) el.textContent = text;
+}
+/* Eine Suche ohne Treffer ist ein Ergebnis, kein Nichts. Frueher verschwand
+   der ganze Bereich und uebrig blieb die letzte Zeile im Verlauf. */
+function renderNoResults(message){
+  lastResults = [];
+  openRows = new Set(); seenRows = new Set();
+  $("#rows").innerHTML = `<tr class="empty"><td colspan="${RESULT_COLUMNS}">${
+    esc(message)}</td></tr>`;
+  $("#usedby").textContent = "";
+  $("#ruler").innerHTML = "";
+  $("#resetfilters").hidden = true;
+  $("#outtitle").textContent = "Keine Treffer";
+  announceSummary(message);
+  $("#out").classList.add("on");
+}
 /* Dieselben Ergebnisse, anders gelesen: Sortieren und Filtern bleiben lokal. */
 function renderTable(results){
   lastResults = results;
   const body = $("#rows");
   body.innerHTML = "";
   $("#usedby").textContent = "";
-  $("#filtercount").textContent = "";
-  $("#outsummary").textContent = "";
-  if (!results.length){ $("#out").classList.remove("on"); return; }
+  announceSummary("");
+  if (!results.length){
+    $("#out").classList.remove("on");
+    openRows = new Set(); seenRows = new Set();
+    return;
+  }
   updateResultFilters(results);
   const found = results.length;
   const visible = filterResults(results);
-  $("#filtercount").textContent = resultFilterSummary(visible.length, found);
+  $("#resetfilters").hidden = !filtersActive();
+  // Die Spalte "Mit Hotel" gibt es nur, wenn wirklich Uebernachtungen gerechnet
+  // wurden. Sonst belegt sie 136 px und bleibt in jeder Zeile leer.
+  const grand = results.some(hasStayCosts);
+  $("#resulttable").classList.toggle("withgrand", grand);
+  const sortGrand = $("#sort").querySelector('option[value="grand"]');
+  if (sortGrand){
+    sortGrand.disabled = !grand;
+    if (!grand && $("#sort").value === "grand") $("#sort").value = "price";
+  }
   if (!visible.length){
     $("#outtitle").textContent = "Keine passenden Kandidaten";
-    $("#outsummary").textContent = resultSummaryLine(0, found, 0);
+    announceSummary(resultSummaryLine(0, found, 0));
     $("#ruler").innerHTML = "";
     body.innerHTML = `<tr class="empty"><td colspan="${RESULT_COLUMNS}">`
-      + `Die Suche hat Ergebnisse, aber keiner passt zu den aktuellen Filtern.</td></tr>`;
+      + `Die Suche hat ${found === 1 ? "ein Ergebnis" : `${found} Ergebnisse`}, `
+      + `aber davon passt keines zu den aktuellen Filtern.</td></tr>`;
     $("#out").classList.add("on");
     return;
   }
@@ -1254,9 +1477,10 @@ function renderTable(results){
   axis = {start:new Date(Math.min(...all)), end:new Date(Math.max(...all))};
   drawRuler();
   $("#outtitle").textContent = resultTitle(rows);
-  $("#outsummary").textContent =
-    resultSummaryLine(rows.length, found, Math.min(...rows.map(o => o.total)));
+  announceSummary(
+    resultSummaryLine(rows.length, found, Math.min(...rows.map(o => o.total))));
   body.innerHTML = rows.map(rowMarkup).join("");
+  rows.forEach(o => seenRows.add(resultKey(o)));
   wireRows(body);
   $("#out").classList.add("on");
 }
@@ -1331,14 +1555,46 @@ function progressValue(p){
 function setProgress(p){
   const phase = progressPhase(p && p.phase);
   const value = progressValue(Object.assign({}, p, {phase}));
-  const bar = $("#progressbar");
-  bar.className = "progressbar" + (phase === "failed" ? " failed" : "");
-  bar.setAttribute("aria-valuenow", value);
-  $("#progressfill").style.width = `${value}%`;
-  $("#progresslabel").textContent = PROGRESS_LABELS[phase] || PROGRESS_LABELS.planning;
   const total = Number(p && p.total) || 0;
   const done = Number(p && p.done) || 0;
+  const terminal = phase === "done" || phase === "failed" || phase === "cancelled";
+  // Solange die Gesamtzahl fehlt, ist jeder Prozentwert geraten. Dann sagt ein
+  // wanderndes Stueck die Wahrheit: es laeuft, wie weit weiss noch niemand.
+  const pending = !terminal && total <= 0;
+  const bar = $("#progressbar");
+  bar.className = "progressbar" + (phase === "failed" ? " failed" : "")
+                + (pending ? " pending" : "");
+  bar.setAttribute("aria-valuenow", value);
+  if (pending) bar.setAttribute("aria-valuetext", "Läuft, Umfang noch offen");
+  else bar.setAttribute("aria-valuetext", `${value} Prozent`);
+  $("#progressfill").style.width = pending ? "" : `${value}%`;
+  $("#progresslabel").textContent = PROGRESS_LABELS[phase] || PROGRESS_LABELS.planning;
   $("#progresscount").textContent = total > 0 ? `${done} / ${total}` : "";
+}
+/* Der Lauf meldet Teilausfaelle mit: erschoepfte Budgets, geblockte Quellen,
+   uebersprungene Tage. Bisher landeten die im Nichts, und das Ergebnis war
+   einfach duenner, ohne dass jemand den Grund erfuhr. */
+let runNotes = [];
+function resetRunNotes(){
+  runNotes = [];
+  $("#runnotes").textContent = "";
+  $("#runnotes").dataset.tone = "";
+}
+function addRunNotes(list, head){
+  const items = (Array.isArray(list) ? list : []).map(v => String(v)).filter(Boolean);
+  if (!items.length) return runNotes;
+  items.forEach(item => {
+    const line = head ? `${head}: ${item}` : item;
+    if (!runNotes.includes(line)) runNotes.push(line);
+  });
+  $("#runnotes").dataset.tone = "warn";
+  $("#runnotes").textContent = runNotes.join("\n");
+  return runNotes;
+}
+function skippedNote(count){
+  const n = Number(count) || 0;
+  if (n <= 0) return "";
+  return n === 1 ? "1 Abruf wurde übersprungen." : `${n} Abrufe wurden übersprungen.`;
 }
 function setSearching(on){
   const button = $("#go");
@@ -1372,13 +1628,14 @@ $("#f").onsubmit = async e => {
   if (es){ es.close(); es=null; }
   // checkWindow schreibt die Meldung selbst, hier reicht der Abbruch.
   if (!checkWindow()) return;
-  if (hops.some(h=>!h.code)){
+  if (active().some(h=>!h.code)){
     $("#log").classList.add("on"); $("#note").dataset.tone="err";
     setProgress({phase:"failed"});
     $("#note").textContent="Bitte alle Flughäfen aus der Vorschlagsliste wählen."; return;
   }
   setSearching(true); $("#out").classList.remove("on");
   $("#rows").innerHTML=""; $("#legs").innerHTML="";
+  openRows = new Set(); seenRows = new Set(); resetRunNotes();
   $("#log").classList.add("on"); $("#note").dataset.tone="";
   $("#note").textContent="Suche startet"; drawSteps("planning"); setProgress({phase:"planning"});
 
@@ -1408,6 +1665,9 @@ $("#f").onsubmit = async e => {
     }
     if (p.phase==="stays"){
       applyStays((p.detail&&p.detail.results)||[]);
+      // Ohne das blieb der Balken auf dem Stand vor dem Hotelschritt stehen.
+      setProgress(p);
+      addRunNotes((p.detail&&p.detail.notes)||[], "Hotelkosten");
       $("#note").dataset.tone = ""; $("#note").textContent = p.message;
       return;
     }
@@ -1417,8 +1677,17 @@ $("#f").onsubmit = async e => {
     $("#note").textContent = p.message;
     $("#note").dataset.tone = p.phase === "failed" ? "err" : "";
     if (p.detail && p.detail.legs) paintLegMeters(p.detail.legs);
-    if (p.phase==="done"){ renderTable((p.detail&&p.detail.results)||[]); focusResults();
-                           es.close(); es=null; setSearching(false); currentJob=null; }
+    // Quellen, die nicht geantwortet haben, stehen im Ereignis. Der Nutzer sah
+    // davon bisher nur das Ergebnis: weniger Preise, ohne Begruendung.
+    if (p.detail && p.detail.errors) addRunNotes(p.detail.errors, "Preisabruf");
+    if (p.phase==="done"){
+      const results = (p.detail&&p.detail.results)||[];
+      if (results.length) renderTable(results);
+      else renderNoResults("Für dieses Fenster hat keine Quelle eine vollständige "
+        + "Reise gefunden. Ein größeres Fenster oder ein anderer Aufenthalt hilft meist.");
+      focusResults();
+      es.close(); es=null; setSearching(false); currentJob=null;
+    }
     if (p.phase==="failed"||p.phase==="cancelled"){ es.close(); es=null;
                            setSearching(false); currentJob=null; }
   };
@@ -1442,6 +1711,7 @@ function saveForm(){
       checked_bags: Number($("#checkedBags").value || 0),
       max_stops: $("#maxStops").value,
       sort: $("#sort").value,
+      direct_only: $("#directOnly").checked === true,
       with_hotels: $("#withHotels").checked === true,
       hotel_adults: $("#hotelAdults").value,
       hotel_rooms: $("#hotelRooms").value,
@@ -1470,11 +1740,21 @@ function loadForm(){
   if (saved.checked_bags !== undefined) $("#checkedBags").value = String(saved.checked_bags);
   if (saved.max_stops !== undefined) $("#maxStops").value = String(saved.max_stops);
   if (saved.sort) $("#sort").value = saved.sort;
+  $("#directOnly").checked = saved.direct_only === true;
   $("#withHotels").checked = saved.with_hotels === true;
   if (saved.hotel_adults) $("#hotelAdults").value = String(saved.hotel_adults);
   if (saved.hotel_rooms) $("#hotelRooms").value = String(saved.hotel_rooms);
   setStayOptionsEnabled($("#withHotels").checked);
+  // Eine wiederhergestellte Einstellung, die in einem zugeklappten Bereich
+  // liegt, wirkt auf jede Suche und ist trotzdem nicht zu sehen.
+  if (optionsChanged()) $("#optionsdetails").open = true;
   return true;
+}
+/* Weicht in den Optionen etwas von der Vorgabe ab? */
+function optionsChanged(){
+  return Number($("#checkedBags").value || 0) > 0
+      || $("#maxStops").value !== ""
+      || $("#withHotels").checked === true;
 }
 
 /* ---------------- Deals ---------------- */
@@ -1495,11 +1775,14 @@ function deviationLabel(pct){
   return `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")} %`;
 }
 
+/* Dieselbe Aussage traegt ueberall denselben Namen. "keine Baseline" in den
+   Scans und "keine Basis" in der Ergebnistabelle waren zwei Woerter fuer
+   denselben Zustand. Seit der vierten Stufe gibt es dafuer nur noch eine
+   Liste: zwei Tabellen auf einer Seite duerfen sie nicht getrennt pflegen.
+   Der Kettenpreis der Scans erreicht `error` heute nicht, aber wenn er es
+   je tut, heisst er hier nicht ploetzlich "keine Basis". */
 function signalLabel(status){
-  if (status === "cheap") return "günstig";
-  if (status === "expensive") return "teuer";
-  if (status === "normal") return "normal";
-  return "keine Baseline";
+  return bandLabel(status);
 }
 
 function scanTime(iso){
@@ -1510,12 +1793,28 @@ function scanTime(iso){
     {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"});
 }
 
+/* Ein Scan ohne die Reisedaten sagt nicht, worauf sich der Preis bezieht: zwei
+   Zeilen desselben Profils sehen dann gleich aus und meinen andere Tage. */
+function dealDates(row){
+  const dates = (row && row.dates) || [];
+  if (!dates.length) return "";
+  const first = dates[0], last = dates[dates.length - 1];
+  return first === last ? fmtDay(first) : `${fmtDay(first)} bis ${fmtDay(last)}`;
+}
+function dealPriceNote(row){
+  const usual = (row && row.median !== null && row.median !== undefined)
+    ? ` üblich ${money(row.median)} €` : "";
+  return `${row && row.verified ? "geprüft" : "Schätzung"}${usual}`;
+}
 function dealRowMarkup(row){
-  return `<tr class="opt" data-job="${esc(row.job_id)}" tabindex="0" role="button">
-    <td>${esc(row.profile || "")}</td>
-    <td class="mono">${esc(row.route || "")}</td>
-    <td class="mono">${esc(scanTime(row.scanned_at))}</td>
-    <td class="c-price">${money(row.price)}<small>€</small></td>
+  return `<tr class="opt" data-job="${esc(row.job_id)}">
+    <td><button type="button" class="dealopen" data-job="${esc(row.job_id)}"
+      >${esc(row.profile || "Ohne Namen")}</button></td>
+    <td class="mono c-route">${esc(row.route || "")}</td>
+    <td class="c-dates">${esc(dealDates(row))}</td>
+    <td class="mono c-scan">${esc(scanTime(row.scanned_at))}</td>
+    <td class="c-price">${money(row.price)}<small>€</small
+      ><small class="pricenote">${esc(dealPriceNote(row))}</small></td>
     <td class="c-num">${esc(deviationLabel(row.deviation_pct))}</td>
     <td class="c-status" data-signal="${esc(row.signal || "unknown")}">${
       esc(signalLabel(row.signal))}</td>
@@ -1528,11 +1827,14 @@ function renderDeals(rows){
   $("#dealssummary").textContent = dealsSummary(list);
   const body = $("#dealsrows");
   body.innerHTML = list.map(dealRowMarkup).join("");
+  // Der Knopf in der Profilspalte ist der Bedienweg, die Zeile die Trefferflaeche.
+  body.querySelectorAll(".dealopen").forEach(button => {
+    button.onclick = e => { e.stopPropagation(); openDeal(Number(button.dataset.job)); };
+  });
   body.querySelectorAll("tr.opt").forEach(tr => {
-    const job = Number(tr.dataset.job);
-    tr.onclick = () => openDeal(job);
-    tr.onkeydown = e => {
-      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openDeal(job); }
+    tr.onclick = e => {
+      if (e.target.closest(".dealopen")) return;
+      openDeal(Number(tr.dataset.job));
     };
   });
   return list;
@@ -1543,12 +1845,24 @@ function renderDeals(rows){
    Einladung, sie unterschiedlich zu lesen. */
 async function openDeal(jobId){
   try {
-    const d = await (await fetch(`/api/jobs/${jobId}`)).json();
-    renderTable(d.results || []);
+    // Ohne diese Pruefung wurde aus einem 404 ein stilles renderTable([]):
+    // die Tabelle verschwand und niemand sagte, warum.
+    const r = await fetch(`/api/jobs/${jobId}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(detail(d.detail) || `HTTP ${r.status}`);
+    const results = d.results || [];
+    openRows = new Set(); seenRows = new Set();
+    if (!results.length){
+      renderNoResults("Für diesen Scan sind keine Ergebnisse mehr gespeichert.");
+    } else {
+      renderTable(results);
+    }
+    $("#dealssummary").dataset.tone = "";
     focusResults();
-  } catch {
+  } catch (err) {
     $("#dealssummary").dataset.tone = "err";
-    $("#dealssummary").textContent = "Der Scan konnte nicht geladen werden.";
+    $("#dealssummary").textContent =
+      `Der Scan konnte nicht geladen werden: ${err.message || err}`;
   }
 }
 
@@ -1562,6 +1876,820 @@ async function loadDeals(){
   }
 }
 
+/* ---------------- Beobachtungsliste ---------------- */
+const WATCH_COLUMNS = 8;
+const WATCH_MIN_DAYS = 5;
+/* Rueckfall, falls die Zusammenfassung die Zahl nicht mitschickt. Die
+   verbindliche Zahl steht im Server, nicht hier. */
+const WATCH_MAX_HOT = 5;
+let lastWatchSummary = null;
+
+/* Ohne Eintrag zeichnet niemand etwas auf, und die leere Tabelle sieht dann
+   aus wie eine Aufzeichnung ohne Treffer. Der Text sagt deshalb, was ein
+   Eintrag bewirkt und ab wann er etwas wert ist. */
+function watchlistSummary(body){
+  const rows = (body && body.routes) || [];
+  const sum = (body && body.summary) || {};
+  const need = Number(sum.min_days || WATCH_MIN_DAYS);
+  if (!rows.length){
+    return `Noch wird nichts aufgezeichnet. Trage eine Strecke ein: ab dann `
+      + `wird ihr Preiskalender täglich mitgeschrieben, und nach etwa ${need} `
+      + `Tagen trägt die erste Aussage zur Preislage.`;
+  }
+  const active = Number(sum.active || 0);
+  const head = rows.length === 1 ? "1 Strecke" : `${rows.length} Strecken`;
+  const state = active === rows.length
+    ? (rows.length === 1 ? "aktiv" : "alle aktiv")
+    : `${active} aktiv`;
+  const obs = Number(sum.observations || 0).toLocaleString("de-DE");
+  const last = sum.last_run_at ? ` Zuletzt ${scanTime(sum.last_run_at)}.` : "";
+  return `${head}, ${state}. ${obs} Beobachtungen gesammelt.${last}`;
+}
+
+/* Die Frage der Spalte ist nicht "wie viel", sondern "ab wann traegt das".
+   Beobachtungen zaehlen Reisetage, Aufzeichnungstage zaehlen Messpunkte je
+   Kombination aus Strecke, Wochentag und Vorlauf. Nur die zweite Zahl
+   entscheidet, wann eine Baseline steht. */
+function watchReadiness(row){
+  const days = Number((row && row.days_recorded) || 0);
+  const need = Number((row && row.min_days) || WATCH_MIN_DAYS);
+  if (!days) return "noch nichts aufgezeichnet";
+  if (days < need) return `noch ${need - days} von ${need} Tagen`;
+  return `trägt, ${days} Tage aufgezeichnet`;
+}
+
+function watchLeadLabel(row){
+  const lo = Number((row && row.lead_min_days) || 0);
+  const hi = Number((row && row.lead_max_days) || 0);
+  return `${lo} bis ${hi} Tage`;
+}
+
+function watchPayload(){
+  return {
+    origin: String($("#watchFrom").value || "").trim(),
+    destination: String($("#watchTo").value || "").trim(),
+    lead_min_days: Number($("#watchLeadMin").value || 0),
+    lead_max_days: Number($("#watchLeadMax").value || 0),
+  };
+}
+
+/* Zwei Taktarten, zwei Woerter. "heiß" ist dasselbe Wort, das der Server
+   benutzt und mit dem die Jagd beschrieben ist. */
+const CADENCE_LABELS = {daily:"täglich", hot:"heiß"};
+function cadenceLabel(row){
+  return CADENCE_LABELS[String((row || {}).cadence || "daily")] || "täglich";
+}
+/* Die Obergrenze ist keine Sperre, sondern ein Budget: der Server lehnt eine
+   sechste heiße Strecke nicht ab, sie kommt nur seltener dran. Genau das muss
+   dastehen. Eine erfundene Fehlermeldung waere die eine Auskunft, die schlimmer
+   ist als gar keine, weil sie stimmen koennte und es nicht tut. */
+function hotBudgetLine(summary){
+  const s = summary || {};
+  const max = Number(s.max_hot_routes || WATCH_MAX_HOT);
+  const hot = Number(s.hot || 0);
+  const every = Math.max(1, Math.round(Number(s.hot_interval_seconds || 1200) / 60));
+  if (hot > max){
+    return `${hot} Strecken heiß, getragen sind ${max}. Keine wird abgelehnt,`
+      + ` alle teilen sich dasselbe Budget und kommen damit seltener dran als`
+      + ` alle ${every} Minuten.`;
+  }
+  const head = `${hot} von ${max} Strecken heiß, alle ${every} Minuten abgefragt.`;
+  return hot >= max
+    ? `${head} Eine weitere wäre nicht abgelehnt, sondern langsamer: das Budget`
+      + ` bleibt gleich groß.`
+    : head;
+}
+function watchCadenceCell(row){
+  const hot = String((row || {}).cadence || "daily") === "hot";
+  return `<td class="c-cadence" data-cadence="${hot ? "hot" : "daily"}"
+    ><span class="cadencenow">${esc(cadenceLabel(row))}</span
+    ><button type="button" class="cadenceswitch" data-route="${esc(row.id)}"
+      data-cadence="${hot ? "daily" : "hot"}">${
+      hot ? "auf täglich" : "heiß schalten"}</button></td>`;
+}
+
+function watchRowMarkup(row){
+  const on = row.enabled !== false;
+  return `<tr data-route="${esc(row.id)}"${on ? "" : ' class="off"'}>
+    <td class="mono c-route">${esc(row.route || "")}</td>
+    <td class="c-lead">${esc(watchLeadLabel(row))}</td>
+    <td class="mono c-scan">${esc(row.last_run_at ? scanTime(row.last_run_at) : "noch nie")}</td>
+    <td class="c-num c-count">${Number(row.observations || 0).toLocaleString("de-DE")}</td>
+    <td class="c-num c-days">${Number(row.days_recorded || 0)}</td>
+    <td class="c-status" data-signal="${row.ready ? "normal" : "unknown"}">${
+      esc(watchReadiness(row))}</td>
+    ${watchCadenceCell(row)}
+    <td><button type="button" class="watchtoggle" data-route="${esc(row.id)}"
+      data-enabled="${on ? "1" : "0"}">${on ? "Abschalten" : "Einschalten"}</button>${
+      on ? "" : ' <small class="pricenote">aus</small>'
+      }<button type="button" class="watchcurve" data-origin="${esc(row.origin || "")}"
+      data-destination="${esc(row.destination || "")}">Verlauf</button></td>
+  </tr>`;
+}
+
+function renderWatchlist(body){
+  const rows = (body && body.routes) || [];
+  lastWatchSummary = (body && body.summary) || {};
+  $("#watchsummary").dataset.tone = "";
+  $("#watchsummary").textContent = watchlistSummary(body);
+  $("#watchhot").dataset.tone = "";
+  $("#watchhot").textContent = hotBudgetLine(lastWatchSummary);
+  const table = $("#watchrows");
+  table.innerHTML = rows.length
+    ? rows.map(watchRowMarkup).join("")
+    : `<tr class="empty"><td colspan="${WATCH_COLUMNS}">Keine Strecke wird `
+      + `beobachtet. Das Formular darüber trägt die erste ein.</td></tr>`;
+  table.querySelectorAll(".watchtoggle").forEach(button => {
+    button.onclick = () => toggleWatchRoute(
+      Number(button.dataset.route), button.dataset.enabled !== "1"
+    );
+  });
+  table.querySelectorAll(".cadenceswitch").forEach(button => {
+    button.onclick = () => setWatchCadence(
+      Number(button.dataset.route), button.dataset.cadence);
+  });
+  table.querySelectorAll(".watchcurve").forEach(button => {
+    button.onclick = () => loadHistory(
+      button.dataset.origin, button.dataset.destination);
+  });
+  return rows;
+}
+
+async function loadWatchlist(){
+  try {
+    const d = await (await fetch("/api/watchlist")).json();
+    renderWatchlist(d);
+  } catch {
+    $("#watchsummary").dataset.tone = "err";
+    $("#watchsummary").textContent = "Die Beobachtungsliste ist gerade nicht abrufbar.";
+  }
+}
+
+async function addWatchRoute(){
+  const msg = $("#watchmsg");
+  msg.dataset.tone = "";
+  msg.textContent = "Trage Strecke ein";
+  try {
+    const r = await fetch("/api/watchlist", {method:"POST",
+      headers:{"content-type":"application/json"}, body:JSON.stringify(watchPayload())});
+    const d = await r.json();
+    if (!r.ok) throw new Error(detail(d.detail) || "Strecke konnte nicht eingetragen werden");
+    msg.dataset.tone = "ok";
+    msg.textContent = `${d.route} wird beobachtet`;
+    $("#watchFrom").value = ""; $("#watchTo").value = "";
+    await loadWatchlist();
+  } catch (err) {
+    msg.dataset.tone = "err";
+    msg.textContent = err.message || "Strecke konnte nicht eingetragen werden";
+  }
+}
+
+async function toggleWatchRoute(id, enabled){
+  const msg = $("#watchmsg");
+  msg.dataset.tone = "";
+  msg.textContent = enabled ? "Schalte ein" : "Schalte ab";
+  try {
+    const r = await fetch(`/api/watchlist/${id}`, {method:"PATCH",
+      headers:{"content-type":"application/json"}, body:JSON.stringify({enabled})});
+    const d = await r.json();
+    if (!r.ok) throw new Error(detail(d.detail) || "Schalter blieb wirkungslos");
+    msg.dataset.tone = "ok";
+    /* Abgeschaltet heisst nicht geloescht: die Zeile und ihre Historie bleiben,
+       nur wird nichts mehr dazugeschrieben. */
+    msg.textContent = d.enabled
+      ? `${d.route} wird wieder aufgezeichnet`
+      : `${d.route} pausiert, die Historie bleibt`;
+    await loadWatchlist();
+  } catch (err) {
+    msg.dataset.tone = "err";
+    msg.textContent = err.message || "Schalter blieb wirkungslos";
+  }
+}
+
+/* Nach dem Schalten steht die frische Zahl da, nicht die geratene: erst die
+   Liste neu holen, dann den Satz bilden. */
+function cadenceSwitchLabel(route, summary){
+  const r = route || {};
+  if (!r.hot) return `${r.route} läuft wieder im Tagestakt`;
+  const s = summary || {};
+  const max = Number(s.max_hot_routes || WATCH_MAX_HOT);
+  const hot = Number(s.hot || 0);
+  return hot > max
+    ? `${r.route} ist heiß. Das sind ${hot} heiße Strecken bei einem Budget für`
+      + ` ${max}: abgelehnt wird keine, jede kommt seltener dran.`
+    : `${r.route} ist heiß, ${hot} von ${max}`;
+}
+
+async function setWatchCadence(id, cadence){
+  const msg = $("#watchmsg");
+  msg.dataset.tone = "";
+  msg.textContent = cadence === "hot" ? "Schalte heiß" : "Schalte auf täglich";
+  try {
+    const r = await fetch(`/api/watchlist/${id}`, {method:"PATCH",
+      headers:{"content-type":"application/json"}, body:JSON.stringify({cadence})});
+    const d = await r.json();
+    if (!r.ok) throw new Error(readableGerman(detail(d.detail))
+      || "Der Takt blieb, wie er war");
+    await loadWatchlist();
+    msg.dataset.tone = "ok";
+    msg.textContent = cadenceSwitchLabel(d, lastWatchSummary);
+    await loadHuntHealth();
+  } catch (err) {
+    msg.dataset.tone = "err";
+    msg.textContent = err.message || "Der Takt blieb, wie er war";
+  }
+}
+
+/* Was der Lauf gebracht hat, in einem Satz. Der Rest, der faellig blieb,
+   gehoert dazu: sonst sieht ein halber Durchgang aus wie ein ganzer. */
+function watchRunLabel(report){
+  const routes = Number((report && report.routes) || 0);
+  if (!routes) return "Heute ist schon alles aufgezeichnet.";
+  const noun = routes === 1 ? "Strecke" : "Strecken";
+  const obs = Number((report && report.observations) || 0).toLocaleString("de-DE");
+  const left = Number((report && report.due_left) || 0);
+  const rest = left ? `, ${left} bleiben fällig` : "";
+  return `${routes} ${noun} abgefragt, ${obs} Beobachtungen${rest}`;
+}
+
+async function runWatchlistNow(){
+  const msg = $("#watchmsg");
+  msg.dataset.tone = "";
+  msg.textContent = "Zeichne auf";
+  try {
+    const d = await (await fetch("/api/watchlist/run-once",{method:"POST"})).json();
+    msg.dataset.tone = Number(d.routes || 0) ? "ok" : "";
+    msg.textContent = watchRunLabel(d);
+    await loadWatchlist();
+  } catch {
+    msg.dataset.tone = "err";
+    msg.textContent = "Die Aufzeichnung konnte nicht gestartet werden.";
+  }
+}
+
+/* ---------------- Fehltarif-Jagd ---------------- */
+/* Was die Jagd gefunden hat, wie belastbar es ist, ob es hinausging und wo
+   man bucht. Die Reihenfolge der Fragen ist die Reihenfolge der Spalten. */
+const HUNT_COLUMNS = 5;
+
+/* Der Weg einer Meldung, in den vier Worten, die dazu gehoeren. `dry_run`
+   heisst nicht "Fehler" und nicht "erledigt": erkannt und aufgeschrieben,
+   aber nicht gesendet, weil kein Kanal eingerichtet ist. */
+const DELIVERY_LABELS = {
+  sent: "gemeldet",
+  dry_run: "erkannt, nicht gesendet",
+  suppressed: "zurückgehalten",
+  failed: "Meldung fehlgeschlagen",
+};
+function deliveryLabel(find){
+  // "offen" waere hier das falsche Wort: es heisst in dieser Ansicht schon
+  // "noch nicht abgehakt".
+  return DELIVERY_LABELS[String((find || {}).delivery || "")] || "unbekannt";
+}
+/* Warum eine Meldung nicht hinausging, steht am Fund und nicht im Log. Ohne
+   das sieht eine zurueckgehaltene Doppelmeldung aus wie ein Ausfall. */
+function deliveryNote(find){
+  const f = find || {};
+  if (f.delivery === "sent") return "";
+  if (f.error) return String(f.error);
+  if (f.delivery === "dry_run") return "Kein Kanal eingerichtet.";
+  return "";
+}
+
+/* Worauf ein Fund steht. Drei Stufen, weil es drei wirklich verschiedene
+   Lagen gibt: eine Historie, die traegt; eine, die noch zu duenn ist; und
+   gar keine, wo allein die Entfernungsschranke urteilt. Die dritte ist die
+   schwaechste Aussage, die dieses Werkzeug macht, und sie muss auch so
+   aussehen. */
+const STRENGTH_STEPS = {floor:1, thin:2, solid:3};
+function findStrength(find){
+  const f = find || {};
+  const n = Number(f.n) || 0;
+  if (n <= 0) return "floor";
+  return (f.thin || n < 10) ? "thin" : "solid";
+}
+function strengthMark(find){
+  const level = findStrength(find);
+  const filled = STRENGTH_STEPS[level];
+  const pips = [1, 2, 3].map(i => `<i${i <= filled ? ' class="on"' : ""}></i>`).join("");
+  // Die Marke sagt nichts, was der Satz daneben nicht sagt: sie ist der Blick,
+  // er ist die Aussage. Deshalb wird sie nicht vorgelesen.
+  return `<span class="strength" data-strength="${esc(level)}" aria-hidden="true"
+    >${pips}</span>`;
+}
+/* Derselbe Satzbau wie die Preislage in der Ergebnistabelle, weil es
+   dieselbe Frage ist. `bandBasis` nimmt genau die Felder, die ein Fund
+   ohnehin traegt. */
+function findBasisLine(find){
+  const f = find || {};
+  const basis = bandBasis(f);
+  if (!basis) return "Keine Vergleichspreise. Diesen Fund trägt allein die"
+    + " Entfernungsschranke.";
+  const usual = (f.median === null || f.median === undefined)
+    ? "Kein Median" : `Üblich ${money(f.median)} €`;
+  return `${usual} ${basis}.`;
+}
+function findReason(find){
+  return readableGerman((find || {}).reason);
+}
+/* Ein Fehltarif hält selten lange. "09.09., 19:02" beantwortet die Frage
+   "ist das noch aktuell" nicht, das Alter beantwortet sie. Nachgeprüft wird
+   nichts: was hier steht, ist das Alter des Fundes und nicht die Aussage,
+   dass der Preis noch steht. Genau so steht es auch in der Legende. */
+function findAge(iso, now){
+  const then = new Date(String(iso || "")).getTime();
+  if (!Number.isFinite(then)) return "";
+  const mins = Math.max(0, Math.round(
+    ((now ? now.getTime() : Date.now()) - then) / 60000));
+  if (mins < 1) return "gerade eben";
+  if (mins < 60) return `vor ${mins} ${mins === 1 ? "Minute" : "Minuten"}`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `vor ${hours} ${hours === 1 ? "Stunde" : "Stunden"}`;
+  const days = Math.floor(hours / 24);
+  return `vor ${days} ${days === 1 ? "Tag" : "Tagen"}`;
+}
+/* Ab wann ein Fund alt aussieht. Die Schwelle ist nicht erfunden: es ist die
+   Ruhezeit, nach der die Jagd denselben Fund erneut melden würde. Wer so
+   lange nicht hingesehen hat, sieht wahrscheinlich einen Preis, den es nicht
+   mehr gibt. */
+function findIsStale(find, quietHours, now){
+  const then = new Date(String((find || {}).created_at || "")).getTime();
+  if (!Number.isFinite(then)) return false;
+  const limit = Number(quietHours) > 0 ? Number(quietHours) : 6;
+  return ((now ? now.getTime() : Date.now()) - then) > limit * 3600000;
+}
+function findDistance(find){
+  const km = Number((find || {}).distance_km);
+  return Number.isFinite(km) && km > 0
+    ? `${Math.round(km).toLocaleString("de-DE")} km` : "";
+}
+
+/* Ohne Webhook laeuft alles trocken. Das ist weder ein Fehler noch ein
+   Erfolg, sondern der vorgesehene erste Betriebszustand, und genau so muss
+   die Zeile klingen. Deshalb traegt sie nie einen Ton. */
+function channelLine(summary){
+  const s = summary || {};
+  if (s.channel_configured) return "Discord-Kanal eingerichtet. Ein Fund geht als"
+    + " Meldung hinaus.";
+  return "Kein Discord-Kanal eingerichtet. Funde werden erkannt und aufgezeichnet,"
+    + " aber nicht gesendet.";
+}
+
+function findsWord(n){
+  return n === 1 ? "1 Fund" : `${Number(n || 0).toLocaleString("de-DE")} Funde`;
+}
+function huntSummary(body){
+  const s = (body && body.summary) || {};
+  const events = Number(s.events || 0);
+  if (!events) return "Noch kein Fehltarif gefunden. Die Jagd läuft auf den"
+    + " Strecken, die in der Beobachtungsliste heiß geschaltet sind.";
+  const open = Number(s.open || 0);
+  const offen = open ? `${open} noch offen` : "alle abgehakt";
+  const last = s.last_find_at ? ` Zuletzt ${scanTime(s.last_find_at)}.` : "";
+  const sent = Number(s.sent || 0);
+  const dry = Number(s.dry_run || 0);
+  const failed = Number(s.failed || 0);
+  const parts = [];
+  if (sent) parts.push(`${sent} gemeldet`);
+  if (dry) parts.push(`${dry} nur erkannt`);
+  if (failed) parts.push(`${failed} fehlgeschlagen`);
+  const ways = parts.length ? ` Davon ${parts.join(", ")}.` : "";
+  return `${findsWord(events)}, ${offen}.${last}${ways}`;
+}
+
+function findRowMarkup(row, quietHours){
+  const f = row || {};
+  const open = !f.acknowledged_at;
+  const book = f.booking_url
+    ? `<a class="findbook" href="${esc(f.booking_url)}" target="_blank"
+        rel="noopener noreferrer">buchen</a>`
+    : `<span class="pricenote">kein Link</span>`;
+  const note = deliveryNote(f);
+  const km = findDistance(f);
+  const stale = findIsStale(f, quietHours);
+  const age = findAge(f.created_at);
+  return `<tr data-find="${esc(f.id)}" class="${open ? "open" : "done"}${
+      stale ? " stale" : ""}">
+    <td class="c-route"><b class="mono">${esc(f.route || "")}</b>
+      <small class="pricenote">${esc(fmtDay(f.travel_date))}${
+        km ? `, ${esc(km)}` : ""}</small>
+      <small class="findage">gefunden ${esc(age || scanTime(f.created_at))}</small>
+      <small class="findstate">${esc(deliveryLabel(f))}</small></td>
+    <td class="c-price">${money(f.price)}<small>€</small
+      ><small class="pricenote">${esc(f.source || "ohne Quelle")}</small></td>
+    <td class="c-why" data-strength="${esc(findStrength(f))}">${strengthMark(f)
+      }<b class="findbasis">${esc(findBasisLine(f))}</b>
+      <small class="findwhy">${esc(findReason(f))}</small></td>
+    <td class="c-status">${esc(deliveryLabel(f))}${
+      note ? `<small class="findwhy">${esc(note)}</small>` : ""}</td>
+    <td class="c-act">${book}<button type="button" class="findcurve"
+        data-origin="${esc(f.entity_key ? String(f.entity_key).split("|")[0] : "")}"
+        data-destination="${esc(f.entity_key ? String(f.entity_key).split("|")[1] || "" : "")}"
+        >Verlauf</button><button type="button" class="findack"
+        data-find="${esc(f.id)}" data-open="${open ? "1" : "0"}"
+        >${open ? "Abhaken" : "Wieder öffnen"}</button></td>
+  </tr>`;
+}
+
+/* Null Zeilen bei gesetztem Filter heisst etwas anderes als null Zeilen
+   ueberhaupt. Ohne den Unterschied sucht jemand einen Fehler, wo keiner ist. */
+function huntEmptyLine(summary, openOnly){
+  if (!Number((summary || {}).events || 0))
+    return "Noch nichts gefunden. Ein Fehltarif ist selten, und das ist der"
+      + " Sinn der engen Schwelle.";
+  return openOnly
+    ? "Keine offenen Funde. Der Filter darüber zeigt auch die abgehakten."
+    : "Keine Funde in dieser Liste.";
+}
+
+function renderHunt(body){
+  const rows = (body && body.finds) || [];
+  const summary = (body && body.summary) || {};
+  $("#huntsummary").dataset.tone = "";
+  $("#huntsummary").textContent = huntSummary(body);
+  // Nie "ok", nie "err": ein Trockenlauf ist beides nicht.
+  $("#huntchannel").dataset.tone = "";
+  $("#huntchannel").textContent = channelLine(summary);
+  const table = $("#huntrows");
+  table.innerHTML = rows.length
+    ? rows.map(row => findRowMarkup(row, summary.quiet_hours)).join("")
+    : `<tr class="empty"><td colspan="${HUNT_COLUMNS}">${esc(huntEmptyLine(
+        summary, $("#huntOpenOnly").checked === true))}</td></tr>`;
+  table.querySelectorAll(".findack").forEach(button => {
+    button.onclick = () => acknowledgeFind(
+      Number(button.dataset.find), button.dataset.open === "1");
+  });
+  table.querySelectorAll(".findcurve").forEach(button => {
+    button.onclick = () => loadHistory(
+      button.dataset.origin, button.dataset.destination);
+  });
+  return rows;
+}
+
+async function loadHunt(){
+  const open = $("#huntOpenOnly").checked === true;
+  try {
+    const d = await (await fetch(`/api/hunt/finds?limit=50&open_only=${open}`)).json();
+    renderHunt(d);
+  } catch {
+    $("#huntsummary").dataset.tone = "err";
+    $("#huntsummary").textContent = "Die Funde sind gerade nicht abrufbar.";
+  }
+}
+
+async function acknowledgeFind(id, acknowledged){
+  const msg = $("#huntmsg");
+  msg.dataset.tone = "";
+  msg.textContent = acknowledged ? "Hake ab" : "Öffne wieder";
+  try {
+    const r = await fetch(`/api/hunt/finds/${id}`, {method:"PATCH",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({acknowledged})});
+    const d = await r.json();
+    if (!r.ok) throw new Error(detail(d.detail) || "Der Fund blieb, wie er war");
+    msg.dataset.tone = "ok";
+    msg.textContent = d.acknowledged_at
+      ? `${d.route} abgehakt`
+      : `${d.route} wieder offen`;
+    await loadHunt();
+  } catch (err) {
+    msg.dataset.tone = "err";
+    msg.textContent = err.message || "Der Fund blieb, wie er war";
+  }
+}
+
+/* Was ein Durchgang gebracht hat. Aufgeschobene Strecken gehoeren dazu:
+   sonst sieht ein Durchgang, den das Budget halbiert hat, aus wie ein
+   vollstaendiger. */
+function huntRunLabel(report){
+  const r = report || {};
+  const routes = Number(r.routes || 0);
+  if (!routes) return "Gerade ist keine heiße Strecke fällig.";
+  const noun = routes === 1 ? "Strecke" : "Strecken";
+  const finds = Number(r.finds || 0);
+  const found = finds ? `, ${findsWord(finds)}` : ", nichts gefunden";
+  const left = (r.deferred || []).length;
+  const rest = left ? `, ${left} aufgeschoben` : "";
+  const paused = (r.paused || []).length
+    ? `. Sicherung offen bei ${(r.paused || []).join(", ")}` : "";
+  return `${routes} ${noun} abgefragt${found}${rest}${paused}`;
+}
+
+async function runHuntNow(){
+  const msg = $("#huntmsg");
+  msg.dataset.tone = "";
+  msg.textContent = "Jage";
+  try {
+    const d = await (await fetch("/api/hunt/run-once", {method:"POST"})).json();
+    msg.dataset.tone = Number((d || {}).finds || 0) ? "ok" : "";
+    msg.textContent = huntRunLabel(d);
+    await loadHunt();
+    await loadHuntHealth();
+  } catch {
+    msg.dataset.tone = "err";
+    msg.textContent = "Der Durchgang konnte nicht gestartet werden.";
+  }
+}
+
+/* ---------------- Preisverlauf ---------------- */
+/* Handgezeichnet, wie der Rest hier auch: keine Bibliothek, kein Aufbauschritt.
+   Der Kasten ist in Prozent gerechnet und wird gestreckt, deshalb steht kein
+   Text darin. Beschriftet wird daneben, genau wie die Datumsschiene ueber der
+   Ergebnistabelle. Striche behalten ihre Staerke ueber `non-scaling-stroke`. */
+const CURVE_W = 100, CURVE_H = 100;
+/* Der Zaehlbalken darunter belegt das untere Fuenftel. */
+const CURVE_BARS = 20;
+/* Ab wann ein Tag die Linie traegt. Dieselbe Fuenf, ab der ueberhaupt eine
+   Baseline entsteht: ein Tag mit einer einzigen Beobachtung ist kein Preis
+   dieses Tages, sondern ein Preis. */
+const CURVE_SOLID_N = 5;
+
+function dayStamp(day){
+  return new Date(String(day || "") + "T00:00:00").getTime();
+}
+/* `Number(null)` ist 0 und damit endlich. Wer nur auf `Number.isFinite`
+   prueft, liest ein fehlendes Minimum als Preis von null Euro und zieht die
+   ganze Achse auf den Nullpunkt. Eine Luecke ist keine Null. */
+function finiteNumber(value){
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+/* Ein Punkt zaehlt nur, wenn alle drei Zahlen und der Tag wirklich Zahlen
+   sind. Ein fehlendes Minimum als Null zu lesen zoege die ganze Achse auf
+   den Nullpunkt: die Kurve zeigte dann einen Sturz, den es nie gab. Sortiert
+   wird selbst, statt sich auf die Reihenfolge der Antwort zu verlassen -
+   eine verdrehte Reihenfolge spiegelte die Kurve, ohne dass etwas auffiele. */
+function curveDays(points){
+  return (points || []).filter(p => p
+      && Number.isFinite(dayStamp(p.day))
+      && finiteNumber(p.median) !== null
+      && finiteNumber(p.min) !== null
+      && finiteNumber(p.max) !== null)
+    .slice()
+    .sort((a, b) => dayStamp(a.day) - dayStamp(b.day));
+}
+function curveScale(points){
+  const rows = curveDays(points);
+  if (!rows.length) return null;
+  const lows = rows.map(p => Number(p.min));
+  const highs = rows.map(p => Number(p.max));
+  const lo = Math.min(...lows), hi = Math.max(...highs);
+  const first = dayStamp(rows[0].day);
+  const last = dayStamp(rows[rows.length - 1].day);
+  return {rows, lo, hi, first, last, span: last - first,
+          maxN: Math.max(1, ...rows.map(p => Number(p.n) || 0))};
+}
+function round2(v){ return Math.round(v * 100) / 100; }
+function curveX(day, s){
+  // Alle Punkte an einem Tag: dann gibt es keine Strecke, nur eine Mitte.
+  if (!(s.span > 0)) return CURVE_W / 2;
+  return round2((dayStamp(day) - s.first) / s.span * CURVE_W);
+}
+/* Der Preis waechst nach oben, die Bildkante nach unten. Der Zeichenbereich
+   endet ueber den Zaehlbalken, sonst ueberschreibt die Linie sie. */
+function curveY(price, s){
+  const room = CURVE_H - CURVE_BARS;
+  if (!(s.hi > s.lo)) return round2(room / 2);
+  return round2(room - (Number(price) - s.lo) / (s.hi - s.lo) * room);
+}
+
+/* Ein Tag mit einer Beobachtung sagt weniger als einer mit dreissig. Sichtbar
+   wird das zweimal: die duenn belegte Strecke der Linie ist gestrichelt, und
+   unter der Kurve steht je Tag ein Balken mit der Anzahl. Ohne das erzaehlt
+   eine glatte Linie aus lauter Einzelmessungen eine Sicherheit, die es nicht
+   gibt. */
+function curveSegments(s){
+  const solid = [], thin = [];
+  for (let i = 0; i < s.rows.length - 1; i++){
+    const a = s.rows[i], b = s.rows[i + 1];
+    const line = `M${curveX(a.day, s)} ${curveY(a.median, s)}`
+      + `L${curveX(b.day, s)} ${curveY(b.median, s)}`;
+    const carries = (Number(a.n) || 0) >= CURVE_SOLID_N
+      && (Number(b.n) || 0) >= CURVE_SOLID_N;
+    (carries ? solid : thin).push(line);
+  }
+  return {solid: solid.join(""), thin: thin.join("")};
+}
+function curveBand(s){
+  if (s.rows.length < 2) return "";
+  const top = s.rows.map(p => `${curveX(p.day, s)} ${curveY(p.max, s)}`);
+  const bottom = s.rows.slice().reverse()
+    .map(p => `${curveX(p.day, s)} ${curveY(p.min, s)}`);
+  return `M${top.join("L")}L${bottom.join("L")}Z`;
+}
+function curveCounts(s){
+  const step = s.rows.length > 1 ? CURVE_W / (s.rows.length - 1) : CURVE_W;
+  const w = round2(Math.min(6, Math.max(0.8, step * 0.5)));
+  return s.rows.map(p => {
+    const n = Number(p.n) || 0;
+    const h = round2(Math.max(n ? 1.5 : 0, n / s.maxN * (CURVE_BARS - 4)));
+    const x = round2(Math.min(CURVE_W - w, Math.max(0, curveX(p.day, s) - w / 2)));
+    return `<rect class="cbar" x="${x}" y="${round2(CURVE_H - h)}" width="${w}"`
+      + ` height="${h}" data-n="${n}"></rect>`;
+  }).join("");
+}
+/* Ohne die Funde ist die Kurve nur huebsch. Sie stehen als senkrechte Marke
+   an dem Tag, nach dem gerade gruppiert wird: nach Reisetag am Reisetag, nach
+   Beobachtungstag an dem Tag, an dem der Fund entstand. Beides zu mischen
+   waere die eine Marke, die immer daneben steht. Ein Fund ausserhalb des
+   Fensters faellt weg, statt an den Rand geschoben zu werden. */
+function findDay(find, by){
+  const f = find || {};
+  return by === "travel" ? String(f.travel_date || "")
+                         : String(f.created_at || "").slice(0, 10);
+}
+function curveFinds(finds, s, by){
+  return (finds || []).map(f => findDay(f, by)).filter(day => {
+    const t = dayStamp(day);
+    return Number.isFinite(t) && t >= s.first && t <= s.last;
+  }).map(day => {
+    const x = curveX(day, s);
+    return `<line class="cfind" x1="${x}" y1="0" x2="${x}"`
+      + ` y2="${CURVE_H - CURVE_BARS}"></line>`;
+  }).join("");
+}
+/* Ein Bild ohne Text ist fuer einen Screenreader nichts. Der Name nennt
+   deshalb, was die Kurve zeigt: Zeitraum, Spanne und wie viele Tage die Linie
+   nicht traegt. */
+function curveLabel(s){
+  const thin = s.rows.filter(p => (Number(p.n) || 0) < CURVE_SOLID_N).length;
+  const weak = thin ? `, ${thin} davon mit weniger als ${CURVE_SOLID_N}`
+    + " Beobachtungen" : "";
+  return `Preisverlauf über ${s.rows.length} ${s.rows.length === 1
+    ? "Tag" : "Tage"}${weak}. Die Preise liegen zwischen ${money(s.lo)}`
+    + ` und ${money(s.hi)} Euro.`;
+}
+function curvePath(cls, d){
+  return d ? `<path class="${cls}" d="${d}"></path>` : "";
+}
+/* Ein einziger Tag ergibt keine Linie, sondern eine Marke: die Spanne als
+   senkrechter Strich, der Median als Querstrich darauf. Ohne die Spanne
+   fiele bei genau einem Tag die halbe Aussage weg, denn `curveBand` braucht
+   zwei Punkte. Und die Schwelle gilt hier genauso wie zwischen zwei Tagen:
+   die Legende verspricht "gestrichelt heisst wenig Beobachtungen", also darf
+   auch die einzelne Marke nicht durchgezogen dastehen, wenn eine einzige
+   Beobachtung dahintersteht. */
+function curveLoneDay(s){
+  const p = s.rows[0];
+  const mid = CURVE_W / 2;
+  const thin = (Number(p.n) || 0) < CURVE_SOLID_N ? " thin" : "";
+  const y = curveY(p.median, s);
+  const spread = curveY(p.min, s) === curveY(p.max, s) ? ""
+    : `<line class="cband" x1="${mid}" y1="${curveY(p.max, s)}"`
+      + ` x2="${mid}" y2="${curveY(p.min, s)}"></line>`;
+  return `${spread}<line class="cmed${thin}" x1="${mid - 6}" y1="${y}"`
+    + ` x2="${mid + 6}" y2="${y}"></line>`;
+}
+function historyChart(points, finds, by){
+  const s = curveScale(points);
+  if (!s) return "";
+  const seg = curveSegments(s);
+  const dot = s.rows.length === 1 ? curveLoneDay(s) : "";
+  return `<svg class="curve" viewBox="0 0 ${CURVE_W} ${CURVE_H}"
+      preserveAspectRatio="none" role="img" focusable="false"
+      aria-label="${esc(curveLabel(s))}">
+    ${curvePath("cband", curveBand(s))}
+    ${curvePath("cmed", seg.solid)}
+    ${curvePath("cmed thin", seg.thin)}
+    ${dot}${curveCounts(s)}${curveFinds(finds, s, by)}
+  </svg>`;
+}
+/* Beschriftet wird ausserhalb des Kastens, sonst zieht die Streckung die
+   Schrift mit. Dieselbe Machart wie die Datumsschiene ueber der Tabelle. */
+function curveAxis(points){
+  const s = curveScale(points);
+  if (!s) return {days: "", prices: ""};
+  const last = s.rows[s.rows.length - 1];
+  const ends = s.rows.length > 1 ? [s.rows[0], last] : [s.rows[0]];
+  const days = ends.map((p, i) => {
+    const align = ends.length === 1 ? "translateX(-50%)"
+      : (i === 0 ? "translateX(0)" : "translateX(-100%)");
+    return `<span style="left:${curveX(p.day, s)}%;transform:${align}">${
+      esc(fmtDay(p.day))}</span>`;
+  }).join("");
+  const prices = `<span class="chi">${money(s.hi)} €</span>`
+    + `<span class="clo">${money(s.lo)} €</span>`;
+  return {days, prices};
+}
+function historyHeadline(body){
+  const b = body || {};
+  const points = curveDays(b.points);
+  const span = b.by === "travel" ? "nach Reisetag" : "nach Beobachtungstag";
+  if (!points.length) return `${b.route || ""}: für die letzten ${
+    Number(b.days || 0)} Tage ist nichts aufgezeichnet.`;
+  const obs = points.reduce((sum, p) => sum + (Number(p.n) || 0), 0);
+  const days = points.length === 1 ? "1 Tag" : `${points.length} Tage`;
+  const thin = points.filter(p => (Number(p.n) || 0) < CURVE_SOLID_N).length;
+  const weak = thin
+    ? ` An ${thin === 1 ? "einem Tag" : `${thin} Tagen`} stehen weniger als ${
+        CURVE_SOLID_N} Beobachtungen dahinter; dort ist die Linie gestrichelt.`
+    : "";
+  return `${b.route || ""} ${span}: ${days}, ${
+    obs.toLocaleString("de-DE")} Beobachtungen.${weak}`;
+}
+/* Was der Takt dieser Strecke ist, gehoert an die Kurve: die Dichte der
+   Punkte ist seine unmittelbare Folge. */
+function historyCadenceLine(body){
+  const b = body || {};
+  if (!b.cadence) return "Diese Strecke steht nicht in der Beobachtungsliste."
+    + " Aufgezeichnet wird nur, was eine gewöhnliche Suche nebenbei mitschreibt.";
+  const stats = b.stats || {};
+  const ready = stats.ready
+    ? `${Number(stats.days_recorded || 0)} Tage aufgezeichnet, die Basis trägt`
+    : `noch ${Math.max(0, Number(stats.min_days || 5)
+        - Number(stats.days_recorded || 0))} von ${
+        Number(stats.min_days || 5)} Tagen bis zur ersten Aussage`;
+  return `Takt ${b.hot ? "heiß" : "täglich"}, ${ready}.`;
+}
+
+function renderHistory(body){
+  const b = body || {};
+  const box = $("#huntcurve");
+  box.hidden = false;
+  $("#curvehead").textContent = historyHeadline(b);
+  $("#curvecadence").textContent = historyCadenceLine(b);
+  const axis = curveAxis(b.points);
+  const chart = historyChart(b.points, b.finds, b.by);
+  /* Ein leerer Kasten mit Achsen sieht aus wie eine kaputte Kurve. Ohne einen
+     einzigen Punkt gibt es keinen Kasten, nur den Satz darueber. */
+  $("#curvefield").hidden = !chart;
+  $("#curvebox").innerHTML = chart;
+  $("#curvedays").innerHTML = axis.days;
+  $("#curveprices").innerHTML = axis.prices;
+  return b;
+}
+
+let historyRoute = null;
+async function loadHistory(origin, destination){
+  const msg = $("#huntmsg");
+  const from = String(origin || "").trim(), to = String(destination || "").trim();
+  if (!from || !to){
+    msg.dataset.tone = "err";
+    msg.textContent = "Zu diesem Fund fehlt die Strecke.";
+    return null;
+  }
+  msg.dataset.tone = "";
+  msg.textContent = "Lade Verlauf";
+  historyRoute = {origin: from, destination: to};
+  try {
+    const by = $("#curveBy").value || "observed";
+    const days = Number($("#curveDays").value || 30);
+    const r = await fetch(`/api/hunt/history/${encodeURIComponent(from)}/`
+      + `${encodeURIComponent(to)}?days=${days}&by=${by}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(detail(d.detail) || "Der Verlauf ist nicht abrufbar");
+    msg.dataset.tone = "";
+    msg.textContent = "";
+    return renderHistory(d);
+  } catch (err) {
+    msg.dataset.tone = "err";
+    msg.textContent = err.message || "Der Verlauf ist nicht abrufbar";
+    return null;
+  }
+}
+function reloadHistory(){
+  if (!historyRoute) return null;
+  return loadHistory(historyRoute.origin, historyRoute.destination);
+}
+
+/* ---------------- Zustand der Jagd ---------------- */
+/* Der Takt und seine Sicherungen stehen dort, wo der Takt gestellt wird. Wer
+   sich fragt, warum eine heisse Strecke nicht alle zwanzig Minuten laeuft,
+   sucht bei dem Schalter, der ihm "heiss" versprochen hat. */
+function pauseLine(hunt){
+  const h = hunt || {};
+  const paused = h.paused || [];
+  if (paused.length){
+    const names = paused.map(p => String((p || {}).source || "")).filter(Boolean);
+    const until = paused.map(p => (p || {}).until).filter(Boolean).sort().pop();
+    return `Die Jagd läuft im Tagestakt: bei ${names.join(", ")} ist eine`
+      + ` Sicherung offen${until ? `, bis ${scanTime(until)}` : ""}. Aufgezeichnet`
+      + ` wird weiter, nur nicht alle 20 Minuten.`;
+  }
+  const want = Number(h.interval_seconds || 0);
+  const real = Number(h.effective_interval_seconds || 0);
+  if (want && real && real > want){
+    return `Der heiße Takt ist auf ${Math.round(want / 60)} Minuten ausgelegt,`
+      + ` der Planer ruft die Jagd aber nur alle ${Math.round(real / 60)} Minuten`
+      + ` auf. Schneller als das wird sie nicht.`;
+  }
+  return "";
+}
+async function loadHuntHealth(){
+  try {
+    const d = await (await fetch("/api/health/detail")).json();
+    const hunt = (d && d.hunt) || {};
+    $("#watchpause").dataset.tone = (hunt.paused || []).length ? "warn" : "";
+    $("#watchpause").textContent = pauseLine(hunt);
+    return hunt;
+  } catch {
+    $("#watchpause").dataset.tone = "";
+    $("#watchpause").textContent = "";
+    return null;
+  }
+}
+
 /* ---------------- boot ---------------- */
 $("#from").min = todayIso();
 $("#to").min = todayIso();
@@ -1572,6 +2700,7 @@ setStayEnabled(TRIPS.find(t=>t.id===trip).stays);
 setStayOptionsEnabled($("#withHotels").checked === true);
 $("#withHotels").onchange = () => {
   setStayOptionsEnabled($("#withHotels").checked === true);
+  updateRouteGlance();
   saveForm();
 };
 ["#hotelAdults","#hotelRooms"].forEach(s => $(s).oninput = saveForm);
@@ -1584,8 +2713,14 @@ $("#withHotels").onchange = () => {
   saveForm(); if (lastResults.length) renderTable(lastResults);
 });
 $("#aiApply").onclick = parseNaturalSearch;
+$("#resetfilters").onclick = resetResultFilters;
 $("#saveProfile").onclick = saveProfileNow;
 $("#profileName").onkeydown = profileNameKeydown;
+$("#watchAdd").onclick = addWatchRoute;
+$("#watchRun").onclick = runWatchlistNow;
+$("#huntRun").onclick = runHuntNow;
+$("#huntOpenOnly").onchange = loadHunt;
+["#curveBy", "#curveDays"].forEach(s => $(s).onchange = reloadHistory);
 setupVoiceInput();
 drawTrips(); drawRoute(); loadAirlines().then(() => {
   // Restore the chips only after the registry has rendered them.
@@ -1599,5 +2734,8 @@ drawTrips(); drawRoute(); loadAirlines().then(() => {
 size();
 loadScanner();
 loadDeals();
+loadWatchlist();
+loadHunt();
+loadHuntHealth();
 $("#cancel").onclick = cancelSearch;
 updateRouteGlance();

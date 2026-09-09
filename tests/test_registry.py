@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from flightopt.domain import airlines
 from flightopt.sources.kiwi import KiwiSource
 from flightopt.sources.registry import build_sources
 from flightopt.sources.serpapi_google import SerpApiGoogleFlights
@@ -111,17 +112,51 @@ async def test_routes_endpoint_unions_the_sources_and_survives_one_failure(monke
     import flightopt.api.main as main
 
     class WithRoutes:
+        name = "mit"
+
         async def load_routes(self, code):
             assert code == "BER"
             return {"ATH", "PMI"}
 
     class Broken:
+        name = "kaputt"
+
         async def load_routes(self, code):
             raise RuntimeError("kaputt")
 
     class NoRoutes:
-        pass
+        name = "ohne"
 
     monkeypatch.setattr(main, "build_sources", lambda *a, **kw: [WithRoutes(), Broken(), NoRoutes()])
 
-    assert await main.routes("ber") == {"origin": "BER", "destinations": ["ATH", "PMI"]}
+    assert await main.routes("ber") == {
+        "origin": "BER",
+        "destinations": ["ATH", "PMI"],
+        # Die Teilauskunft nennt, wer ausgefallen ist.
+        "sources": {"asked": 2, "failed": ["kaputt"]},
+    }
+
+
+def test_live_airlines_point_at_an_adapter_that_exists():
+    """Die Notiz im Katalog steuert, wo jemand eine Quelle vermutet.
+
+    Ein `source`, den es nicht gibt, waere ein Verweis ins Leere - und faellt
+    sonst erst auf, wenn eine Suche nichts findet.
+    """
+    adapters = {s.name for s in build_sources(None, env={})}
+
+    for airline in airlines.LIVE:
+        assert airline.source in adapters, airline.code
+
+
+def test_condor_note_does_not_narrow_its_coverage_to_the_mediterranean():
+    """Gemessen bepreist Condor auch FRA-JFK, 529,99 bis 629,99 EUR.
+
+    Die alte Notiz sagte "Deckt Griechenland und die Tuerkei ab Deutschland
+    ab". Wer Transatlantik sucht, haette die Quelle danach nie vermutet, dabei
+    ist sie die einzige eigene Airline-Quelle fuer diese Richtung.
+    """
+    note = airlines.AIRLINES["DE"].note
+
+    assert "Nordamerika" in note
+    assert "Deckt Griechenland und die Türkei ab Deutschland ab" not in note

@@ -64,6 +64,26 @@ HOTEL_SIGNAL_ORDER = {"error": 0, "cheap": 1, "normal": 2, "expensive": 3, "unkn
 
 SourceFactory = Callable[[], Sequence[HotelSource]]
 
+SIGNAL_FIELDS: tuple[str, ...] = (
+    "tier", "reason", "basis", "n",
+    "evidence", "thin", "population", "population_split",
+)
+"""Was vom Urteil in die Tabellenzeile wandert.
+
+Die ersten vier waren immer dabei. Die vier dahinter kamen mit der Trennung
+der Grundgesamtheiten dazu, und ohne sie erreicht die neue Ehrlichkeit die
+Oberflaeche nur als Satz in `reason`.
+
+Ein Satz ist aber nichts, wonach sich filtern laesst. `evidence` sagt als
+Kennung, welche Regel entschieden hat - solange die Historie duenn ist, ist
+"hat allein die Plausibilitaetsschranke gegriffen?" die entscheidende Frage,
+und `reason` beantwortet sie nur einem Menschen. `thin` sagt, wie duenn die
+Vergleichsgruppe war, `population` gegen welche Grundgesamtheit gerechnet
+wurde und `population_split`, ob die Baseline die beiden ueberhaupt trennt.
+Ein `error` gegen eine gemischte Gruppe ist eine schwaechere Aussage als
+einer gegen Haendlerpreise, und die Zeile soll den Unterschied tragen.
+"""
+
 
 def hotel_row(conn: sqlite3.Connection, offer: HotelOffer) -> dict[str, Any]:
     """Eine Tabellenzeile aus einem Angebot, samt Preissignal.
@@ -96,7 +116,10 @@ def hotel_row(conn: sqlite3.Connection, offer: HotelOffer) -> dict[str, Any]:
         "city": offer.city,
         "indicative": offer.indicative,
     }
-    for extra in ("tier", "reason", "basis", "n"):
+    for extra in SIGNAL_FIELDS:
+        # `is not None` und nicht `if signal.get(...)`: `thin` und
+        # `population_split` sind Wahrheitswerte, und ein falsches `thin` ist
+        # eine Aussage - kein fehlendes Feld.
         if signal.get(extra) is not None:
             row[extra] = signal[extra]
     return row
@@ -125,8 +148,10 @@ def stored_rows(conn: sqlite3.Connection, scan: dict[str, Any]) -> list[dict[str
         return []
     finished = str(scan.get("finished_at") or scan.get("updated_at") or "")
     if scan.get("status") in TERMINAL and finished:
-        # `created_at` steht auf Sekunden, `observed_at` traegt Mikrosekunden.
-        # Ohne diesen Nachschlag faellt die letzte Beobachtung aus dem Fenster.
+        # Ein Zeichen hinter allen, die in einem Zeitstempel vorkommen: so
+        # bleibt die Grenze auch dann einschliessend, wenn `observed_at` eines
+        # Tages feiner aufloest als der Endzeitpunkt. Heute schreiben beide
+        # auf Sekunden genau.
         ended = finished + "~"
     else:
         ended = "9999"
@@ -251,6 +276,12 @@ class HotelJobRunner:
         self._history.pop(scan_id, None)
         self._results.pop(scan_id, None)
         self._cancelled.discard(scan_id)
+        # Ein zweiter Start verdraengte den alten Task bisher nur aus `_tasks`.
+        # Er lief weiter, fragte dieselben Tage ein zweites Mal ab und schrieb
+        # `current_day` und `days_done` des neuen Laufs zurueck. Der neue Lauf
+        # nimmt den alten deshalb mit und wartet ihn ab, bevor er selbst
+        # schreibt - abbrechen allein greift erst am naechsten Haltepunkt.
+        previous = self._tasks.get(scan_id)
         self._tasks[scan_id] = asyncio.create_task(
             self._run(
                 scan_id,
@@ -259,8 +290,28 @@ class HotelJobRunner:
                 window_end=window_end,
                 sources=sources,
                 max_errors=max_errors,
+                previous=previous,
             )
         )
+
+    async def _stop_previous(self, scan_id: int, previous: asyncio.Task | None) -> None:
+        """Den vorigen Lauf desselben Durchlaufs beenden und abwarten."""
+        if previous is None or previous.done():
+            return
+        logger.warning(
+            "hotels: Durchlauf %s lief noch, der alte Lauf wird abgebrochen", scan_id
+        )
+        previous.cancel()
+        # `wait` reicht die Ausnahme des alten Laufs nicht durch, laesst einen
+        # Abbruch dieses Laufs aber weiterhin durch. Genau das ist hier richtig.
+        await asyncio.wait({previous})
+        if previous.cancelled():
+            return
+        failure = previous.exception()
+        if failure is not None:
+            logger.warning(
+                "hotels: alter Lauf von Durchlauf %s endete mit %s", scan_id, failure
+            )
 
     def status(self, scan_id: int) -> str | None:
         conn = self._conn()
@@ -291,6 +342,7 @@ class HotelJobRunner:
                 "status": scan["status"],
                 "error": scan["error"],
                 "rows": stored_rows(conn, scan),
+                "retries": scan["retries"],
             }
         finally:
             conn.close()
@@ -335,7 +387,9 @@ class HotelJobRunner:
         window_end: date,
         sources: SourceFactory | Sequence[HotelSource],
         max_errors: int = MAX_ERRORS,
+        previous: asyncio.Task | None = None,
     ) -> None:
+        await self._stop_previous(scan_id, previous)
         conn = self._conn()
         live: list[HotelSource] = []
         collected: list[dict[str, Any]] = []
@@ -393,6 +447,9 @@ class HotelJobRunner:
                             "date": update.day.isoformat(),
                             "rows": rows,
                             "found": len(collected),
+                            # Ein Tag, der nur mit Nachfassen zustande kam,
+                            # sieht sonst aus wie einer, der auf Anhieb da war.
+                            "retries": update.retries,
                         },
                     ),
                 )
@@ -429,7 +486,12 @@ class HotelJobRunner:
             conn.commit()
             self._raise_if_cancelled(scan_id)
 
-            self._results[scan_id] = {"status": "done", "error": None, "rows": payload}
+            self._results[scan_id] = {
+                "status": "done",
+                "error": None,
+                "rows": payload,
+                "retries": result.retries,
+            }
             self._emit(
                 scan_id,
                 Progress(
@@ -441,6 +503,7 @@ class HotelJobRunner:
                         "rows": payload,
                         "skipped": len(result.skipped),
                         "errors": result.errors[:5],
+                        "retries": result.retries,
                     },
                 ),
             )

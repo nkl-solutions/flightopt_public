@@ -83,10 +83,20 @@ class FakeSource(HotelSource):
 
 
 class BlockedSource(FakeSource):
-    """Antwortet mit einer Sperre. Danach faechert diese Quelle nichts mehr."""
+    """Antwortet mit einer Sperre. Danach faechert diese Quelle nichts mehr.
+
+    Vermerkt wird sie wie im echten Adapter, also vor dem Werfen. Die Schwelle
+    steht auf eins, weil hier der Fall geprueft wird, in dem die Sicherung
+    wirklich zugeht - eine einzelne Abweisung kostet nur ihren eigenen Tag.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.breaker.threshold = 1
 
     async def search(self, query: HotelQuery) -> HotelBatch:
         self.asked.append(query.arrival)
+        self.breaker.record_block()
         raise SourceBlocked("wir sind gesperrt")
 
 
@@ -175,6 +185,38 @@ async def test_a_resumed_run_starts_at_the_day_after_the_last_finished_one(tmp_p
     assert second.asked == [date(2026, 11, d) for d in (12, 13, 14)]
     assert result.days_done == 5
     assert load_scan(conn, scan_id)["status"] == "done"
+    conn.close()
+
+
+async def test_a_day_no_source_answered_is_asked_again_on_resume(tmp_path):
+    """`current_day` ist der Stand der Wiederaufnahme, kein Hochwasserstand.
+
+    Ein Tag, an dem keine Quelle geantwortet hat, wurde uebersprungen - und
+    der naechste gelungene Tag schrieb die Marke trotzdem fort. Der Fehltag
+    lag danach dahinter und wurde nie wieder gefragt. Weil `already` ihn beim
+    naechsten Mal als erledigt mitzaehlt, erreichte der Balken am Ende sauber
+    "alle Tage": der Ausfall verschwand restlos.
+    """
+    conn = conn_for(tmp_path)
+    lost = date(2026, 11, 11)
+    scan_id = create_scan(conn, athens(), window_start=WINDOW[0], window_end=WINDOW[1])
+
+    await run_scan(
+        conn, athens(), window_start=WINDOW[0], window_end=WINDOW[1],
+        sources=[FakeSource(fail_on={lost})], rates=RATES, scan_id=scan_id,
+    )
+
+    assert load_scan(conn, scan_id)["current_day"] == "2026-11-10"
+
+    second = FakeSource()
+    result = await run_scan(
+        conn, athens(), window_start=WINDOW[0], window_end=WINDOW[1],
+        sources=[second], rates=RATES, scan_id=scan_id,
+    )
+
+    # Nur der Fehltag geht wirklich ins Netz, der Rest liegt im Tages-Cache.
+    assert second.asked == [lost]
+    assert result.days_done == 5
     conn.close()
 
 

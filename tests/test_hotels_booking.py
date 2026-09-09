@@ -13,6 +13,7 @@ Diese Tests starten keinen Browser und fassen kein Netz an.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from datetime import date
 from pathlib import Path
@@ -36,6 +37,8 @@ from flightopt.hotels.sources.booking import (
     WAF_COOKIE,
     BookingSource,
     Destination,
+    browser_args,
+    charge_evidence,
     PriceRange,
     _gate,
     apollo_store,
@@ -51,6 +54,7 @@ from flightopt.hotels.sources.booking import (
     review_bucket,
     search_node,
 )
+from flightopt.hotels.browser import close_shared_pools, reset_shared_pools
 from flightopt.sources.base import RateLimiter
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -285,7 +289,10 @@ def test_the_apollo_cache_gives_id_name_stars_reviews_price_place_and_url():
     assert (round(first.lat, 4), round(first.lon, 4)) == (37.982, 23.7246)
     assert first.city == "Athens" and first.country_code == "GR"
     assert first.url == "https://www.booking.com/hotel/gr/sparta.de.html"
-    assert first.indicative is True
+    # Kein Richtwert: die Seite nennt Steuern und Gebuehren als enthalten und
+    # haengt den Preis an ein benanntes Zimmer. Der Beleg steht in
+    # `test_the_recorded_apollo_price_carries_its_own_charges_information`.
+    assert first.indicative is False
 
 
 def test_the_currency_comes_from_the_field_and_never_from_a_symbol():
@@ -527,3 +534,293 @@ def test_availability_names_what_is_missing(monkeypatch):
 
     assert usable is False
     assert "Playwright" in reason
+
+
+# --------------------------------------------------------------------------
+# Richtwert oder Haendlerpreis: was die Antwort selbst dazu sagt
+# --------------------------------------------------------------------------
+
+
+def test_the_recorded_apollo_price_carries_its_own_charges_information():
+    """Der Beleg, auf dem alles Weitere steht - aus der echten Aufzeichnung.
+
+    Alle sechs Treffer der Athen-Seite tragen dieselben vier Merkmale, und
+    zusammen sagen sie: das ist der Preis, den die Seite selbst anzeigt, fuer
+    ein benanntes Zimmer, mit Steuern und Gebuehren darin.
+    """
+    node = search_node(apollo_store(recorded_apollo()))
+
+    for result in node["results"]:
+        prices = result["priceDisplayInfoIrene"]
+        assert "einschlie" in prices["chargesInfo"]["translation"].casefold()
+        assert prices["excludedCharges"]["excludeChargesList"] == []
+        excluded = prices["excludedCharges"]["excludeChargesAggregated"]["amountPerStay"]
+        assert excluded["amountUnformatted"] == 0
+        assert prices["taxExceptions"] == []
+        # Der angezeigte Gesamtpreis ist derselbe Betrag wie der des Zimmers,
+        # das Booking dazu ausgewaehlt hat. Kein Von-Preis, kein Mittelwert.
+        block = result["blocks"][0]
+        assert block["blockId"]["roomId"]
+        assert round(float(block["finalPrice"]["amount"]), 4) == round(
+            float(prices["displayPrice"]["amountPerStay"]["amountUnformatted"]), 4
+        )
+
+
+def test_charges_included_makes_the_price_a_merchant_price():
+    evidence = charge_evidence(
+        {
+            "priceDisplayInfoIrene": {
+                "chargesInfo": {"translation": "Einschliesslich Steuern und Gebuehren"},
+                "excludedCharges": {
+                    "excludeChargesList": [],
+                    "excludeChargesAggregated": {
+                        "amountPerStay": {"amountUnformatted": 0, "currency": ""}
+                    },
+                },
+                "taxExceptions": [],
+            },
+            "blocks": [{"blockId": {"roomId": "42"}, "finalPrice": {"amount": 1, "currency": "EUR"}}],
+        }
+    )
+
+    assert evidence.inclusive is True
+    assert "einschlie" in evidence.reason.casefold()
+
+
+def test_excluded_charges_keep_the_price_an_estimate():
+    """Was die Seite selbst herausrechnet, fehlt auch in unserer Zahl."""
+    evidence = charge_evidence(
+        {
+            "priceDisplayInfoIrene": {
+                "chargesInfo": {"translation": "Zusaetzliche Gebuehren und Steuern"},
+                "excludedCharges": {
+                    "excludeChargesList": [{"name": {"translation": "Kurtaxe"}}],
+                    "excludeChargesAggregated": {
+                        "amountPerStay": {"amountUnformatted": 3.5, "currency": "EUR"}
+                    },
+                },
+                "taxExceptions": [],
+            },
+            "blocks": [{"blockId": {"roomId": "42"}}],
+        }
+    )
+
+    assert evidence.inclusive is False
+    assert "herausgerechnet" in evidence.reason
+
+
+def test_an_excluded_amount_alone_keeps_the_price_an_estimate():
+    """Auch ohne benannte Posten: was abgezogen ist, fehlt im Preis."""
+    evidence = charge_evidence(
+        {
+            "priceDisplayInfoIrene": {
+                "chargesInfo": {"translation": "Einschliesslich Steuern und Gebuehren"},
+                "excludedCharges": {
+                    "excludeChargesList": [],
+                    "excludeChargesAggregated": {
+                        "amountPerStay": {"amountUnformatted": 3.5, "currency": "EUR"}
+                    },
+                },
+                "taxExceptions": [],
+            },
+            "blocks": [{"blockId": {"roomId": "42"}}],
+        }
+    )
+
+    assert evidence.inclusive is False
+    assert "3.5" in evidence.reason
+
+
+def test_tax_exceptions_keep_the_price_an_estimate():
+    evidence = charge_evidence(
+        {
+            "priceDisplayInfoIrene": {
+                "chargesInfo": {"translation": "Einschliesslich Steuern und Gebuehren"},
+                "excludedCharges": {
+                    "excludeChargesList": [],
+                    "excludeChargesAggregated": {
+                        "amountPerStay": {"amountUnformatted": 0}
+                    },
+                },
+                "taxExceptions": [{"translation": "Ortstaxe vor Ort"}],
+            },
+            "blocks": [{"blockId": {"roomId": "42"}}],
+        }
+    )
+
+    assert evidence.inclusive is False
+
+
+def test_a_price_without_charges_information_stays_an_estimate():
+    """Schweigen ist kein Beleg. Ohne Auskunft bleibt es beim Richtwert."""
+    evidence = charge_evidence(
+        {"priceDisplayInfoIrene": {}, "blocks": [{"blockId": {"roomId": "42"}}]}
+    )
+
+    assert evidence.inclusive is False
+    assert "keine" in evidence.reason.casefold()
+
+
+def test_a_price_without_a_named_room_stays_an_estimate():
+    """Ohne Zimmer gibt es keinen Tarif, auf den sich der Preis bezieht."""
+    evidence = charge_evidence(
+        {
+            "priceDisplayInfoIrene": {
+                "chargesInfo": {"translation": "Einschliesslich Steuern und Gebuehren"},
+                "excludedCharges": {
+                    "excludeChargesList": [],
+                    "excludeChargesAggregated": {"amountPerStay": {"amountUnformatted": 0}},
+                },
+                "taxExceptions": [],
+            },
+            "blocks": [],
+        }
+    )
+
+    assert evidence.inclusive is False
+
+
+def test_the_recorded_apollo_offers_are_merchant_prices_and_not_estimates():
+    batch = parse_apollo(search_node(apollo_store(recorded_apollo())), query(adults=2))
+
+    assert [offer.indicative for offer in batch.offers] == [False] * 6
+
+
+def test_the_card_fallback_has_no_charges_information_and_stays_an_estimate():
+    """Eine Ergebniskarte sagt nicht, was im Preis steckt. Also Richtwert."""
+    batch = parse_result_html(recorded(), query(adults=2))
+
+    assert all(offer.indicative for offer in batch.offers)
+
+
+def test_booking_is_a_merchant_and_trivago_is_a_metasearch():
+    """Zwei verschiedene Aussagen, und sie gehoeren nicht in einen Topf.
+
+    `indicative` an der Quelle heisst "Vergleichsportal mit bekanntem
+    Aufschlag", `indicative` am Angebot heisst "diese eine Zahl ist ein
+    Richtwert". Booking ist das eine nicht und kann das andere trotzdem sein.
+    """
+    from flightopt.hotels.sources.trivago_mcp import TrivagoMcpSource
+
+    assert BookingSource.indicative is False
+    assert TrivagoMcpSource.indicative is True
+
+
+# --------------------------------------------------------------------------
+# Der Browser, der laenger lebt als eine Suche
+# --------------------------------------------------------------------------
+
+
+def test_the_browser_arguments_come_from_the_environment():
+    """Im Container gelten andere Schalter als auf einem Arbeitsrechner.
+
+    Auf dem Arbeitsrechner behaelt Chromium seine eigene Sandbox. Im Container
+    laeuft alles als root, und dort startet er nur ohne sie; die Grenze ist
+    dann der Container. Weil das eine Betriebsentscheidung ist und keine
+    Codeentscheidung, steht sie in der Umgebung.
+    """
+    assert browser_args({}) == []
+    assert browser_args(
+        {"FLIGHTOPT_HOTELS_BROWSER_ARGS": "--no-sandbox, --disable-dev-shm-usage ,"}
+    ) == ["--no-sandbox", "--disable-dev-shm-usage"]
+
+
+async def test_two_sources_share_one_browser():
+    """Zwei Durchlaeufe nacheinander duerfen nicht zwei Chromium starten.
+
+    Der Katalog wird je Lauf neu gebaut. Haenge der Browser an der Instanz,
+    zahlte jeder Durchgang im Dauerbetrieb einen Start.
+    """
+    reset_shared_pools()
+    starts = 0
+
+    async def launcher():
+        nonlocal starts
+        starts += 1
+
+        class Fake:
+            async def close(self):
+                return None
+
+        return Fake()
+
+    first = BookingSource(launcher=launcher)
+    async with first.browser() as one:
+        assert one is not None
+    second = BookingSource(launcher=launcher)
+    async with second.browser() as two:
+        assert two is one
+
+    assert starts == 1
+    await close_shared_pools()
+
+
+async def test_a_blocked_page_throws_the_browser_away():
+    """Nach einer haengenden Challenge faengt der naechste Tag frisch an."""
+    reset_shared_pools()
+    launched: list[object] = []
+
+    async def launcher():
+        class Fake:
+            async def close(self):
+                return None
+
+        fake = Fake()
+        launched.append(fake)
+        return fake
+
+    source = BookingSource(launcher=launcher)
+    with pytest.raises(SourceBlocked):
+        async with source.browser():
+            raise SourceBlocked("booking: Challenge haengt")
+    async with source.browser():
+        pass
+
+    assert len(launched) == 2
+    await close_shared_pools()
+
+
+async def test_a_page_that_never_answers_ends_as_an_error_and_not_as_a_hang():
+    """Ohne eigene Frist haelt eine haengende Seite ihren Platz fuer immer.
+
+    Playwright hat je Schritt eine Frist, aber nicht fuer den ganzen Vorgang.
+    Im Dauerbetrieb ist genau das der Unterschied zwischen einem verlorenen
+    Tag und einer Quelle, die nie wieder etwas liefert.
+    """
+
+    class SleepingPage:
+        async def route(self, _pattern, _handler):
+            return None
+
+        async def goto(self, _url, **_kwargs):
+            await asyncio.sleep(3600)
+
+        async def wait_for_selector(self, _selector, **_kwargs):
+            return None
+
+        async def content(self):
+            return ""
+
+    closed = []
+
+    class Context:
+        async def new_page(self):
+            return SleepingPage()
+
+        async def close(self):
+            closed.append(True)
+
+        async def cookies(self):
+            return []
+
+    class Browser:
+        async def new_context(self, **_kwargs):
+            return Context()
+
+    source = BookingSource()
+    with pytest.raises(SourceError) as caught:
+        await source._page(Browser(), "https://example.invalid/", deadline=0.05)
+
+    assert "Frist" in str(caught.value)
+    # Der Kontext muss trotzdem zugegangen sein, sonst leckt jede Zeitueberschreitung.
+    assert closed == [True]

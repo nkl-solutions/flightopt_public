@@ -7,19 +7,22 @@ wie in `tests/test_api_cancel.py` fuer die Fluege.
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
 
+from flightopt.domain.fx import Rates
 from flightopt.domain.models import Money
 from flightopt.hotels.models import HotelOffer, HotelQuery
 from flightopt.hotels.scan import load_scan
 from flightopt.hotels.sources.base import HotelBatch, HotelSource
+from flightopt.hotels.store import HOTEL_BASELINE_SPLITS_POPULATIONS, signal_for
 from flightopt.jobs import hotel_runner as hotel_runner_module
 from flightopt.jobs import runner as flight_runner_module
-from flightopt.jobs.hotel_runner import HotelJobRunner
+from flightopt.jobs.hotel_runner import HotelJobRunner, hotel_row, stored_rows
 from flightopt.jobs.runner import JobRunner
+from flightopt.storage import db
 
 
 class StubSource(HotelSource):
@@ -270,6 +273,165 @@ def test_a_cancel_leaves_a_finished_run_alone(tmp_path):
     assert runner.cancel(9999) is None
 
 
+async def test_a_run_stopped_twice_still_shows_the_rows_of_its_second_attempt(tmp_path):
+    """Ein Lauf, der wieder laeuft, ist nicht fertig.
+
+    Der Endzeitpunkt des ersten Anlaufs blieb stehen: `cancel` und die
+    Fehlerwege nehmen ihn per COALESCE in Schutz. `stored_rows` grenzt die
+    Beobachtungen aber genau darauf ein, und damit fiel jede Zeile des zweiten
+    Anlaufs aus dem Fenster - sie wurde nach dem "Ende" beobachtet. HTTP 200,
+    richtige Metadaten, zu wenige Zeilen.
+    """
+    path = tmp_path / "resume.db"
+    runner = HotelJobRunner(str(path))
+    start, end = window()
+    scan_id = runner.create(query(), window_start=start, window_end=end)
+
+    # Anlauf eins endete vorzeitig und hat seinen Endzeitpunkt gesetzt.
+    conn = db.connect(path)
+    conn.execute(
+        "UPDATE hotel_scan SET status='cancelled', created_at=?, finished_at=? "
+        "WHERE id=?",
+        ("2026-09-01T10:00:00", "2026-09-01T10:05:00", scan_id),
+    )
+    conn.close()
+
+    # Anlauf zwei laeuft an und wird nach dem ersten Tag wieder gestoppt.
+    emit = runner._emit
+
+    def emit_then_cancel(sid, progress):
+        emit(sid, progress)
+        if progress.phase == "day" and progress.done == 1:
+            runner.cancel(sid)
+
+    runner._emit = emit_then_cancel  # type: ignore[method-assign]
+
+    await runner._run(
+        scan_id, query(), window_start=start, window_end=end, sources=[StubSource()]
+    )
+
+    conn = db.connect(path)
+    try:
+        rows = stored_rows(conn, load_scan(conn, scan_id))
+    finally:
+        conn.close()
+
+    assert {row["name"] for row in rows} == {"Hotel 0", "Hotel 1"}
+
+
+class WobblySource(StubSource):
+    """Antwortet erst nach dem Nachfassen. Der Zaehler haengt am Ergebnis."""
+
+    async def search(self, query: HotelQuery) -> HotelBatch:
+        batch = await super().search(query)
+        batch.retries = 1
+        return batch
+
+
+class BrittleSource(StubSource):
+    """Gibt nach zwei vergeblichen Nachfragen auf - und sagt, was es kostete."""
+
+    async def search(self, query: HotelQuery) -> HotelBatch:
+        self.asked.append(query.arrival)
+        failure = RuntimeError("Quelle antwortet nicht")
+        failure.retries = 2
+        raise failure
+
+
+async def test_a_run_that_only_went_green_by_asking_again_says_so(tmp_path):
+    """Der Zaehler entstand im Adapter und endete im Speicher.
+
+    Weder der Strom noch die Datenbank noch die API haben ihn je gesehen: ein
+    Endpunkt, der schleichend unzuverlaessig wird, verschwand damit in lauter
+    erfolgreichen Laeufen.
+    """
+    path = tmp_path / "wobble.db"
+    runner = HotelJobRunner(str(path))
+    start, end = window()
+    scan_id = runner.create(query(), window_start=start, window_end=end)
+
+    await runner._run(
+        scan_id, query(), window_start=start, window_end=end,
+        sources=[WobblySource()],
+    )
+
+    history = runner._history[scan_id]
+    assert [p.detail["retries"] for p in history if p.phase == "day"] == [1, 1, 1]
+    assert history[-1].detail["retries"] == 3
+
+    conn = db.connect(path)
+    try:
+        assert load_scan(conn, scan_id)["retries"] == 3
+    finally:
+        conn.close()
+
+
+async def test_a_day_that_was_lost_anyway_still_shows_what_it_cost(tmp_path):
+    """Gerade der vergebliche Neuversuch sagt etwas ueber die Quelle."""
+    path = tmp_path / "brittle.db"
+    runner = HotelJobRunner(str(path))
+    start, end = window()
+    scan_id = runner.create(query(), window_start=start, window_end=end)
+
+    await runner._run(
+        scan_id, query(), window_start=start, window_end=end,
+        sources=[BrittleSource()],
+    )
+
+    conn = db.connect(path)
+    try:
+        # Drei Tage, je zwei vergebliche Nachfragen.
+        assert load_scan(conn, scan_id)["retries"] == 6
+    finally:
+        conn.close()
+
+
+def test_the_row_carries_every_field_the_signal_answers_with(tmp_path):
+    """Die neue Ehrlichkeit darf nicht nur im Satz stehen.
+
+    `reason` ist Text fuer Menschen und aendert seine Formulierung. Welche
+    Regel entschieden hat (`evidence`), wie duenn die Vergleichsgruppe war
+    (`thin`) und gegen welche Grundgesamtheit ueberhaupt gerechnet wurde
+    (`population`, `population_split`) sind Kennungen - danach kann eine
+    Oberflaeche sortieren und filtern, nach einem Satz nicht.
+    """
+    conn = db.connect(tmp_path / "zeile.db")
+    try:
+        # Ohne jede Historie traegt nur die Plausibilitaetsschranke: zwoelf
+        # Euro fuer drei Sterne sind in keinem europaeischen Markt ein Angebot.
+        offer = HotelOffer(
+            source="stub",
+            property_key="stub:0",
+            name="Hotel Ohne Historie",
+            arrival=date(2026, 11, 10),
+            departure=date(2026, 11, 11),
+            price_total=Money(1200, "EUR"),
+            price_eur=Money(1200, "EUR"),
+            stars=3,
+            city="Athens",
+            country="Greece",
+            party_size=2,
+            indicative=True,
+        )
+        signal = signal_for(conn, offer)
+        row = hotel_row(conn, offer)
+
+        assert row["tier"] == "error"
+        assert row["evidence"] == "schranke"
+        assert row["thin"] is False
+        assert row["population"] == "estimate"
+        # Die Zeile sagt auch, ob die Baseline die Grundgesamtheiten ueberhaupt
+        # trennt. Ohne das liest sich ein Urteil gegen eine gemischte Gruppe
+        # wie eines gegen Haendlerpreise.
+        assert row["population_split"] == HOTEL_BASELINE_SPLITS_POPULATIONS
+        # Und zwar Feld fuer Feld dasselbe, was der Detektor geantwortet hat.
+        for field in ("tier", "reason", "basis", "n", "evidence", "thin",
+                      "population", "population_split"):
+            assert row[field] == signal[field], field
+    finally:
+        conn.close()
+
+
 def test_the_flight_runner_stays_free_of_hotels():
     """Die Flugsuche darf von diesem Umbau nichts mitbekommen."""
     source = Path(flight_runner_module.__file__).read_text(encoding="utf-8")
@@ -280,3 +442,56 @@ def test_the_flight_runner_stays_free_of_hotels():
     assert hotel_runner_module.JobCancelled is flight_runner_module.JobCancelled
     for name in ("create", "start", "cancel", "status", "result", "subscribe"):
         assert callable(getattr(JobRunner, name))
+
+
+class BlockingStub(StubSource):
+    """Haengt im ersten Abruf, bis der Test sie loslaesst."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.reached = asyncio.Event()
+
+    async def search(self, query: HotelQuery) -> HotelBatch:
+        self.reached.set()
+        await asyncio.sleep(30)
+        return await super().search(query)
+
+
+async def test_a_second_start_stops_the_first_run(tmp_path, monkeypatch):
+    """Zwei Laeufe auf derselben Kennung schrieben dieselben Tage doppelt.
+
+    `start()` hat den alten Task nur aus `_tasks` verdraengt; er lief weiter,
+    fragte dieselben Tage noch einmal ab und setzte den Fortschritt des neuen
+    Laufs zurueck.
+    """
+    async def no_network(conn, **kwargs):
+        return Rates(base="EUR", rates={}, fetched_at=datetime.now())
+
+    monkeypatch.setattr(hotel_runner_module.fx_store, "current_rates", no_network)
+    runner = HotelJobRunner(str(tmp_path / "doppelt.db"))
+    start, end = window()
+    scan_id = runner.create(query(), window_start=start, window_end=end)
+    blocked, second_source = BlockingStub(), StubSource()
+
+    runner.start(
+        scan_id, query(), window_start=start, window_end=end, sources=[blocked]
+    )
+    first = runner._tasks[scan_id]
+    await asyncio.wait_for(blocked.reached.wait(), timeout=5)
+
+    runner.start(
+        scan_id, query(), window_start=start, window_end=end, sources=[second_source]
+    )
+    second = runner._tasks[scan_id]
+    await asyncio.wait_for(second, timeout=10)
+
+    assert second is not first
+    assert first.cancelled()
+    # Der abgebrochene Lauf gibt seine Quelle frei, statt sie liegen zu lassen.
+    assert blocked.closed == 1
+    assert runner.status(scan_id) == "done"
+    assert second_source.asked == [
+        date(2026, 11, 10),
+        date(2026, 11, 11),
+        date(2026, 11, 12),
+    ]

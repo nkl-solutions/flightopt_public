@@ -211,8 +211,13 @@ def test_the_adapter_needs_a_key(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_a_paid_call_is_not_retried_blindly(monkeypatch):
-    """Jeder Versuch kostet einen Abruf aus dem Monatsbudget."""
+async def test_a_paid_call_retries_now_that_failures_are_refunded(monkeypatch):
+    """Ein Versuch war zu wenig fuer die einzige Quelle mit Fernstrecken.
+
+    Ein einzelner Netzhaenger nahm bisher die einzige Quelle aus dem Rennen,
+    die eine Fernstrecke ueberhaupt pruefen kann. Drei Versuche sind vertretbar,
+    seit ein Fehlschlag den gebuchten Monatsslot zurueckgibt.
+    """
     src = source(monkeypatch)
     seen: dict = {}
 
@@ -223,7 +228,107 @@ async def test_a_paid_call_is_not_retried_blindly(monkeypatch):
     monkeypatch.setattr(src, "fetch_json", fake)
     await src.search_leg("BER", "NRT", DAY)
 
-    assert seen["retries"] == 1
+    assert seen["retries"] == 3
+
+
+@pytest.mark.asyncio
+async def test_a_network_failure_gives_the_month_slot_back(monkeypatch, tmp_path):
+    """Ohne Rueckgabe verbrennt jeder Fehlschlag einen bezahlten Monatsabruf."""
+    conn = db.connect(tmp_path / "budget.db")
+    budget = MonthlyBudget(conn, "serpapi", cap=2)
+    src = source(monkeypatch, budget=budget)
+
+    async def fake(url, **kw):
+        raise SourceError("serpapi: HTTP 502")
+
+    monkeypatch.setattr(src, "fetch_json", fake)
+
+    with pytest.raises(SourceError):
+        await src.search_leg("BER", "NRT", DAY)
+
+    assert budget.used() == 0
+    assert budget.remaining() == 2
+
+
+@pytest.mark.asyncio
+async def test_a_refused_request_gives_the_month_slot_back(monkeypatch, tmp_path):
+    """Einen abgewiesenen Aufruf zaehlt SerpApi nicht, also zaehlen wir ihn auch nicht."""
+    conn = db.connect(tmp_path / "budget.db")
+    budget = MonthlyBudget(conn, "serpapi", cap=2)
+    src = source(monkeypatch, budget=budget)
+
+    async def fake(url, **kw):
+        return {"error": "Invalid API key"}
+
+    monkeypatch.setattr(src, "fetch_json", fake)
+
+    with pytest.raises(SourceError, match="Invalid API key"):
+        await src.search_leg("BER", "NRT", DAY)
+
+    assert budget.used() == 0
+
+
+@pytest.mark.asyncio
+async def test_a_failed_status_gives_the_month_slot_back(monkeypatch, tmp_path):
+    conn = db.connect(tmp_path / "budget.db")
+    budget = MonthlyBudget(conn, "serpapi", cap=2)
+    src = source(monkeypatch, budget=budget)
+
+    async def fake(url, **kw):
+        data = payload()
+        data["search_metadata"]["status"] = "Error"
+        return data
+
+    monkeypatch.setattr(src, "fetch_json", fake)
+
+    with pytest.raises(SourceError):
+        await src.search_leg("BER", "NRT", DAY)
+
+    assert budget.used() == 0
+
+
+@pytest.mark.asyncio
+async def test_a_search_that_found_nothing_keeps_its_slot(monkeypatch, tmp_path):
+    """Gelaufen ist gelaufen. Im Zweifel lieber einen Abruf zu viel zaehlen."""
+    conn = db.connect(tmp_path / "budget.db")
+    budget = MonthlyBudget(conn, "serpapi", cap=2)
+    src = source(monkeypatch, budget=budget)
+
+    async def fake(url, **kw):
+        return {
+            "search_metadata": {"status": "Success"},
+            "error": "Google Flights hasn't returned any results for this query.",
+        }
+
+    monkeypatch.setattr(src, "fetch_json", fake)
+
+    assert await src.search_leg("BER", "NRT", DAY) == []
+    assert budget.used() == 1
+
+
+def test_release_hands_a_booked_call_back(tmp_path):
+    conn = db.connect(tmp_path / "budget.db")
+    budget = MonthlyBudget(conn, "serpapi", cap=2)
+    now = datetime(2027, 3, 10, 9, 0, 0)
+
+    assert budget.consume(now=now) is True
+    budget.release(now=now)
+
+    assert budget.used(now=now) == 0
+    assert budget.consume(now=now) is True
+
+
+def test_release_never_credits_the_next_month(tmp_path):
+    """Ein Zaehler unter null waere eine stille Gutschrift."""
+    conn = db.connect(tmp_path / "budget.db")
+    budget = MonthlyBudget(conn, "serpapi", cap=2)
+    now = datetime(2027, 3, 10, 9, 0, 0)
+
+    budget.release(now=now)
+    budget.release(now=now)
+
+    assert budget.used(now=now) == 0
+    assert budget.remaining(now=now) == 2
 
 
 def test_a_key_without_a_connection_is_refused():

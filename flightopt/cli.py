@@ -28,9 +28,10 @@ from flightopt.hotels.registry import build_hotel_sources, source_report
 from flightopt.hotels.scan import ScanProgress, run_scan
 from flightopt.hotels.store import signal_for
 from flightopt.jobs.runner import JobRunner, build_catalogue, preload_routes
+from flightopt.jobs.watchlist import run_watchlist
 from flightopt.search.dp import Combination, count_combinations, feasible_dates, solve
 from flightopt.search.grid import build_grid
-from flightopt.storage import db, fx_store
+from flightopt.storage import db, fx_store, watchlist
 from flightopt.storage.baseline import refresh_baselines
 from flightopt.storage.cache import SqliteCache, SqliteHistory
 
@@ -409,6 +410,141 @@ async def run_hotels(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- Beobachtungsliste ------------------------------------------------------
+
+def watch_code(token: str) -> str:
+    """Freitext zu genau einem Flughafen.
+
+    Gruppencodes bleiben draussen: die Historie einer Beobachtung haengt an
+    genau einem Schluessel, und "irgendein Tokioter Flughafen" ist keiner.
+    """
+    code = airport_registry.resolve(token)
+    if code is None:
+        raise SystemExit(f"watch: unbekannter Ort: {token!r}")
+    members = airport_registry.expand_code(code)
+    if len(members) != 1:
+        # Mit den Codes dabei: abweisen ohne Vorschlag laesst den Nutzer raten,
+        # was er stattdessen tippen soll.
+        raise SystemExit(
+            f"watch: {token!r} ist eine Flughafengruppe fuer "
+            f"{', '.join(members)}. Eine Beobachtung braucht einen einzelnen "
+            f"Flughafen."
+        )
+    return code
+
+
+def format_watch_table(rows: list[dict[str, Any]]) -> list[str]:
+    """Kursbuch-Zeilen: Strecke, Vorlauf, Zustand, Ertrag."""
+    header = (
+        f"{'Nr':>3}  {'Strecke':<9}  {'Vorlauf':>12}  {'An':>3}  "
+        f"{'Zuletzt':<19}  {'Zeilen':>8}  {'Tage':>5}  Aussage"
+    )
+    lines = [header, "-" * len(header)]
+    for row in rows:
+        window = f"{row['lead_min_days']}-{row['lead_max_days']} Tage"
+        ready = (
+            "traegt"
+            if row["ready"]
+            else f"noch {max(0, row['min_days'] - row['days_recorded'])} Tage"
+        )
+        lines.append(
+            f"{row['id']:>3}  {row['route']:<9}  {window:>12}  "
+            f"{'an' if row['enabled'] else 'aus':>3}  "
+            f"{(row['last_run_at'] or 'noch nie'):<19}  "
+            f"{row['observations']:>8}  {row['days_recorded']:>5}  {ready}"
+        )
+    return lines
+
+
+def run_watch_list(args: argparse.Namespace) -> int:
+    conn = db.connect(args.db)
+    try:
+        rows = watchlist.routes_with_stats(conn)
+        report = watchlist.watchlist_report(conn)
+        if not rows:
+            # Leer ist eine Aussage. Sie sieht sonst genauso aus wie eine
+            # Aufzeichnung, die nichts findet.
+            print("Keine Strecke wird beobachtet.")
+            print("Eintragen mit: flightopt watch add BER ATH")
+            print(
+                f"Ab dann laeuft der Preiskalender taeglich mit, und nach "
+                f"{report['min_days']} Tagen traegt die erste Aussage."
+            )
+            return 0
+        for line in format_watch_table(rows):
+            print(line)
+        print()
+        # "1 Strecken" liest sich wie ein Zaehlfehler, und wer die Zahl daneben
+        # nicht selbst nachrechnet, haelt sie fuer einen.
+        noun = "Strecke" if report["routes"] == 1 else "Strecken"
+        print(
+            f"{report['routes']} {noun}, {report['active']} aktiv, "
+            f"{report['due']} heute noch faellig, "
+            f"{report['observations']} Beobachtungen."
+        )
+        return 0
+    finally:
+        conn.close()
+
+
+def run_watch_add(args: argparse.Namespace) -> int:
+    origin, destination = watch_code(args.origin), watch_code(args.destination)
+    conn = db.connect(args.db)
+    try:
+        route_id = watchlist.add_route(
+            conn, origin, destination,
+            lead_min_days=args.lead_min, lead_max_days=args.lead_max,
+            currency=args.currency,
+        )
+        conn.commit()
+    except ValueError as exc:
+        raise SystemExit(f"watch: {exc}") from exc
+    finally:
+        conn.close()
+    print(
+        f"{origin}-{destination} wird beobachtet (Nr {route_id}), "
+        f"Vorlauf {args.lead_min} bis {args.lead_max} Tage."
+    )
+    print("Aufzeichnen mit: flightopt watch run")
+    return 0
+
+
+def run_watch_switch(args: argparse.Namespace, *, enabled: bool) -> int:
+    conn = db.connect(args.db)
+    try:
+        route = watchlist.set_enabled(conn, args.route_id, enabled)
+        conn.commit()
+    except ValueError as exc:
+        raise SystemExit(f"watch: {exc}") from exc
+    finally:
+        conn.close()
+    if enabled:
+        print(f"{route.label} wird wieder aufgezeichnet.")
+    else:
+        # Abgeschaltet ist nicht geloescht. Was schon gesammelt ist, bleibt.
+        print(f"{route.label} pausiert. Die bisherige Historie bleibt stehen.")
+    return 0
+
+
+async def run_watch_collect(args: argparse.Namespace) -> int:
+    conn = db.connect(args.db)
+    try:
+        report = await run_watchlist(conn)
+    finally:
+        conn.close()
+    print(
+        f"{report['routes']} Strecken abgefragt, {report['calls']} Abrufe, "
+        f"{report['observations']} Beobachtungen geschrieben."
+    )
+    if report["due_left"]:
+        print(f"{report['due_left']} Strecken bleiben faellig, naechster Durchgang.")
+    for note in report["errors"]:
+        print(f"  fehler: {note}")
+    if not report["routes"]:
+        print("Nichts faellig: entweder ist die Liste leer oder heute lief schon alles.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="flightopt", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -449,6 +585,36 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("--top", type=int, default=30)
     h.add_argument("--db", default=str(db.DEFAULT_DB))
     h.add_argument("-v", "--verbose", action="store_true")
+
+    watch = sub.add_parser(
+        "watch", help="Strecken beobachten und ihren Preiskalender mitschreiben"
+    )
+    watch_sub = watch.add_subparsers(dest="watch_command", required=True)
+
+    def with_db(target: argparse.ArgumentParser) -> argparse.ArgumentParser:
+        target.add_argument("--db", default=str(db.DEFAULT_DB))
+        target.add_argument("-v", "--verbose", action="store_true")
+        return target
+
+    with_db(watch_sub.add_parser("list", help="was gerade aufgezeichnet wird"))
+
+    w_add = with_db(watch_sub.add_parser("add", help="eine Strecke eintragen"))
+    w_add.add_argument("origin", help='Freitext oder IATA-Code, z.B. "Berlin"')
+    w_add.add_argument("destination", help='Freitext oder IATA-Code, z.B. "Athen"')
+    w_add.add_argument("--lead-min", dest="lead_min", type=int,
+                       default=watchlist.DEFAULT_LEAD_MIN,
+                       help="ab wie vielen Tagen Vorlauf, gezaehlt ab heute")
+    w_add.add_argument("--lead-max", dest="lead_max", type=int,
+                       default=watchlist.DEFAULT_LEAD_MAX,
+                       help="bis wie vielen Tagen Vorlauf")
+    w_add.add_argument("--currency", default="EUR")
+
+    w_on = with_db(watch_sub.add_parser("on", help="eine Strecke wieder aufzeichnen"))
+    w_on.add_argument("route_id", type=int)
+    w_off = with_db(watch_sub.add_parser("off", help="eine Strecke pausieren"))
+    w_off.add_argument("route_id", type=int)
+
+    with_db(watch_sub.add_parser("run", help="die heute faelligen Strecken abrufen"))
     return parser
 
 
@@ -462,6 +628,17 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(run_search(args))
     if args.command == "hotels":
         return asyncio.run(run_hotels(args))
+    if args.command == "watch":
+        if args.watch_command == "list":
+            return run_watch_list(args)
+        if args.watch_command == "add":
+            return run_watch_add(args)
+        if args.watch_command == "on":
+            return run_watch_switch(args, enabled=True)
+        if args.watch_command == "off":
+            return run_watch_switch(args, enabled=False)
+        if args.watch_command == "run":
+            return asyncio.run(run_watch_collect(args))
     return 1
 
 

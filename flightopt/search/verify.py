@@ -213,10 +213,14 @@ async def verify(
                 break
 
         if history is not None and best is not None:
-            # Derselbe Schluessel wie in `build_grid`, nur die andere
-            # Grundgesamtheit: `is_estimate=False`. Geschrieben wird der reine
-            # Angebotspreis, ohne aufgeschlagene Gepaeckgebuehr - so wie der
-            # Kalender ihn auch schreibt.
+            # Derselbe Schluessel wie in `build_grid`. Die Grundgesamtheit sagt
+            # aber die Quelle, nicht die Phase: hier stand fest `False`, und
+            # damit galt jeder Treffer der Nachpruefung als geprueft - auch
+            # einer, den seine Quelle selbst als Schaetzung ausweist. Solche
+            # Zeilen landen sonst in der falschen Haelfte von
+            # `flight_baseline` (siehe docs/PRICE_HISTORY.md, Abschnitt 3).
+            # Geschrieben wird der reine Angebotspreis, ohne aufgeschlagene
+            # Gepaeckgebuehr - so wie der Kalender ihn auch schreibt.
             await history.record(
                 source=best.source,
                 entity_type="flight",
@@ -224,7 +228,7 @@ async def verify(
                 travel_date=day,
                 price=best.price,
                 party_size=spec.pax.total,
-                is_estimate=False,
+                is_estimate=best.is_estimate,
                 is_indicative=best_indicative,
             )
 
@@ -269,6 +273,20 @@ def _offer_to_cache(offer: Offer) -> dict:
         "destination": offer.destination,
         "travel_date": offer.travel_date.isoformat(),
         "deep_link": offer.deep_link,
+        # Muss mit, sonst geht die Einstufung der Quelle auf dem Weg durch den
+        # Cache verloren und der zweite Lauf innerhalb der TTL macht aus einer
+        # Schaetzung einen geprueften Preis.
+        "is_estimate": offer.is_estimate,
+        # Gleiche Sorte Verlust: ohne Nativwaehrung loescht `_leg_payload` das
+        # Feld aus der Zeile. Der Originalpreis der Airline waere dann je nach
+        # Cache-Zustand mal da und mal nicht.
+        "price_native": (
+            None if offer.price_native is None
+            else {
+                "minor": offer.price_native.minor,
+                "currency": offer.price_native.currency,
+            }
+        ),
         "segments": [
             {
                 "carrier": s.carrier,
@@ -306,5 +324,12 @@ def _offer_from_cache(row: dict, source: str) -> Offer:
             for s in row.get("segments", [])
         ),
         deep_link=row.get("deep_link"),
-        is_estimate=False,
+        # Eintraege aus der Zeit vor diesem Feld tragen es nicht. Der alte
+        # Standardwert bleibt deshalb der Standardwert, statt eine ganze
+        # Cache-Generation stillschweigend umzudeuten.
+        is_estimate=bool(row.get("is_estimate", False)),
+        price_native=(
+            Money(native["minor"], native["currency"])
+            if (native := row.get("price_native")) else None
+        ),
     )

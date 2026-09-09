@@ -30,14 +30,23 @@ def a_property(conn, *, key="trivago:melia", name="Melia Athens", city="Athens",
 
 
 def observe(conn, prices, *, key="trivago:melia", cc="GR", party_size=2, nights=1,
-            currency="EUR") -> None:
+            currency="EUR", is_estimate=1) -> None:
+    """Beobachtungen einer Vergleichsportal-Quelle, also Richtwerte.
+
+    `is_estimate=1` ist hier kein Beiwerk, sondern das, was Trivago
+    tatsaechlich schreibt - und seit `hotel_baseline` die Grundgesamtheiten
+    trennt, entscheidet es, in welche Verteilung die Zeile faellt. Ein Preis
+    wird nur gegen Preise seiner eigenen Art gehalten; die Voreinstellung von
+    `detect_price_signal` ist dieselbe.
+    """
     for price in prices:
         conn.execute(
             "INSERT INTO price_observation(observed_at, source, entity_type, entity_key, "
-            "travel_date, return_or_nights, party_size, currency, price_total_minor) "
-            "VALUES(?,?,?,?,?,?,?,?,?)",
+            "travel_date, return_or_nights, party_size, currency, price_total_minor, "
+            "is_estimate) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (OBSERVED.isoformat(timespec="seconds"), "trivago", "hotel", f"{cc}|{key}",
-             TRAVEL.isoformat(), str(nights), party_size, currency, int(price)),
+             TRAVEL.isoformat(), str(nights), party_size, currency, int(price),
+             int(is_estimate)),
         )
 
 
@@ -170,7 +179,9 @@ def test_the_plausibility_floor_works_on_the_very_first_day(tmp_path):
     verdict = signal(conn, 1200)
 
     assert verdict["tier"] == "error"
-    assert verdict["reason"] == "unter der Schranke von 45 Euro je Nacht"
+    assert verdict["reason"] == (
+        "unter der Schranke von 45 Euro je Nacht, ohne Vergleichspreise"
+    )
     assert (verdict["status"], verdict["basis"], verdict["n"]) == ("unknown", "none", 0)
     conn.close()
 
@@ -183,7 +194,14 @@ def test_a_hotel_without_history_and_above_the_floor_stays_unknown(tmp_path):
     conn.close()
 
 
-def test_the_flight_detector_keeps_its_three_tiers(tmp_path):
+def test_the_hotel_thresholds_do_not_leak_into_the_flight_detector(tmp_path):
+    """Fluege haben seit `flightopt.hunt.errorfare` eine vierte Stufe.
+
+    Sie ist aber nicht die der Hotels. Derselbe Abstand zum Median waere bei
+    einem Hotel ein Preisfehler; auf einer Flugstrecke reicht er nicht, weil
+    dort zusaetzlich die Schranke der Entfernung greifen muss und weil sieben
+    Vergleichspreise fuer die statistische Bedingung zu wenig sind.
+    """
     conn = db.connect(tmp_path / "h.db")
     for price in (19000, 19500, 20000, 20000, 20500, 21000, 20000):
         conn.execute(

@@ -171,6 +171,34 @@ async def test_preload_routes_queries_sources_concurrently():
 
 
 @pytest.mark.asyncio
+async def test_one_source_that_cannot_load_its_network_does_not_end_the_search():
+    """Das Vorwaermen laeuft vor jedem Preisabruf und fuer alle Quellen.
+
+    Eine Ausnahme aus einem einzigen Lader riss bisher den ganzen Suchlauf
+    mit, bevor irgendeine Quelle einen Preis geholt hatte - wegen eines
+    Streckennetzes, das die Suche gar nicht gebraucht haette.
+    """
+
+    class Broken:
+        async def load_routes(self, origin: str):
+            raise RuntimeError("Streckennetz nicht erreichbar")
+
+    class Fine:
+        def __init__(self) -> None:
+            self.seen: list[str] = []
+
+        async def load_routes(self, origin: str):
+            self.seen.append(origin)
+            return {"ATH"}
+
+    healthy = Fine()
+
+    await preload_routes([Broken(), healthy], one_leg_spec().legs)
+
+    assert healthy.seen == ["BER"]
+
+
+@pytest.mark.asyncio
 async def test_verify_queries_distinct_leg_dates_concurrently():
     first_ready = asyncio.Event()
     second_ready = asyncio.Event()

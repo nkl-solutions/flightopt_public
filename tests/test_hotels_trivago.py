@@ -57,7 +57,11 @@ def test_the_recorded_answer_becomes_offers_with_price_stars_and_rating():
     assert first.party_size == 2
     # Trivagos prominentester Preis ist monetarisiert sortiert, also Richtwert.
     assert first.indicative is True
-    assert first.entity_key == "GR|trivago:1d6fec31a3cf"
+    # Der Beobachtungsschluessel ist der `property_key` allein. Das Land steht
+    # weiter am Angebot, aber nicht im Schluessel: eine Antwort ohne Land
+    # wuerde die Historie sonst spalten.
+    assert first.entity_key == "trivago:1d6fec31a3cf"
+    assert first.country_code == "GR"
 
 
 def test_the_llm_instructions_in_the_answer_are_data_and_never_reach_the_offers():
@@ -391,6 +395,10 @@ class Endpoint:
         self.replies = list(replies)
         self.calls: list[str] = []
         self.handshakes = 0
+        self.greeting_fails = 0
+        """Wie oft der zweite Schritt der Begruessung noch scheitern soll."""
+        self.greeting_status = 400
+        """Womit er dann scheitert. 400 ist ein Aufbaufehler, 429 eine Bremse."""
 
     @property
     def searches(self) -> int:
@@ -411,6 +419,9 @@ class Endpoint:
                 rpc_id,
             )
         if method.startswith("notifications/"):
+            if self.greeting_fails > 0:
+                self.greeting_fails -= 1
+                return Reply(status_code=self.greeting_status)
             return Reply(status_code=202)
         reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
         return self.answer(reply, rpc_id)
@@ -680,3 +691,135 @@ async def test_a_day_that_was_lost_anyway_still_shows_what_it_cost():
     assert results[0].retries == 2
     assert report.retries == 2
     assert any(HICCUP in note for note in report.notes)
+
+
+# --------------------------------------------------------------------------
+# Stellen, an denen still weniger ankam, als die Quelle geschickt hat.
+# --------------------------------------------------------------------------
+
+
+ZEUS = {
+    "accommodation_id": "zeus",
+    "accommodation_name": "Hotel Zeus",
+    "currency": "EUR",
+    "price_per_stay": "90 EUR",
+}
+
+
+def block(rows: list[dict]) -> dict:
+    """Ein Textblock mit genau diesen Zeilen darin."""
+    return {"type": "text", "text": json.dumps({"output": json.dumps(rows)})}
+
+
+def test_every_text_block_is_read_and_not_only_the_first():
+    """Das Protokoll laesst der Quelle frei, ihre Antwort zu stueckeln.
+
+    Wer nur den ersten Block liest, verliert den Rest: kein Fehler, keine
+    Notiz, nur ein Tag, der duenner aussieht als er war.
+    """
+    answer = {
+        "content": [
+            block([ROOM]),
+            {"type": "image", "data": "..."},
+            block([ZEUS]),
+        ]
+    }
+
+    batch = parse_tool_result(answer, athens())
+
+    assert [offer.name for offer in batch.offers] == ["Hotel Athena", "Hotel Zeus"]
+    assert batch.empty is False
+
+
+def test_a_sentence_in_front_does_not_hide_the_block_that_carries_the_data():
+    """Ein Begleitsatz in eigenem Block ist kein Ausfall der Quelle.
+
+    Frueher galt der erste Block als die ganze Antwort: er trug kein Objekt,
+    also hiess das "trivago meldet ...", der Tag wurde zweimal nachgefragt und
+    ging dann verloren - obwohl die Daten im Block daneben standen.
+    """
+    answer = {
+        "content": [
+            {"type": "text", "text": "Here are the results for Athens."},
+            block([ROOM]),
+        ]
+    }
+
+    batch = parse_tool_result(answer, athens())
+
+    assert [offer.name for offer in batch.offers] == ["Hotel Athena"]
+
+
+def test_only_prose_and_no_object_at_all_stays_the_sources_own_hiccup():
+    """Die Gegenprobe: sagt kein Block etwas, bleibt es ihre Stoerung."""
+    answer = {
+        "content": [
+            {"type": "text", "text": "An error occurred while searching"},
+            {"type": "text", "text": "for accommodations. Please try again."},
+        ]
+    }
+
+    with pytest.raises(SourceUnstable) as caught:
+        parse_tool_result(answer, athens())
+
+    assert str(caught.value) == f"trivago meldet: {HICCUP}"
+
+
+async def test_a_greeting_that_broke_off_is_repeated_instead_of_ending_the_day():
+    """`notifications/initialized` ist kein optionaler zweiter Schritt.
+
+    Blieb sie haengen, stand die Sitzungskennung trotzdem schon: `handshake`
+    kehrte ab da sofort zurueck, schickte die fehlende Benachrichtigung nie
+    nach, und der Fehler beendete den Tag endgueltig - waehrend der Rest der
+    Quelle laengst zweimal nachfasst.
+    """
+    wired = Wired(found(ROOM))
+    wired.endpoint.greeting_fails = 1
+
+    batch = await wired.source.search(athens())
+
+    assert [offer.name for offer in batch.offers] == ["Hotel Athena"]
+    assert batch.retries == 1
+    # Neu begruesst, nicht auf der halben Sitzung weitergemacht.
+    assert wired.endpoint.handshakes == 2
+    assert wired.source._mcp_session_id == "sitzung-2"
+
+
+async def test_a_greeting_that_was_rejected_is_not_asked_again():
+    """Die Gegenprobe: eine Abweisung ist keine Stoerung.
+
+    Dafuer gibt es `Retry-After` und die Sicherung in `_post`. Wer auf eine
+    Bremse hin haeufiger begruesst, hat sie nicht verstanden.
+    """
+    wired = Wired(found(ROOM))
+    # Drei, damit auch die eigene Schleife von `_post` nur Abweisungen sieht.
+    wired.endpoint.greeting_fails = 3
+    wired.endpoint.greeting_status = 429
+
+    with pytest.raises(SourceBlocked):
+        await wired.source.search(athens())
+
+    assert wired.endpoint.handshakes == 1
+    assert wired.endpoint.searches == 0
+
+
+async def test_a_single_rejection_costs_its_day_and_not_the_whole_fan():
+    """Ein 403 ist die Abweisung einer Anfrage, keine Sperre der Quelle.
+
+    Frueher beendete die erste Abweisung den ganzen Faecher: ein Tag, an dem
+    die WAF quergeschossen hat, kostete alle folgenden Anreisetage mit - ohne
+    dass an der Quelle etwas kaputt war. Erst wenn die Sicherung wirklich
+    zugeht, ist Weiterfragen nur noch Klopfen.
+    """
+    wired = Wired(Reply(status_code=403), found(ROOM), found(ROOM))
+    days = [
+        HotelQuery(destination="Athen", arrival=date(2026, 11, 10 + offset))
+        for offset in range(3)
+    ]
+
+    results = await wired.source.search_many(days)
+    report = FetchReport.of(results)
+
+    assert [result.status for result in results] == ["fehler", "ok", "ok"]
+    assert (report.ok, report.failed, report.aborted) == (2, 1, 0)
+    assert not wired.source.breaker.is_open

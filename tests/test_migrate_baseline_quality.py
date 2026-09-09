@@ -159,3 +159,46 @@ def test_the_migration_leaves_the_hotel_rows_alone(tmp_path):
     # Kennzeichen hier wuerde ihnen jede Vergleichsgruppe nehmen.
     assert [row["is_indicative"] for row in hotel_obs] == [0]
     assert hotel_baseline == 1
+
+
+def test_a_break_in_the_middle_leaves_the_baselines_standing(tmp_path):
+    """`DELETE FROM flight_baseline` lief ausserhalb jeder Transaktion.
+
+    Die Verbindung steht auf `isolation_level=None`, jede Anweisung war also
+    sofort endgueltig. Brach das Neurechnen danach ab, waren die alten
+    Baselines weg und die neuen nicht da - und zwar dauerhaft.
+    """
+    path = tmp_path / "flightopt.db"
+    old_shaped_db(path)
+    run(path)
+
+    module = load_module()
+    conn = db.connect(path)
+    try:
+        before_rows = conn.execute("SELECT COUNT(*) c FROM flight_baseline").fetchone()["c"]
+        marked_before = conn.execute(
+            "SELECT COUNT(*) c FROM price_observation WHERE is_indicative=1"
+        ).fetchone()["c"]
+
+        def explode(*args, **kwargs):
+            raise sqlite3.OperationalError("database is locked")
+
+        module.refresh_flight_baselines = explode
+        try:
+            module.migrate(conn, {})
+        except sqlite3.OperationalError:
+            pass
+        else:
+            raise AssertionError("der Abbruch kam nicht durch")
+
+        after_rows = conn.execute("SELECT COUNT(*) c FROM flight_baseline").fetchone()["c"]
+        marked_after = conn.execute(
+            "SELECT COUNT(*) c FROM price_observation WHERE is_indicative=1"
+        ).fetchone()["c"]
+        assert conn.in_transaction is False
+    finally:
+        conn.close()
+
+    assert before_rows == 1
+    assert after_rows == before_rows
+    assert marked_after == marked_before

@@ -5,10 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>flightopt: Multi-Stop-Flugpreise</title>
 <meta name="description" content="Feste Route, bewegliche Daten. flightopt zeigt, an welchen Tagen dieselbe Multi-Stop-Reise am wenigsten kostet.">
+<meta name="theme-color" content="#f8f7f2">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23f8f7f2'/%3E%3Crect x='2' y='3' width='12' height='1.4' fill='%231e1a16'/%3E%3Crect x='2' y='7.3' width='12' height='1.4' fill='%23b01003'/%3E%3Crect x='2' y='11.6' width='12' height='1.4' fill='%231e1a16'/%3E%3C/svg%3E">
+<link rel="preload" href="/static/fonts/archivo-narrow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/sometype-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
 <div class="wrap">
 
 <header class="mast">
@@ -20,6 +24,7 @@
   <p class="tagline">Feste Route, bewegliche Daten. Zeigt, wann dieselbe Reise am wenigsten kostet.</p>
 </header>
 
+<main id="main">
 <form id="f">
   <fieldset class="seg">
     <legend class="lab">Reiseart</legend>
@@ -30,6 +35,8 @@
     <div>
       <span class="lab" id="routelbl">Route</span>
       <div class="route" id="route" role="group" aria-labelledby="routelbl"></div>
+      <p class="hint" id="routehint" hidden>Reihenfolge ändern: Feld ziehen oder
+        mit Alt und den Pfeiltasten nach links und rechts schieben.</p>
 
       <details class="fold" id="freetext">
         <summary>Als Satz beschreiben</summary>
@@ -45,7 +52,7 @@
               </button>
               <button id="aiApply" type="button">Route übernehmen</button>
             </div>
-            <span class="msg" id="aiStatus" data-tone=""></span>
+            <span class="msg" id="aiStatus" data-tone="" role="status"></span>
             <span class="msg" id="voiceStatus" data-tone="" role="status" aria-live="polite"></span>
           </div>
         </div>
@@ -54,8 +61,10 @@
 
     <div>
       <div class="row">
-        <div><label class="lab" for="from">Fenster ab</label><input type="date" id="from" required></div>
-        <div><label class="lab" for="to">bis</label><input type="date" id="to" required></div>
+        <div><label class="lab" for="from">Fenster ab</label>
+          <input type="date" id="from" required aria-describedby="windowmsg"></div>
+        <div><label class="lab" for="to">bis</label>
+          <input type="date" id="to" required aria-describedby="windowmsg"></div>
       </div>
       <p class="msg" id="windowmsg" data-tone=""></p>
 
@@ -94,7 +103,7 @@
 
       <div class="stayopts">
         <label class="check" for="withHotels">
-          <input type="checkbox" id="withHotels"> Hotelkosten mitrechnen
+          <input type="checkbox" id="withHotels" aria-describedby="hotelhint"> Hotelkosten mitrechnen
         </label>
         <div class="row" id="hotelparty">
           <div>
@@ -128,19 +137,21 @@
   <p class="routeglance" id="routeglance"></p>
 </form>
 
-<section class="log" id="log">
+<section class="log" id="log" aria-label="Verlauf der Suche">
   <div class="progressmeter">
     <div class="progressbar" id="progressbar" role="progressbar" aria-valuemin="0"
-      aria-valuemax="100" aria-valuenow="0"><i id="progressfill"></i></div>
+      aria-valuemax="100" aria-valuenow="0" aria-labelledby="progresslabel"
+      ><i id="progressfill"></i></div>
     <div class="progressmeta">
       <span id="progresslabel" aria-live="polite">Bereit</span>
       <span id="progresscount"></span>
       <button class="kill-search" id="cancel" type="button" hidden>Abbrechen</button>
     </div>
   </div>
-  <div class="steps" id="steps"></div>
+  <div class="steps" id="steps" aria-hidden="true"></div>
   <p class="msg note" id="note" data-tone="" role="status" aria-live="polite"></p>
-  <div class="legs" id="legs"></div>
+  <p class="msg" id="runnotes" data-tone=""></p>
+  <div class="legs" id="legs" role="group" aria-label="Tage mit Preis je Teilstrecke"></div>
 </section>
 
 <section class="out" id="out">
@@ -168,27 +179,33 @@
       <label class="check" for="directOnly">
         <input type="checkbox" id="directOnly"> nur Direktflüge
       </label>
-      <span class="filtercount" id="filtercount"></span>
+      <button class="linkbtn" id="resetfilters" type="button" hidden>Filter zurücksetzen</button>
       <div class="key"><span>günstig</span><span class="scale" aria-hidden="true"
         ><i style="--d:.28"></i><i style="--d:.46"></i><i style="--d:.64"></i
         ><i style="--d:.82"></i><i style="--d:1"></i></span><span>teuer</span></div>
     </div>
   </div>
   <p class="outsummary" id="outsummary" aria-live="polite"></p>
+  <p class="legend">Zwei Spalten, zwei Aussagen: <b>Status</b> sagt, wie sicher der
+    Preis ist. <b>Preislage</b> sagt, ob er für diese Strecke gut ist. Ohne genug
+    Preishistorie steht dort <b>keine Basis</b>, das ist kein schlechtes Zeichen,
+    sondern gar keins. <b>Fehltarif</b> ist keine Steigerung von günstig: der
+    Preis liegt so weit unter dem Üblichen, dass er vermutlich nicht so gemeint
+    war. Woran das gemessen wurde, steht in der aufgeklappten Zeile.</p>
   <p class="usedby" id="usedby"></p>
   <div class="ruler" id="ruler"></div>
-  <div class="tablewrap">
+  <div class="tablewrap" tabindex="0" role="region" aria-label="Ergebnisse, seitlich scrollbar">
     <table class="kursbuch" id="resulttable">
       <thead>
         <tr>
           <th scope="col" class="c-rank">Rang</th>
           <th scope="col" class="c-price">Preis</th>
-          <th scope="col" class="c-price c-grand">Gesamt</th>
+          <th scope="col" class="c-price c-grand">Mit Hotel</th>
           <th scope="col" class="c-status">Status</th>
           <th scope="col" class="c-status c-band">Preislage</th>
           <th scope="col" class="c-rail">Daten</th>
-          <th scope="col" class="c-num">Nächte</th>
-          <th scope="col" class="c-num">Umstiege</th>
+          <th scope="col" class="c-num c-nights">Nächte</th>
+          <th scope="col" class="c-num c-stops">Umstiege</th>
           <th scope="col" class="c-air">Airlines</th>
         </tr>
       </thead>
@@ -204,20 +221,21 @@
       <label class="lab" for="profileName">Profilname</label>
       <input id="profileName" type="text" placeholder="Berlin nach Athen, täglich">
       <button id="saveProfile" type="button">Profil speichern</button>
-      <span class="msg" id="savedmsg" data-tone=""></span>
+      <span class="msg" id="savedmsg" data-tone="" role="status"></span>
     </div>
     <div class="scanbar">
-      <span id="scanstate">Scanner wird geprüft</span>
+      <span id="scanstate" role="status">Scanner wird geprüft</span>
       <button id="runScanner" type="button">Fällige Scans starten</button>
     </div>
   </div>
   <p class="msg" id="dealssummary" data-tone=""></p>
-  <div class="tablewrap">
+  <div class="tablewrap" tabindex="0" role="region" aria-label="Gespeicherte Scans, seitlich scrollbar">
     <table class="kursbuch" id="dealstable">
       <thead>
         <tr>
           <th scope="col">Profil</th>
           <th scope="col">Route</th>
+          <th scope="col" class="c-dates">Reisedaten</th>
           <th scope="col">Scan</th>
           <th scope="col" class="c-price">Preis</th>
           <th scope="col" class="c-num">Abweichung</th>
@@ -229,9 +247,132 @@
   </div>
 </section>
 
+<section class="hunt" id="hunt">
+  <div class="hunthead">
+    <h2>Fehltarif-Jagd</h2>
+    <p class="msg" id="huntchannel" data-tone=""></p>
+    <div class="scanbar">
+      <button id="huntRun" type="button">Jetzt jagen</button>
+      <label class="check" for="huntOpenOnly">
+        <input type="checkbox" id="huntOpenOnly" checked> nur offene Funde
+      </label>
+      <span class="msg" id="huntmsg" data-tone="" role="status"></span>
+    </div>
+  </div>
+  <p class="msg" id="huntsummary" data-tone=""></p>
+  <p class="legend">Ein Fehltarif ist ein Preis, der so weit unter dem Üblichen
+    liegt, dass er vermutlich nicht so gemeint war. <b>Warum</b> sagt, worauf
+    das Urteil steht: drei Striche heißen eine Historie, die trägt, einer heißt,
+    dass allein die Entfernungsschranke urteilt. Das ist die schwächste Aussage,
+    die hier vorkommt, und sie sieht auch so aus. Ob ein Preis noch steht,
+    prüft die Jagd nicht nach: darum steht an jedem Fund, wie alt er ist, und
+    ältere Zeilen treten zurück.</p>
+  <div class="tablewrap" tabindex="0" role="region" aria-label="Funde der Jagd, seitlich scrollbar">
+    <table class="kursbuch" id="hunttable">
+      <thead>
+        <tr>
+          <th scope="col" class="c-route">Strecke</th>
+          <th scope="col" class="c-price">Preis</th>
+          <th scope="col" class="c-why">Warum</th>
+          <th scope="col" class="c-status">Meldung</th>
+          <th scope="col" class="c-act">Buchen und abhaken</th>
+        </tr>
+      </thead>
+      <tbody id="huntrows"></tbody>
+    </table>
+  </div>
+
+  <div class="curvewrap" id="huntcurve" hidden>
+    <div class="curvehead">
+      <h3 id="curvehead"></h3>
+      <div class="curvetools">
+        <label class="sortlbl" for="curveBy">Gruppiert</label>
+        <select id="curveBy">
+          <option value="observed">nach Beobachtungstag</option>
+          <option value="travel">nach Reisetag</option>
+        </select>
+        <label class="sortlbl" for="curveDays">Zeitraum</label>
+        <select id="curveDays">
+          <option value="14">14 Tage</option>
+          <option value="30" selected>30 Tage</option>
+          <option value="90">90 Tage</option>
+          <option value="180">180 Tage</option>
+        </select>
+      </div>
+    </div>
+    <p class="msg" id="curvecadence" data-tone=""></p>
+    <div class="curvefield" id="curvefield">
+      <div class="curveprices" id="curveprices"></div>
+      <div class="curvebox" id="curvebox"></div>
+      <div class="ruler curvedays" id="curvedays"></div>
+    </div>
+    <p class="legend">Die Fläche ist die Spanne des Tages von Min bis Max, die
+      Linie der Median. Gestrichelt heißt: an diesem Tag stehen weniger als fünf
+      Beobachtungen dahinter. Die Balken unten zählen die Beobachtungen je Tag,
+      die senkrechten Marken sind Funde.</p>
+  </div>
+</section>
+
+<section class="watch" id="watch">
+  <div class="watchhead">
+    <h2>Beobachtungsliste</h2>
+    <div class="watchform">
+      <span class="watchfield">
+        <label class="lab" for="watchFrom">Von</label>
+        <input id="watchFrom" type="text" placeholder="Berlin" autocomplete="off">
+      </span>
+      <span class="watchfield">
+        <label class="lab" for="watchTo">Nach</label>
+        <input id="watchTo" type="text" placeholder="Athen" autocomplete="off">
+      </span>
+      <span class="watchfield">
+        <label class="lab" for="watchLeadMin">Vorlauf ab</label>
+        <input id="watchLeadMin" type="number" min="0" max="365" value="14">
+      </span>
+      <span class="watchfield">
+        <label class="lab" for="watchLeadMax">bis</label>
+        <input id="watchLeadMax" type="number" min="0" max="365" value="73">
+      </span>
+      <button id="watchAdd" type="button">Strecke beobachten</button>
+      <span class="msg" id="watchmsg" data-tone="" role="status"></span>
+    </div>
+    <div class="scanbar">
+      <button id="watchRun" type="button">Jetzt aufzeichnen</button>
+    </div>
+  </div>
+  <p class="msg" id="watchsummary" data-tone=""></p>
+  <p class="msg" id="watchhot" data-tone=""></p>
+  <p class="msg" id="watchpause" data-tone=""></p>
+  <p class="legend">Der Vorlauf zählt ab heute und wandert mit: ein Eintrag mit
+    14 bis 73 Tagen fragt jeden Tag dieselbe Spanne ab, nur einen Tag weiter.
+    Aufgezeichnet wird einmal am Tag, bei denselben Quellen wie die Suche. Eine
+    <b>heiß</b> geschaltete Strecke wird zusätzlich alle 20 Minuten gefragt und
+    ihre Funde gehen an die Jagd. Heiß geht nur bis zu einem Vorlauffenster von
+    62 Tagen.</p>
+  <div class="tablewrap" tabindex="0" role="region" aria-label="Beobachtete Strecken, seitlich scrollbar">
+    <table class="kursbuch" id="watchtable">
+      <thead>
+        <tr>
+          <th scope="col">Strecke</th>
+          <th scope="col" class="c-lead">Vorlauf</th>
+          <th scope="col" class="c-scan">Zuletzt</th>
+          <th scope="col" class="c-num c-count">Beobachtungen</th>
+          <th scope="col" class="c-num c-days">Tage</th>
+          <th scope="col" class="c-status">Aussage</th>
+          <th scope="col" class="c-cadence">Takt</th>
+          <th scope="col">Aufzeichnung</th>
+        </tr>
+      </thead>
+      <tbody id="watchrows"></tbody>
+    </table>
+  </div>
+</section>
+</main>
+
 <footer>
-  Preise ohne Kennzeichnung sind Tagesbestpreise und noch nicht nachgeprüft.
-  Aufschläge für Gepäck und Sitzplatz sind nicht enthalten. Privater Gebrauch.
+  Der Status je Zeile sagt, wie sicher ein Preis ist: geprüft, Schätzung oder
+  Richtwert. Aufschläge für Gepäck und Sitzplatz sind nicht enthalten.
+  Privater Gebrauch.
 </footer>
 </div>
 <script src="/static/app.js"></script>

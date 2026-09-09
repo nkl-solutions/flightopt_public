@@ -227,12 +227,23 @@ def build_arguments(query: HotelQuery) -> dict[str, Any]:
     return args
 
 
-def _first_text_block(result: Mapping[str, Any]) -> str:
-    """Der erste `text`-Block. Die `image`-Bloecke daneben tragen keine Preise."""
+def _text_blocks(result: Mapping[str, Any]) -> list[str]:
+    """Alle `text`-Bloecke, in ihrer Reihenfolge.
+
+    Die `image`-Bloecke daneben tragen keine Preise und bleiben liegen. Gelesen
+    werden aber alle Textbloecke und nicht nur der erste: das Protokoll laesst
+    der Quelle frei, ihre Antwort zu stueckeln, und wer nur den ersten nimmt,
+    verliert den Rest still - kein Fehler, keine Notiz, nur ein Tag, der
+    duenner aussieht als er war.
+    """
+    blocks: list[str] = []
     for block in result.get("content") or []:
-        if isinstance(block, Mapping) and block.get("type") == "text":
-            return str(block.get("text") or "")
-    return ""
+        if not isinstance(block, Mapping) or block.get("type") != "text":
+            continue
+        text = str(block.get("text") or "")
+        if text.strip():
+            blocks.append(text)
+    return blocks
 
 
 def _envelope_from_text(text: str) -> Mapping[str, Any]:
@@ -243,15 +254,9 @@ def _envelope_from_text(text: str) -> Mapping[str, Any]:
     wird wie jede andere Werkzeug-Ausgabe als Daten behandelt: er wird
     uebersprungen, nicht befolgt. Gelesen wird ab der ersten geschweiften
     Klammer, und auch nur so weit, wie ein Objekt reicht.
-
-    Steht gar kein Objekt darin, sondern nur ein Satz, dann hat die Quelle
-    selbst geantwortet ("An error occurred while searching for
-    accommodations."). Das ist ihre Stoerung und nicht unser Parse-Problem,
-    also wird sie woertlich weitergegeben statt uns zugeschoben - und als
-    `SourceUnstable`, weil genau dieser Satz einen Neuversuch wert ist.
     """
     start = text.find("{")
-    if start < 0:
+    if start < 0:  # pragma: no cover - `_envelopes` fragt vorher danach
         raise SourceUnstable(f"trivago meldet: {source_message(text)}")
     try:
         envelope, _ = json.JSONDecoder().raw_decode(text[start:])
@@ -260,6 +265,43 @@ def _envelope_from_text(text: str) -> Mapping[str, Any]:
     if not isinstance(envelope, Mapping):
         raise SourceError("trivago: Textblock ist kein Objekt")
     return envelope
+
+
+def _envelopes(blocks: Sequence[str]) -> list[Mapping[str, Any]]:
+    """Aus den Textbloecken die, die ein Objekt tragen.
+
+    Bloecke ohne geschweifte Klammer sind Begleittext und keine Nutzlast; sie
+    duerfen den Block daneben nicht verdecken. Traegt gar keiner ein Objekt,
+    sondern alle zusammen nur einen Satz, dann hat die Quelle selbst
+    geantwortet ("An error occurred while searching for accommodations."). Das
+    ist ihre Stoerung und nicht unser Parse-Problem, also wird sie woertlich
+    weitergegeben statt uns zugeschoben - und als `SourceUnstable`, weil genau
+    dieser Satz einen Neuversuch wert ist.
+    """
+    found = [_envelope_from_text(text) for text in blocks if "{" in text]
+    if not found:
+        raise SourceUnstable(f"trivago meldet: {source_message(' '.join(blocks))}")
+    return found
+
+
+def _records_of(envelope: Mapping[str, Any]) -> list[Any]:
+    """Die Datensaetze aus `output`, und nur aus `output`."""
+    raw = envelope.get("output")
+    if isinstance(raw, str):
+        if not raw.strip():
+            raise SourceError("trivago: Feld 'output' ist leer")
+        # `output` ist ein JSON-Array als Zeichenkette, also zweimal auspacken.
+        try:
+            records = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise SourceError(f"trivago: 'output' ist kein JSON: {exc}") from exc
+    elif isinstance(raw, list):
+        records = raw
+    else:
+        raise SourceError("trivago: Antwort ohne Feld 'output'")
+    if not isinstance(records, list):
+        raise SourceError("trivago: 'output' ist keine Liste")
+    return records
 
 
 def parse_tool_result(result: Mapping[str, Any], query: HotelQuery) -> HotelBatch:
@@ -278,34 +320,21 @@ def parse_tool_result(result: Mapping[str, Any], query: HotelQuery) -> HotelBatc
     woertlich zitiert), die Antwort ist da, aber ohne `output` (Aufbau
     geaendert), oder es kommt gar kein Textblock (Protokoll passt nicht).
     """
-    text = _first_text_block(result)
+    blocks = _text_blocks(result)
     if result.get("isError"):
         # Der Server sagt selbst, dass es schiefging. Sein Wortlaut ist die
         # bessere Auskunft als jede Vermutung von uns.
-        if text.strip():
-            raise SourceUnstable(f"trivago meldet: {source_message(text)}")
+        if blocks:
+            raise SourceUnstable(f"trivago meldet: {source_message(' '.join(blocks))}")
         # Ohne Text gibt es nichts zu beurteilen. Ein Fehler ohne Aussage ist
         # kein Grund zum Nachfassen, sondern ein Grund, es stehen zu lassen.
         raise SourceError(f"trivago: {TOOL_SEARCH} meldet einen Fehler ohne Text")
-    if not text:
+    if not blocks:
         raise SourceError("trivago: Antwort ohne Textblock, das Protokoll passt nicht")
-    envelope = _envelope_from_text(text)
 
-    raw = envelope.get("output")
-    if isinstance(raw, str):
-        if not raw.strip():
-            raise SourceError("trivago: Feld 'output' ist leer")
-        # `output` ist ein JSON-Array als Zeichenkette, also zweimal auspacken.
-        try:
-            records = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise SourceError(f"trivago: 'output' ist kein JSON: {exc}") from exc
-    elif isinstance(raw, list):
-        records = raw
-    else:
-        raise SourceError("trivago: Antwort ohne Feld 'output'")
-    if not isinstance(records, list):
-        raise SourceError("trivago: 'output' ist keine Liste")
+    records: list[Any] = []
+    for envelope in _envelopes(blocks):
+        records.extend(_records_of(envelope))
 
     batch = HotelBatch()
     # Null Treffer ist eine Auskunft der Quelle und kein Lesefehler. Gemeint ist
@@ -568,21 +597,50 @@ class TrivagoMcpSource(HotelSource):
         await self._post({"jsonrpc": "2.0", "method": method})
 
     async def handshake(self) -> None:
-        """`initialize`, dann `notifications/initialized`. Genau einmal."""
+        """`initialize`, dann `notifications/initialized`. Genau einmal.
+
+        Scheitert einer der beiden Schritte, faellt die Sitzungskennung weg.
+        Sonst bliebe eine halb begruesste Sitzung stehen: die Kennung steht
+        schon nach `initialize`, und ab da kehrte dieser Aufruf sofort zurueck
+        und schickte die fehlende Benachrichtigung nie nach. Der Server sah
+        eine Sitzung, die er nie fertig begruesst hat, und jeder weitere Tag
+        lief in dieselbe halbe Sitzung.
+
+        Und der Fehler wird als Stoerung gemeldet, damit `search` ihn wie jede
+        andere nachfasst. Eine abgerissene Begruessung ist kein Aufbaufehler:
+        derselbe Endpunkt, der mitten in der Suche einen Satz statt Daten
+        schickt, verschluckt sich auch mal an der Begruessung. Nur eine
+        Abweisung bleibt endgueltig - dafuer gibt es die Sicherung in `_post`,
+        und die will kein Nachfassen.
+        """
         async with self._handshake:
             if self._mcp_session_id:
                 return
-            await self._rpc(
-                "initialize",
-                {
-                    "protocolVersion": PROTOCOL_VERSION,
-                    "capabilities": {},
-                    "clientInfo": {"name": "flightopt", "version": "0.1.0"},
-                },
-            )
-            if not self._mcp_session_id:
-                raise SourceError("trivago: initialize lieferte keine Mcp-Session-Id")
-            await self._notify("notifications/initialized")
+            try:
+                await self._rpc(
+                    "initialize",
+                    {
+                        "protocolVersion": PROTOCOL_VERSION,
+                        "capabilities": {},
+                        "clientInfo": {"name": "flightopt", "version": "0.1.0"},
+                    },
+                )
+                if not self._mcp_session_id:
+                    raise SourceError(
+                        "trivago: initialize lieferte keine Mcp-Session-Id"
+                    )
+                await self._notify("notifications/initialized")
+            except (SourceBlocked, SourceUnstable):
+                self._mcp_session_id = None
+                raise
+            except SourceError as exc:
+                self._mcp_session_id = None
+                raise SourceUnstable(
+                    f"trivago: Begruessung abgebrochen: {exc}"
+                ) from exc
+            except Exception:  # noqa: BLE001 - Netzwerkschicht
+                self._mcp_session_id = None
+                raise
 
     async def _search_once(self, query: HotelQuery) -> HotelBatch:
         """Ein Versuch. Beginnt mit dem Handshake, der nur beim ersten Mal einer ist.

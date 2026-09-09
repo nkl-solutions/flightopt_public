@@ -168,6 +168,59 @@ async def test_run_many_persists_merged_variant_results(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_one_variant_without_prices_does_not_throw_away_the_others(
+    tmp_path, monkeypatch
+):
+    """Varianten sind das Produkt der Flughafengruppen, nicht die Ausnahme.
+
+    "London nach Mailand" laeuft ueber vier mal drei Flughaefen, und keine
+    Airline bedient jede Kombination. Bisher riss die erste unbediente den
+    ganzen Job mit: der Nutzer las "Keine Preise fuer LHR-LIN" statt der
+    Treffer, die es gab - samt aller Netzabrufe, die sie gekostet haben.
+    """
+    runner = JobRunner(str(tmp_path / "jobs.db"))
+    specs = [spec("BER"), spec("LEJ")]
+    job_id = runner.create(specs)
+
+    async def fake_variant(job_id, conn, variant, *, airlines, verify_limit, **kw):
+        if variant.route == "BER-ATH":
+            raise ValueError(f"{variant.route}: Keine Preise für BER-ATH.")
+        return [result(variant.route, 99.0, ["2026-10-01"])]
+
+    monkeypatch.setattr(runner, "_run_variant_payloads", fake_variant, raising=False)
+    no_network(monkeypatch)
+
+    await runner._run_many(job_id, specs, airlines=[])
+
+    stored = runner.result(job_id)
+    assert stored["status"] == "done"
+    assert [r["route"] for r in stored["results"]] == ["LEJ-ATH"]
+    # Und die leer ausgegangene Variante steht im Bericht statt zu verschwinden.
+    notes = runner._history[job_id][-1].detail["errors"]
+    assert any("BER-ATH" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_a_job_whose_variants_all_come_up_empty_still_fails(tmp_path, monkeypatch):
+    """Die Gegenprobe: kein Ergebnis bleibt ein Fehler, mit Begruendung."""
+    runner = JobRunner(str(tmp_path / "leer.db"))
+    specs = [spec("BER"), spec("LEJ")]
+    job_id = runner.create(specs)
+
+    async def fake_variant(job_id, conn, variant, *, airlines, verify_limit, **kw):
+        raise ValueError(f"{variant.route}: Keine Preise für {variant.route}.")
+
+    monkeypatch.setattr(runner, "_run_variant_payloads", fake_variant, raising=False)
+    no_network(monkeypatch)
+
+    await runner._run_many(job_id, specs, airlines=[])
+
+    stored = runner.result(job_id)
+    assert stored["status"] == "failed"
+    assert "BER-ATH" in stored["error"] and "LEJ-ATH" in stored["error"]
+
+
+@pytest.mark.asyncio
 async def test_persisted_group_results_keep_route_after_runner_restart(tmp_path, monkeypatch):
     db_path = str(tmp_path / "jobs.db")
     runner = JobRunner(db_path)

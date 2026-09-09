@@ -5,10 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>flightopt: Hotelpreise</title>
 <meta name="description" content="Ein Ziel, ein Fenster, ein Preis je Tag. flightopt zeigt, an welchen Nächten dasselbe Haus am wenigsten kostet.">
+<meta name="theme-color" content="#f8f7f2">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23f8f7f2'/%3E%3Crect x='2' y='3' width='12' height='1.4' fill='%231e1a16'/%3E%3Crect x='2' y='7.3' width='12' height='1.4' fill='%23b01003'/%3E%3Crect x='2' y='11.6' width='12' height='1.4' fill='%231e1a16'/%3E%3C/svg%3E">
+<link rel="preload" href="/static/fonts/archivo-narrow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/sometype-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
 <div class="wrap">
 
 <header class="mast">
@@ -20,6 +24,7 @@
   <p class="tagline">Ein Ziel, ein Fenster, ein Preis je Nacht. Zeigt, wann dasselbe Haus am wenigsten kostet.</p>
 </header>
 
+<main id="main">
 <form id="hf">
   <fieldset class="seg">
     <legend class="lab">Modus</legend>
@@ -29,15 +34,18 @@
   <div class="panel">
     <div>
       <label class="lab" for="destination">Ziel</label>
-      <input type="text" id="destination" value="Athen" required
-        placeholder="Athen, Lissabon, Zürich" autocomplete="off">
-      <p class="msg" id="destmsg" data-tone=""></p>
+      <input type="text" id="destination" value="Athen" required spellcheck="false"
+        placeholder="Athen, Lissabon, Zürich" autocomplete="off"
+        aria-describedby="destmsg">
+      <p class="msg" id="destmsg" data-tone="" role="status"></p>
     </div>
 
     <div>
       <div class="row">
-        <div><label class="lab" for="from">Anreise ab</label><input type="date" id="from" required></div>
-        <div id="towrap"><label class="lab" for="to">bis</label><input type="date" id="to"></div>
+        <div><label class="lab" for="from">Anreise ab</label>
+          <input type="date" id="from" required aria-describedby="windowmsg"></div>
+        <div id="towrap"><label class="lab" for="to">bis</label>
+          <input type="date" id="to" aria-describedby="windowmsg"></div>
         <div><label class="lab" for="nights">Nächte</label><input type="number" id="nights" min="1" max="30" value="1"></div>
       </div>
       <p class="msg" id="windowmsg" data-tone=""></p>
@@ -81,7 +89,8 @@
           </select>
         </div>
       </div>
-      <p class="hint" id="sourcehint"></p>
+      <p class="hint">Welche Quellen gelaufen sind, steht nach dem Start unter dem
+        Fortschritt. Eine abgeschaltete Quelle nennt dort ihren Grund.</p>
     </div>
   </details>
 
@@ -91,10 +100,11 @@
   </div>
 </form>
 
-<section class="log" id="hlog">
+<section class="log" id="hlog" aria-label="Verlauf des Laufs">
   <div class="progressmeter">
     <div class="progressbar" id="progressbar" role="progressbar" aria-valuemin="0"
-      aria-valuemax="100" aria-valuenow="0"><i id="progressfill"></i></div>
+      aria-valuemax="100" aria-valuenow="0" aria-labelledby="progresslabel"
+      ><i id="progressfill"></i></div>
     <div class="progressmeta">
       <span id="progresslabel" aria-live="polite">Bereit</span>
       <span id="progresscount"></span>
@@ -103,6 +113,8 @@
     </div>
   </div>
   <p class="msg note" id="note" data-tone="" role="status" aria-live="polite"></p>
+  <ul class="sources" id="sourcehint"></ul>
+  <p class="msg" id="runnotes" data-tone=""></p>
 </section>
 
 <section class="out" id="hout">
@@ -122,6 +134,7 @@
       <select id="filterSignal">
         <option value="">Alle</option>
         <option value="error">Preisfehler</option>
+        <option value="encoding_suspect">Preis unklar</option>
         <option value="cheap">günstig</option>
         <option value="normal">normal</option>
         <option value="expensive">teuer</option>
@@ -138,19 +151,20 @@
       <select id="filterSource">
         <option value="">Alle</option>
       </select>
+      <button class="linkbtn" id="resetfilters" type="button" hidden>Filter zurücksetzen</button>
       <span class="filtercount" id="filtercount"></span>
     </div>
   </div>
   <p class="outsummary" id="outsummary" aria-live="polite"></p>
-  <div class="tablewrap">
+  <div class="tablewrap" tabindex="0" role="region" aria-label="Hotelpreise, seitlich scrollbar">
     <table class="kursbuch" id="hoteltable">
       <thead>
         <tr>
-          <th scope="col">Objekt</th>
-          <th scope="col" class="c-num">Sterne</th>
+          <th scope="col" class="c-object">Objekt</th>
+          <th scope="col" class="c-num c-stars">Sterne</th>
           <th scope="col" class="c-rail">Datum</th>
           <th scope="col" class="c-price">Preis pro Nacht</th>
-          <th scope="col" class="c-num">Bewertung</th>
+          <th scope="col" class="c-num c-rating">Bewertung</th>
           <th scope="col" class="c-status">Signal</th>
           <th scope="col" class="c-source">Quelle</th>
         </tr>
@@ -164,6 +178,7 @@
     <ul class="scanlist" id="scanlist"></ul>
   </section>
 </section>
+</main>
 
 <footer>
   Die Preise sind Richtwerte der Quelle, keine geprüften Bestpreise. Ein

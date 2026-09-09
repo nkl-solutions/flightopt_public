@@ -13,10 +13,10 @@ from typing import Any, Mapping
 
 from flightopt.domain.models import Money
 
-# Trivago nennt das Land im Klartext ("Athens, Greece"), Booking gar nicht. Der
-# Laendercode steht im `entity_key` nur als lesbares Praefix: eindeutig ist der
-# Schluessel schon durch `property_key`, der Quelle und Objekt-ID traegt. Ein
-# Land, das hier fehlt, wird deshalb "XX" und nicht geraten.
+# Trivago nennt das Land im Klartext ("Athens, Greece"), Booking gar nicht. Ein
+# Land, das fehlt, wird deshalb "XX" und nicht geraten. Im `entity_key` steht es
+# seit dem 2026-09-09 nicht mehr: ein Schluessel darf nichts enthalten, was eine
+# Antwort weglassen kann (siehe `HotelOffer.entity_key`).
 _COUNTRY_CODES: dict[str, str] = {
     "albania": "AL", "albanien": "AL",
     "argentina": "AR", "argentinien": "AR",
@@ -224,8 +224,21 @@ class HotelOffer:
 
     @property
     def entity_key(self) -> str:
-        """'<cc>|<property_key>', damit die Baseline je Objekt rechnet."""
-        return f"{self.country_code}|{self.property_key}"
+        """Der `property_key`, damit die Baseline je Objekt rechnet.
+
+        Frueher stand der Laendercode davor: '<cc>|<property_key>'. Eindeutig
+        war der Schluessel dadurch nicht mehr - `property_key` traegt bereits
+        Quelle und Objekt-ID -, aber instabil: liefert eine Quelle das Land
+        einmal nicht, wandert dieselbe Unterkunft nach 'XX|...' und ihre
+        Historie spaltet sich in zwei Grundgesamtheiten, von denen keine mehr
+        die fuenf Beobachtungen erreicht, ab denen es eine Baseline gibt. Ein
+        Schluessel darf nichts enthalten, was eine Antwort weglassen kann.
+
+        Das Land bleibt, wo es hingehoert: am Angebot und in den Stammdaten.
+        Von dort holt es die Peer-Gruppe, und dort ist es gegen fehlende
+        Antworten geschuetzt.
+        """
+        return self.property_key
 
     @property
     def price(self) -> Money:

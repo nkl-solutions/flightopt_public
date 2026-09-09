@@ -8,6 +8,7 @@ because the TTL asks "how long ago did we ask", not "how old is the quote".
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import sqlite3
 from datetime import datetime, timedelta
@@ -33,6 +34,12 @@ def save_rates(conn: sqlite3.Connection, rates: Rates, *, now: datetime | None =
     not be called while a transaction is already open: the `BEGIN IMMEDIATE`
     below would fail, and the `COMMIT` would end a transaction it does not own.
 
+    Das `COMMIT` steht mit im geschuetzten Teil, denn es kann selbst scheitern
+    (belegte Datei, volle Platte). Stand es daneben, blieb die Transaktion in
+    diesem Fall offen: die Verbindung hielt bis zu ihrem Ende die
+    Schreibsperre, jeder weitere Schreibvorgang desselben Laufs lief in den
+    busy_timeout, und im Log stand nur "Kurse nicht gespeichert".
+
     An empty table is not saved at all. Deleting every rate because a source
     answered with nothing would leave the search unable to price any foreign
     currency, which is worse than keeping yesterday's numbers.
@@ -48,10 +55,14 @@ def save_rates(conn: sqlite3.Connection, rates: Rates, *, now: datetime | None =
         conn.executemany(
             "INSERT INTO fx_rate(currency, rate, fetched_at) VALUES(?,?,?)", rows
         )
+        conn.execute("COMMIT")
     except Exception:
-        conn.execute("ROLLBACK")
+        # Ein gescheitertes COMMIT laesst die Transaktion in SQLite aktiv, das
+        # Zuruecknehmen ist also richtig. Sollte sie doch schon beendet sein,
+        # darf der Rollback-Fehler den urspruenglichen nicht verdecken.
+        with contextlib.suppress(sqlite3.Error):
+            conn.execute("ROLLBACK")
         raise
-    conn.execute("COMMIT")
 
 
 def load_rates(

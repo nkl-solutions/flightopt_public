@@ -132,8 +132,11 @@ def price_band(conn: Any, leg: Mapping[str, Any], *, currency: str = "EUR",
     die passende Baseline noch nicht da, steht dort `unknown` - solange, bis
     genug gepruefte Preise dieser Strecke gesammelt sind.
 
-    Die Stufen sind die drei des Detektors plus `unknown`. Eine vierte Stufe
-    kennt `detect_price_signal` fuer Fluege nicht.
+    Die Stufen sind die drei des Detektors plus `unknown` und, seit es die
+    Jagd auf Fehltarife gibt, `error`. Die vierte Stufe ist eng gefasst und
+    kommt aus `flightopt.hunt.errorfare`: sie verlangt einen Preis unter der
+    Schranke, die die Entfernung setzt, und in aller Regel zusaetzlich einen
+    statistischen Ausreisser. Ein Angebot allein reicht dafuer nicht.
     """
     raw_date = leg.get("date")
     try:
@@ -189,6 +192,14 @@ def checked_bag_fee_minor(carriers: Sequence[str], checked_bags: int) -> int:
 
 
 async def preload_routes(sources: Sequence[Any], legs: Sequence[Any]) -> None:
+    """Streckennetze vorwaermen. Ein Fehlschlag bleibt in seiner Quelle.
+
+    Das hier laeuft vor jedem Preisabruf und fuer alle Quellen zusammen. Ohne
+    `return_exceptions` riss eine einzige Ausnahme den ganzen Suchlauf mit,
+    bevor irgendeine Quelle einen Preis geholt hatte - wegen eines
+    Streckennetzes, das die Suche gar nicht gebraucht haette. Wer seines nicht
+    laden kann, weiss es eben nicht und laesst den Aufruf entscheiden.
+    """
     tasks = []
     for source in sources:
         loader = getattr(source, "load_routes", None)
@@ -200,8 +211,11 @@ async def preload_routes(sources: Sequence[Any], legs: Sequence[Any]) -> None:
                 continue
             seen.add(leg.origin)
             tasks.append(loader(leg.origin))
-    if tasks:
-        await asyncio.gather(*tasks)
+    if not tasks:
+        return
+    for outcome in await asyncio.gather(*tasks, return_exceptions=True):
+        if isinstance(outcome, BaseException):
+            logger.warning("Streckennetz nicht vorgewaermt: %s", outcome)
 
 
 def build_catalogue(
@@ -365,7 +379,8 @@ class JobRunner:
 
     @staticmethod
     def _leg_payload(spec, grid, combo, i, day, live, winner=None,
-                     indicative=None, by_source=None, native=None) -> dict[str, Any]:
+                     indicative=None, by_source=None, native=None,
+                     indicative_sources=None) -> dict[str, Any]:
         """One leg for the UI: estimate always, real flight when confirmed."""
         leg = spec.legs[i]
         estimated_by = (winner or {}).get((i, day))
@@ -401,7 +416,14 @@ class JobRunner:
         if offer is None:
             return out
         out["price"] = offer.price.major
-        out["verified"] = True
+        # Durchgereicht, nicht gesetzt. Hier stand fest `True`: wer die
+        # Nachpruefung durchlaufen hatte, galt als geprueft, egal was seine
+        # Quelle ueber das eigene Ergebnis sagt. `verified` entscheidet weiter
+        # unten auch, gegen welche Grundgesamtheit die Preislage rechnet
+        # (`price_band`), also faerbt eine falsche Angabe hier zwei Aussagen.
+        # Preis, Link und Quelle bleiben in jedem Fall stehen: das Angebot ist
+        # buchbar, auch wenn es sich selbst nur als Schaetzung ausgibt.
+        out["verified"] = not offer.is_estimate
         # Offers without segments still belong to an airline. Fall back to the
         # carrier of the adapter that returned this offer, never to whoever won
         # the estimate: those are often different sources.
@@ -413,9 +435,13 @@ class JobRunner:
             out["bag_fee"] = live_bag_minor / 100
             out["checked_bags"] = spec.checked_bags
             out["price"] = round(out["price"] + out["bag_fee"], 2)
-        # The live price replaces the estimate, so this cell is no longer one,
-        # and the estimate's original currency no longer describes it.
-        out["indicative"] = False
+        # Der Live-Preis loest die Schaetzung ab, deren Waehrung beschreibt die
+        # Zelle also nicht mehr. Ob er ein Tarif oder ein Richtwert ist, sagt
+        # aber weiterhin seine Quelle: hier stand fest False, und ein
+        # Vergleichsportal mit Tagessuche haette seinen Aufschlag ab dann als
+        # Tarif ausgegeben. Gleiche Bauart wie `verified` eine Zeile weiter
+        # oben - durchreichen, nicht setzen.
+        out["indicative"] = offer.source in (indicative_sources or set())
         if offer.price_native is not None:
             out["price_native"] = {
                 "amount": offer.price_native.major,
@@ -725,13 +751,32 @@ class JobRunner:
 
         self._raise_if_cancelled(job_id)
         self._emit(job_id, Progress("verifying", f"{spec.route}: Prüfe echte Flüge"))
-        verified, _ = await verify(
+        verified, vreport = await verify(
             spec, best, sources, cache=cache, history=history, rates=rates,
             limit=verify_limit, on_progress=report_verify,
         )
+        if vreport.errors:
+            # Faellt die Pruefung aus - Budget alle, Sperre, 403 -, bleibt jede
+            # Zeile ein Schaetzpreis. Der Bericht wurde bisher weggeworfen: der
+            # Nutzer sah nur graue Zeilen und erfuhr nirgends, dass gar nicht
+            # geprueft werden konnte.
+            self._emit(
+                job_id,
+                Progress(
+                    "verifying",
+                    f"{spec.route}: Pruefung unvollstaendig, "
+                    f"{len(vreport.errors)} Quelle(n) meldeten einen Fehler",
+                    done=len(best),
+                    total=len(best),
+                    detail={"route": spec.route, "errors": vreport.errors[:5]},
+                ),
+            )
         self._raise_if_cancelled(job_id)
         live_by_dates = {tuple(v.combination.dates): v for v in verified}
         by_source = {s.name: (s.carrier or s.name.upper()) for s in sources}
+        indicative_sources = {
+            s.name for s in sources if getattr(s, "indicative", False)
+        }
 
         rows = []
         for combo in best:
@@ -739,10 +784,16 @@ class JobRunner:
             legs = [
                 self._leg_payload(spec, grid, combo, i, d, live,
                                   report.winner, report.indicative, by_source,
-                                  report.native)
+                                  report.native, indicative_sources)
                 for i, d in enumerate(combo.dates)
             ]
-            confirmed = live is not None and live.complete
+            # Aus den Legs gelesen, nicht daneben noch einmal entschieden: eine
+            # Zeile ist geprueft, wenn jede ihrer Teilstrecken es ist. Nur
+            # `live.complete` zu fragen hiesse, dass jedes aufgeloeste Bein als
+            # geprueft zaehlt - auch eins, dessen Quelle das gar nicht behauptet.
+            # Die Zeilenangabe wird zur Spalte `is_estimate` in
+            # `itinerary_result` und faehrt von dort in jede gespeicherte Ansicht.
+            confirmed = live is not None and all(l["verified"] for l in legs)
             shown = sum(round(l["price"] * 100) for l in legs)
             drift = round((shown - combo.total.minor) / 100, 2) if confirmed else None
             rows.append((Money(shown, combo.total.currency), confirmed, combo, legs, drift))
@@ -789,6 +840,11 @@ class JobRunner:
             # gerade verschoben hat.
             refresh_baselines(conn, entity_type="flight")
             all_payloads: list[dict[str, Any]] = []
+            # Varianten sind das kartesische Produkt der Flughafengruppen, und
+            # keine Airline bedient jede Kombination. Eine Variante ohne Preise
+            # ist damit der Normalfall - frueher riss sie den ganzen Job mit,
+            # samt aller Varianten, die schon fertig gerechnet waren.
+            barren: list[str] = []
             for done, spec in enumerate(specs, 1):
                 self._emit(
                     job_id,
@@ -799,12 +855,35 @@ class JobRunner:
                         total=len(specs),
                     ),
                 )
-                all_payloads.extend(
-                    await self._run_variant_payloads(
-                        job_id, conn, spec, airlines=airlines or [],
-                        verify_limit=verify_limit, sources=sources, rates=rates,
+                try:
+                    all_payloads.extend(
+                        await self._run_variant_payloads(
+                            job_id, conn, spec, airlines=airlines or [],
+                            verify_limit=verify_limit, sources=sources, rates=rates,
+                        )
                     )
-                )
+                except ValueError as exc:
+                    # Genau die beiden Faelle, die die Variante selbst so nennt:
+                    # kein Preis fuer ein Teilstueck, keine gueltige Kombination.
+                    # Alles andere (Abbruch, Sperre) betrifft den ganzen Job und
+                    # bleibt deshalb ein Abbruch des ganzen Jobs.
+                    barren.append(str(exc))
+                    logger.info("Variante ohne Ergebnis: %s", exc)
+                    self._emit(
+                        job_id,
+                        Progress(
+                            "routes",
+                            f"{spec.route}: kein Ergebnis, weiter mit der naechsten",
+                            done=done,
+                            total=len(specs),
+                            detail={"route": spec.route, "reason": str(exc)},
+                        ),
+                    )
+
+            if not all_payloads and barren:
+                # Nichts gefunden bleibt ein Fehler - aber einer, der alle
+                # Varianten nennt und nicht nur die erste.
+                raise ValueError(" | ".join(barren))
 
             payload = merge_variant_payloads(all_payloads, top_k=20)
             payload = await self._add_stay_costs(job_id, payload, stays)
@@ -845,7 +924,9 @@ class JobRunner:
                     f"{confirmed_n} mit echtem Flug bestätigt",
                     done=len(specs),
                     total=len(specs),
-                    detail={"results": payload},
+                    # Die leer ausgegangenen Varianten stehen dabei, sonst
+                    # sieht ein halber Lauf aus wie ein ganzer.
+                    detail={"results": payload, "errors": barren[:5]},
                 ),
             )
 
@@ -1039,6 +1120,9 @@ class JobRunner:
                 tuple(v.combination.dates): v for v in verified
             }
             by_source = {s.name: (s.carrier or s.name.upper()) for s in sources}
+            indicative_sources = {
+                s.name for s in sources if getattr(s, "indicative", False)
+            }
 
             payload = []
             conn.execute("DELETE FROM itinerary_result WHERE job_id=?", (job_id,))
@@ -1051,10 +1135,12 @@ class JobRunner:
                 legs = [
                     self._leg_payload(spec, grid, combo, i, d, live,
                                       report.winner, report.indicative, by_source,
-                                      report.native)
+                                      report.native, indicative_sources)
                     for i, d in enumerate(combo.dates)
                 ]
-                confirmed = live is not None and live.complete
+                # Siehe `_run_variant_payloads`: die Zeile liest ihren Status
+                # aus den Legs, damit beide Aussagen nicht auseinanderlaufen.
+                confirmed = live is not None and all(l["verified"] for l in legs)
                 # Verification can confirm some legs and not others. Summing the
                 # prices actually displayed keeps the total honest; taking the
                 # estimate total would contradict the rows beneath it.
@@ -1119,7 +1205,10 @@ class JobRunner:
                     f"({vreport.calls} Abrufe)",
                     done=len(spec.legs),
                     total=len(spec.legs),
-                    detail={"results": payload},
+                    # Was die Pruefung nicht schaffte, steht dabei: sonst sind
+                    # zwanzig graue Zeilen nicht von zwanzig teuren zu
+                    # unterscheiden.
+                    detail={"results": payload, "errors": vreport.errors[:5]},
                 ),
             )
 

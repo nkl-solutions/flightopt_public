@@ -13,20 +13,46 @@ const money = v => Number(v || 0).toLocaleString("de-DE",
   {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const grade = v => Number(v).toLocaleString("de-DE",
   {minimumFractionDigits: 1, maximumFractionDigits: 1});
+/* Ein Validierungsfehler kommt als Liste von Objekten. `data.detail` direkt in
+   eine Meldung zu schreiben ergab dann woertlich "[object Object]". */
+const detail = d => Array.isArray(d) ? d.map(e => e.msg || JSON.stringify(e)).join("; ")
+                  : (typeof d === "string" ? d : "");
+/* Dieselbe Schreibweise wie auf der Flugseite: ein ISO-Datum in einer deutschen
+   Tabelle liest sich wie ein Datenbankfeld. */
+function fmtDay(s){
+  const d = new Date(String(s) + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return String(s || "");
+  return d.toLocaleDateString("de-DE", {weekday:"short", day:"2-digit", month:"short"});
+}
+function fmtMoment(iso){
+  const d = new Date(String(iso || ""));
+  if (Number.isNaN(d.getTime())) return "";
+  // Mit Jahr: gespeicherte Laeufe koennen aus einer laengst vergangenen Saison
+  // stammen, und "08.09." allein sagt dann nicht, aus welcher.
+  return d.toLocaleString("de-DE", {day:"2-digit", month:"2-digit",
+    year:"numeric", hour:"2-digit", minute:"2-digit"});
+}
 
 const MODES = [
   {id:"single", label:"Einzeltag"},
   {id:"window", label:"Zeitraum"},
 ];
-/* Vier Stufen plus "keine Basis". Die Reihenfolge ist die Sortierung im
-   Zeitraum-Modus: ein Preisfehler steht oben, eine fehlende Basis unten. */
+/* Fuenf Stufen plus "keine Basis". Die Reihenfolge ist die Sortierung im
+   Zeitraum-Modus: ein Preisfehler steht oben, eine fehlende Basis unten.
+   `encoding_suspect` kam vom Detektor, war hier aber nicht eingetragen: ein
+   als kaputt erkannter Preis fiel damit auf "keine Basis" und sah aus wie eine
+   fehlende Aussage statt wie ein Befund. */
 const SIGNALS = {
-  error:     {label:"Preisfehler", rank:0},
-  cheap:     {label:"günstig",     rank:1},
-  normal:    {label:"normal",      rank:2},
-  expensive: {label:"teuer",       rank:3},
-  unknown:   {label:"keine Basis", rank:4},
+  error:             {label:"Preisfehler",   rank:0},
+  encoding_suspect:  {label:"Preis unklar",  rank:1},
+  cheap:             {label:"günstig",       rank:2},
+  normal:            {label:"normal",        rank:3},
+  expensive:         {label:"teuer",         rank:4},
+  unknown:           {label:"keine Basis",   rank:5},
 };
+/* Woher die Einordnung kommt. Ohne das wirkt jede Stufe gleich belastbar,
+   egal ob drei oder dreihundert Vergleichspreise dahinterstehen. */
+const BASIS_LABELS = {own:"eigene Historie", peer:"vergleichbare Häuser"};
 const PHASE_LABELS = {
   planning:  "Lauf wird vorbereitet",
   day:       "Tage werden geholt",
@@ -162,21 +188,28 @@ function progressPercent(p){
 function setProgress(p){
   const phase = (p && p.phase) || "planning";
   const pct = progressPercent(p);
-  const bar = $("#progressbar");
-  bar.className = "progressbar" + (phase === "failed" ? " failed" : "");
-  bar.setAttribute("aria-valuenow", String(pct));
-  $("#progressfill").style.width = pct + "%";
-  $("#progresslabel").textContent = PHASE_LABELS[phase] || PHASE_LABELS.planning;
   const total = Number(p && p.total) || 0;
   const done = Number(p && p.done) || 0;
-  const at = p && p.detail && p.detail.date ? `, ${p.detail.date}` : "";
+  // Ohne Gesamtzahl ist jeder Prozentwert geraten. Ein wanderndes Stueck sagt
+  // stattdessen "laeuft, Umfang noch offen" und behauptet keine Zahl.
+  const pending = !TERMINAL.includes(phase) && !total;
+  const bar = $("#progressbar");
+  bar.className = "progressbar" + (phase === "failed" ? " failed" : "")
+                + (pending ? " pending" : "");
+  bar.setAttribute("aria-valuenow", String(pct));
+  bar.setAttribute("aria-valuetext",
+    pending ? "Läuft, Umfang noch offen" : `${pct} Prozent`);
+  $("#progressfill").style.width = pending ? "" : pct + "%";
+  $("#progresslabel").textContent = PHASE_LABELS[phase] || PHASE_LABELS.planning;
+  const at = p && p.detail && p.detail.date ? `, ${fmtDay(p.detail.date)}` : "";
   $("#progresscount").textContent = total ? `${done} von ${total} Tagen${at}` : "";
 }
 
+let running = false;
 function setRunning(on){
+  running = on;
   $("#hgo").disabled = on;
   $("#hgo").textContent = on ? "Suche läuft" : "Suchen";
-  if (on) $("#hgo").classList.add("busy"); else $("#hgo").classList.remove("busy");
   // Eigenschaft statt Attribut: der Node-Harness kennt kein removeAttribute,
   // im Browser entfernt `hidden = false` das Attribut genauso.
   $("#hcancel").hidden = !on;
@@ -218,7 +251,7 @@ async function search(scanId){
   setProgress({phase:"planning"});
   // Eine Wiederaufnahme setzt den Lauf fort, also bleiben die Zeilen stehen,
   // die er vor dem Stopp schon gefunden hat.
-  if (!scanId){ rows = []; $("#sort").value = defaultSort(); draw(); }
+  if (!scanId){ rows = []; $("#sort").value = defaultSort(); resetRunNotes(); draw(); }
 
   let data;
   try {
@@ -228,7 +261,7 @@ async function search(scanId){
       body: JSON.stringify(body),
     });
     data = await response.json();
-    if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+    if (!response.ok) throw new Error(detail(data.detail) || `HTTP ${response.status}`);
   } catch (err) {
     setProgress({phase:"failed"});
     $("#note").textContent = String(err.message || err);
@@ -238,9 +271,45 @@ async function search(scanId){
   }
 
   lastScan = data.scan_id;
-  $("#sourcehint").textContent = (data.sources || [])
-    .map(s => `${s.name}: ${s.active ? "aktiv" : s.reason}`).join("   ");
+  drawSources(data.sources || []);
   listen(data.scan_id);
+}
+
+/* Der Quellenstatus stand bisher als eine Textzeile in einem zugeklappten
+   Optionsbereich. Wer dort nicht hineinsah, erfuhr nie, dass eine Quelle
+   abgeschaltet war, und hielt ein halbes Ergebnis fuer ein ganzes. */
+function drawSources(list){
+  const items = Array.isArray(list) ? list : [];
+  $("#sourcehint").innerHTML = items.map(s => {
+    const on = s.active === true;
+    const why = on ? "läuft" : (s.reason || "abgeschaltet");
+    return `<li data-active="${on}"><b>${esc(s.name)}</b> <span>${esc(why)}</span></li>`;
+  }).join("");
+  return items;
+}
+
+/* Was der Lauf nebenbei gemeldet hat. Die Kommandozeile zeigt genau diese
+   Angaben seit jeher, der Browser warf sie weg. */
+let runNotes = [];
+function resetRunNotes(){
+  runNotes = [];
+  $("#runnotes").textContent = "";
+  $("#runnotes").dataset.tone = "";
+}
+function addRunNotes(list){
+  const items = (Array.isArray(list) ? list : []).map(v => String(v)).filter(Boolean);
+  items.forEach(item => { if (!runNotes.includes(item)) runNotes.push(item); });
+  if (!runNotes.length) return runNotes;
+  $("#runnotes").dataset.tone = "warn";
+  $("#runnotes").textContent = runNotes.join("\n");
+  return runNotes;
+}
+function skippedNote(count){
+  const n = Number(count) || 0;
+  if (n <= 0) return "";
+  return n === 1
+    ? "1 Tag wurde übersprungen, er war heute schon geholt."
+    : `${n} Tage wurden übersprungen, sie waren heute schon geholt.`;
 }
 
 function listen(scanId){
@@ -256,6 +325,10 @@ function listen(scanId){
     if (!TERMINAL.includes(p.phase)) return;
     const finalRows = (p.detail && p.detail.rows) || [];
     if (finalRows.length) rows = finalRows;
+    // Ausgefallene Tage und Quellen stehen im Abschlussereignis und blieben
+    // bisher unsichtbar: das Ergebnis war einfach duenner.
+    addRunNotes([skippedNote(p.detail && p.detail.skipped)]
+      .concat((p.detail && p.detail.errors) || []));
     draw();
     if (es){ es.close(); es = null; }
     setRunning(false);
@@ -314,7 +387,8 @@ function sortRows(list, how){
   const price = r => Number(r.price_per_night || 0);
   return list.slice().sort((a, b) => {
     if (how === "price") return price(a) - price(b);
-    if (how === "date") return a.date.localeCompare(b.date) || price(a) - price(b);
+    if (how === "date") return String(a.date || "").localeCompare(String(b.date || ""))
+                            || price(a) - price(b);
     if (how === "stars") return (b.stars || 0) - (a.stars || 0) || price(a) - price(b);
     if (how === "rating") return (b.review_rating || 0) - (a.review_rating || 0) || price(a) - price(b);
     if (how === "source") return String(a.source || "").localeCompare(String(b.source || ""))
@@ -343,6 +417,30 @@ function drawSourceFilter(){
   box.value = names.includes(keep) ? keep : "";
 }
 
+/* Eine Bewertung von 9,2 aus acht Stimmen ist etwas anderes als 9,2 aus
+   dreitausend. Die Zahl kommt vom Server mit und stand bisher nirgends. */
+function ratingCell(r){
+  if (r.review_rating == null) return "-";
+  const n = Number(r.review_count);
+  const count = Number.isFinite(n) && n > 0
+    ? `<small class="sub">${n.toLocaleString("de-DE")} Stimmen</small>` : "";
+  return `${grade(r.review_rating)}${count}`;
+}
+/* Worauf das Signal steht. Der Server liefert `basis` und `n`, die Oberflaeche
+   liess beides fallen und jede Stufe sah gleich belastbar aus. */
+function signalBasis(r){
+  const parts = [];
+  const n = Number(r && r.n);
+  if (Number.isFinite(n) && n > 0) parts.push(`${n} Vergleichspreise`);
+  const basis = BASIS_LABELS[String((r || {}).basis || "")];
+  if (basis) parts.push(basis);
+  return parts.join(", ");
+}
+function signalTitle(r){
+  const why = (r && r.reason) || "";
+  const basis = signalBasis(r);
+  return [why, basis].filter(Boolean).join(" · ");
+}
 function rowHtml(r){
   const signal = SIGNALS[signalKey(r)];
   /* Nur https, und nur nach esc. Eine Quelle, die eine javascript:-Adresse
@@ -354,32 +452,72 @@ function rowHtml(r){
   const native = r.native
     ? `<small class="native">umgerechnet aus ${money(r.native.amount)} ${esc(r.native.currency)}</small>`
     : "";
-  const why = r.reason ? ` title="${esc(r.reason)}"` : "";
+  /* Bei mehreren Naechten ist der Nachtpreis nicht das, was abgebucht wird.
+     Der Gesamtpreis kam schon immer mit und wurde nie gezeigt. */
+  const nights = Number(r.nights) || 1;
+  const total = (nights > 1 && r.price_total != null)
+    ? `<small class="native">${money(r.price_total)} ${esc(r.currency)} für ${nights} Nächte</small>`
+    : "";
+  const why = signalTitle(r) ? ` title="${esc(signalTitle(r))}"` : "";
+  /* Auf schmalen Geraeten fallen Sterne, Bewertung und Quelle als Spalten weg.
+     Die Angaben bleiben, sie ruecken unter den Namen. */
+  const facts = [r.stars == null ? "" : `${r.stars} Sterne`,
+                 r.review_rating == null ? "" : `${grade(r.review_rating)} Bewertung`,
+                 r.source].filter(Boolean).join(" · ");
   return `<tr>
-      <td>${name}${r.city ? ` <small>${esc(r.city)}</small>` : ""}</td>
-      <td class="c-num">${r.stars == null ? "-" : r.stars}</td>
-      <td class="c-rail mono">${esc(r.date)}${r.nights > 1 ? ` (${r.nights} Nächte)` : ""}</td>
-      <td class="c-price">${money(r.price_per_night)} <small>${esc(r.currency)}</small>${native}</td>
-      <td class="c-num">${r.review_rating == null ? "-" : grade(r.review_rating)}</td>
+      <td class="c-object">${name}${r.city ? ` <small>${esc(r.city)}</small>` : ""}<small
+        class="facts">${esc(facts)}</small></td>
+      <td class="c-num c-stars">${r.stars == null ? "-" : r.stars}</td>
+      <td class="c-rail">${esc(fmtDay(r.date))}${nights > 1 ? ` (${nights} Nächte)` : ""}</td>
+      <td class="c-price">${money(r.price_per_night)} <small>${esc(r.currency)}</small>${native}${total}</td>
+      <td class="c-num c-rating">${ratingCell(r)}</td>
       <td class="c-status" data-signal="${esc(signalKey(r))}"${why}>${signal.label}</td>
       <td class="c-source">${esc(r.source)}</td>
     </tr>`;
 }
 
+function filtersActive(){
+  return Boolean($("#filterSignal").value) || Boolean($("#filterStars").value)
+      || Boolean($("#filterSource").value);
+}
+function resetFilters(){
+  $("#filterSignal").value = "";
+  $("#filterStars").value = "";
+  $("#filterSource").value = "";
+  draw();
+}
+/* Eine Live-Region, die bei jedem geholten Tag denselben Satz wiederholt, laesst
+   einen Screenreader den ganzen Lauf lang reden. */
+function announce(text){
+  if ($("#outsummary").textContent !== text) $("#outsummary").textContent = text;
+}
 function draw(){
   drawSourceFilter();
   const list = visible();
   $("#hout").classList.add("on");
+  $("#resetfilters").hidden = !filtersActive();
   $("#filtercount").textContent = list.length === rows.length
     ? `${rows.length} Zeilen` : `${list.length} von ${rows.length}`;
-  $("#outsummary").textContent = rows.length
+  announce(rows.length
     ? "Preise sind Richtwerte der Quelle. Je Haus nennt sie genau einen Preis."
-    : "";
+    : "");
 
   if (!list.length){
-    $("#hotelrows").innerHTML = rows.length
-      ? `<tr class="empty"><td colspan="7">Keine Zeile passt zu diesen Filtern.</td></tr>`
-      : "";
+    /* Ein leerer Tabellenkopf ueber nichts sieht aus wie ein Fehler. Beide
+       Faelle sagen jetzt, was los ist und was als naechstes hilft. */
+    if (rows.length){
+      $("#hotelrows").innerHTML = `<tr class="empty"><td colspan="7">Der Lauf hat `
+        + `${rows.length} Zeilen, aber keine passt zu diesen Filtern.</td></tr>`;
+    } else if (running){
+      // Waehrend der Lauf noch Tage holt, ist "nichts gefunden" eine Falschaussage.
+      $("#hotelrows").innerHTML = `<tr class="empty"><td colspan="7">Noch keine `
+        + `Angebote. Die ersten Tage werden gerade geholt.</td></tr>`;
+    } else {
+      $("#hotelrows").innerHTML = `<tr class="empty"><td colspan="7">Für dieses Ziel `
+        + `und dieses Fenster hat keine Quelle ein Angebot geliefert. Ein anderes `
+        + `Datum, weniger Sterne oder eine niedrigere Mindestbewertung bringen `
+        + `meist Treffer.</td></tr>`;
+    }
     return;
   }
   $("#hotelrows").innerHTML = list.map(rowHtml).join("");
@@ -400,14 +538,15 @@ const SCAN_STATUS = {
 function scanTitle(scan){
   const start = scan.window_start || (scan.window && scan.window.start) || "";
   const end = scan.window_end || (scan.window && scan.window.end) || start;
-  const span = start === end ? start : `${start} bis ${end}`;
+  const span = start === end ? fmtDay(start) : `${fmtDay(start)} bis ${fmtDay(end)}`;
   return `${scan.destination}, ${span}`;
 }
 
 function scanSummary(scan){
   const state = SCAN_STATUS[scan.status] || scan.status;
-  const when = String(scan.created_at || "").slice(0, 16).replace("T", " ");
-  return `${state}, ${scan.offers_found} Treffer, `
+  const when = fmtMoment(scan.created_at);
+  const found = scan.offers_found === 1 ? "1 Treffer" : `${scan.offers_found} Treffer`;
+  return `${state}, ${found}, `
        + `${scan.days_done} von ${scan.days_total} Tagen, ${when}`;
 }
 
@@ -436,7 +575,7 @@ async function openScan(scanId){
   try {
     const response = await fetch(`/api/hotels/scan/${scanId}/rows`);
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+    if (!response.ok) throw new Error(detail(data.detail) || `HTTP ${response.status}`);
     lastScan = data.scan_id;
     rows = data.rows || [];
     $("#hlog").classList.add("on");
@@ -457,15 +596,39 @@ async function openScan(scanId){
 
 /* ---------------- Start ---------------- */
 
+/* `toISOString` rechnet in UTC. Wer abends in Berlin sucht, bekam damit den
+   Vortag: dieselbe Falle, die die Flugseite mit `isoDay` schon umgeht. */
+function isoDay(date){
+  const pad = n => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 function today(offset){
   const d = new Date();
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return isoDay(d);
+}
+
+function checkWindow(){
+  const msg = $("#windowmsg");
+  const from = $("#from").value, to = $("#to").value;
+  if (mode === "window" && from && to && to < from){
+    msg.dataset.tone = "err";
+    msg.textContent = "Das Ende des Fensters liegt vor dem Anfang.";
+    $("#to").setAttribute("aria-invalid", "true");
+    return false;
+  }
+  msg.dataset.tone = "";
+  msg.textContent = "";
+  $("#to").setAttribute("aria-invalid", "false");
+  return true;
 }
 
 function boot(){
   drawModes();
   drawStars();
+  // Ein Hotel fuer gestern gibt es nicht. Der Waehler darf ihn gar nicht anbieten.
+  $("#from").min = today(0);
+  $("#to").min = today(0);
   $("#from").value = today(60);
   $("#to").value = today(66);
   drawAges();
@@ -473,9 +636,10 @@ function boot(){
 
   $("#kids").addEventListener("input", drawAges);
   ["#from", "#to", "#nights"].forEach(id =>
-    $(id).addEventListener("input", sizeUp));
+    $(id).addEventListener("input", () => { checkWindow(); sizeUp(); }));
   ["#sort", "#filterSignal", "#filterStars", "#filterSource"].forEach(id =>
     $(id).addEventListener("change", draw));
+  $("#resetfilters").addEventListener("click", resetFilters);
   $("#hf").addEventListener("submit", e => { e.preventDefault(); search(null); });
   $("#hcancel").addEventListener("click", cancelScan);
   $("#resume").addEventListener("click", () => search(lastScan));

@@ -88,18 +88,39 @@ def test_a_dear_leg_is_named_dear_and_a_normal_one_normal(tmp_path):
     assert price_band(conn, leg(price=201.0), observed_at=OBSERVED)["tier"] == "normal"
 
 
-def test_the_fourth_tier_never_shows_up_for_a_flight(tmp_path):
-    """`error` gehoert den Hotels. Fuer Fluege gibt es genau drei Stufen."""
+def test_a_bargain_is_not_a_fourth_tier(tmp_path):
+    """Seit `flightopt.hunt.errorfare` kennt auch der Flugpfad `error`.
+
+    Die Stufe ist eng gefasst, und dieser Test haelt fest, wie eng: ein
+    gewoehnlicher Preis, ein teurer und selbst ein deutliches Angebot bleiben
+    bei den drei alten Stufen. `error` verlangt zusaetzlich einen Preis unter
+    der Schranke, die die Entfernung setzt.
+    """
     conn = conn_at(tmp_path)
     put_baseline(conn, "BER|ATH", median_minor=20000, mad_minor=1000)
 
     tiers = {
         price_band(conn, leg(price=price), observed_at=OBSERVED)["tier"]
-        for price in (1.0, 99.0, 201.0, 4000.0)
+        for price in (13.0, 99.0, 201.0, 4000.0)
     }
 
     assert tiers <= {"cheap", "normal", "expensive"}
     assert "error" not in tiers
+
+
+def test_an_impossible_price_reaches_the_fourth_tier(tmp_path):
+    """Ein Euro fuer 1797 km, bei einem Median von 200 Euro.
+
+    Unter der Schranke von zwoelf Euro *und* unter einem Viertel des Medians:
+    beide Winkel zeigen in dieselbe Richtung, und dafuer ist die Stufe da.
+    """
+    conn = conn_at(tmp_path)
+    put_baseline(conn, "BER|ATH", median_minor=20000, mad_minor=1000)
+
+    band = price_band(conn, leg(price=1.0), observed_at=OBSERVED)
+
+    assert band["tier"] == "error"
+    assert "Schranke" in band["reason"]
 
 
 def test_a_leg_without_price_or_date_stays_unknown(tmp_path):
