@@ -211,9 +211,15 @@ async def test_the_run_refreshes_the_flight_baselines(tmp_path):
     )
 
     rows = conn.execute(
-        "SELECT n FROM flight_baseline WHERE entity_key='BER|ATH'"
+        "SELECT n, leadtime_bucket, computed_at FROM flight_baseline "
+        "WHERE entity_key='BER|ATH'"
     ).fetchall()
     assert [int(row["n"]) for row in rows] == [5]
+    assert rows[0]["leadtime_bucket"] == "14-29"
+    assert rows[0]["computed_at"] == "2026-09-05T08:00:00"
+    assert conn.execute(
+        "SELECT observed_at FROM price_observation ORDER BY id DESC LIMIT 1"
+    ).fetchone()["observed_at"] == "2026-09-05T08:00:00"
 
 
 @pytest.mark.asyncio

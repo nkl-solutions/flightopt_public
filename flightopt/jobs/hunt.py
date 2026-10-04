@@ -140,7 +140,7 @@ async def run_hunt(conn, *, sources: list | None = None,
     if own_sources:
         sources = build_sources(None, conn=conn, env=env or os.environ)
     if rates is None:
-        rates = await fx_store.current_rates(conn)
+        rates = await fx_store.current_rates(conn, now=moment)
 
     observations = calls = 0
     ran: list[watchlist.WatchRoute] = []
@@ -199,7 +199,7 @@ async def run_hunt(conn, *, sources: list | None = None,
     if observations:
         # Erst nachrechnen, dann urteilen: ohne das bleibt die Preislage leer,
         # obwohl die Zeilen da sind.
-        refresh_baselines(conn, entity_type="flight")
+        refresh_baselines(conn, entity_type="flight", now=moment)
         for route in ran:
             finds = find_error_fares(conn, route.entity_key, since_id=first_new_id)
             finds_total += len(finds)

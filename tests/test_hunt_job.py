@@ -9,7 +9,7 @@ from flightopt.hunt import alerts, budget, cadence, discord
 from flightopt.jobs.hunt import MAX_FINDS_PER_ROUTE, MAX_ROUTES_PER_RUN, run_hunt
 from flightopt.sources.base import CircuitBreaker, SourceBlocked
 from flightopt.storage import db
-from flightopt.storage.cache import SqliteCache
+from flightopt.storage.cache import TTL_CALENDAR, SqliteCache
 from flightopt.storage.watchlist import (
     add_route,
     get_route,
@@ -265,9 +265,23 @@ async def test_a_fresh_cache_entry_is_still_used(tmp_path):
 
     assert int(rows["n"]) == 1, "geschrieben wird weiter mit der normalen TTL"
     cached = await SqliteCache(conn).get(
-        conn.execute("SELECT cache_key FROM price_cache").fetchone()["cache_key"]
+        conn.execute("SELECT cache_key FROM price_cache").fetchone()["cache_key"],
+        now=NOW,
     )
     assert cached is not None
+    row = conn.execute("SELECT * FROM price_cache").fetchone()
+    assert row["fetched_at"] == NOW.isoformat(timespec="seconds")
+    assert row["expires_at"] == (NOW + TTL_CALENDAR).isoformat(timespec="seconds")
+    cache = SqliteCache(conn)
+    assert await cache.get(row["cache_key"], now=NOW + TTL_CALENDAR) is None
+    assert await cache.get(
+        row["cache_key"], max_age=cadence.MAX_CACHE_AGE,
+        now=NOW + cadence.MAX_CACHE_AGE,
+    ) is not None
+    assert await cache.get(
+        row["cache_key"], max_age=cadence.MAX_CACHE_AGE,
+        now=NOW + cadence.MAX_CACHE_AGE + timedelta(seconds=1),
+    ) is None
 
 
 # -- Der Fund -----------------------------------------------------------------

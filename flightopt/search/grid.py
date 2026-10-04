@@ -267,6 +267,7 @@ async def build_grid(
                         entity_key=entity,
                         travel_date=day,
                         price=money,
+                        observed_at=now,
                         party_size=spec.pax.total,
                         is_estimate=True,
                         is_indicative=indicative,
