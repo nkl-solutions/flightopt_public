@@ -6,6 +6,9 @@ flightopt ist ein lokaler Multi-Stopp-Flugoptimierer. Die App sucht nicht jede
 Reise einzeln ab, sondern holt Kalenderpreise pro Teilstrecke und kombiniert
 daraus die günstigsten Datumsketten.
 
+Aktueller Funktionsstand, Prioritäten und Abschlusskriterien:
+[Roadmap](ROADMAP.md).
+
 Das Projekt ist bewusst als Portfolio-Version aufbereitet: verständlicher Code,
 Tests, Fixtures und klare Grenzen. Keine Secrets, keine privaten Suchprofile,
 keine lokale Datenbank.
@@ -15,16 +18,28 @@ keine lokale Datenbank.
 - FastAPI-Backend mit Server-Sent Events für Fortschritt
 - SQLite für Cache, Jobs, Preisbeobachtungen, Profile und Baselines
 - dynamischer Programmieralgorithmus für Multi-Stopp-Routen
-- Single-File-Web-UI ohne Build-Schritt
+- responsive Web-UI in HTML, CSS und JavaScript ohne Build-Schritt,
+  mit selbst gehosteten Schriften
 - Airline-Adapter mit aufgezeichneten Test-Fixtures
-- Flughafen-Gruppen wie `DE` und `DE-OST`
+- weltweite Flughafensuche mit Metro- und Ländergruppen wie `TYO`, `DE` und
+  `DE-OST`, deutschen Aliasnamen und Tab-Vervollständigung
 - gespeicherte Suchprofile als Basis für tägliche Scans
-- Preisbaseline mit einfachem Ausreißer-Signal
+- Preisbaseline aus Median und MAD, getrennt nach Kalenderpreisen,
+  geprüften Angeboten und Richtwerten
 - transparente Aufgabegepäck-Annahmen je Airline
 - Portainer-/VPS-Start mit optionaler Basic Auth
 - schnelle Satz-Eingabe als Vorstufe für den KI-Modus
 - Spracheingabe für das KI-Feld im Browser
 - parallele Kalender- und Live-Prüfungen für schnellere Suchen
+- getrennte Ergebnisgruppen für geprüfte Routen und Kandidaten;
+  Favorit nur aus geprüften Preisen
+- Quellenstatus, Abbruch und schrittweise Ergebnisse während der Suche
+- Währungsumrechnung mit EZB-Referenzkursen und sichtbarem Originalpreis
+- Beobachtungsliste mit rollenden Fenstern, täglichen Scans und optionalem
+  20-Minuten-Takt
+- Fehltarif-Jagd mit Preisverläufen, Entdopplung und optionalem Discord-Versand
+- Hotelsuche über Trivago MCP und optional Booking mit Playwright
+- gespeicherte Hotelbeobachtungen und optionale Gesamtreise aus Flug und Hotel
 
 ## Warum das spannend ist
 
@@ -54,10 +69,37 @@ Danach:
 http://127.0.0.1:8000
 ```
 
+Unter Windows funktionieren bei blockierten Script-Wrappern die Modulaufrufe
+`uv run python -m pytest tests/ -q` und
+`uv run python -m uvicorn flightopt.api.main:app --port 8000`.
+
+## Eingabe und Preise
+
+Die Satz-Eingabe liest einfache Routen lokal und füllt die normale Suche vor.
+Spracheingabe verwendet die Browser-Spracherkennung, zum Beispiel in Chrome
+oder Edge über HTTPS oder localhost. Die Route wird vor dem Suchen bestätigt.
+Ein OpenAI-Modellaufruf für komplexe Reisewünsche ist noch nicht angeschlossen.
+
+Kalenderpreise bilden den Suchraum. Danach werden Kandidaten bei den Quellen
+nachgeprüft, soweit diese eine Tagessuche anbieten. Nur vollständig geprüfte
+Routen erscheinen in der geprüften Gruppe. Richtwerte bleiben als solche
+sichtbar. Die Preislage beantwortet eine andere Frage: ob ein Preis gegenüber
+vergleichbaren Beobachtungen günstig oder teuer ist.
+
+Hotelpreise dienen als Richtwerte; fehlt ein Aufenthaltspreis, bleibt die
+Gesamtsumme offen. Booking benötigt zusätzlich
+`uv sync --group hotels` und `uv run python -m playwright install chromium`.
+
 ## VPS
 
 Der erste Container-Start für Portainer liegt in `docker-compose.portainer.yml`.
 Details stehen in `docs/DEPLOYMENT.md`.
+
+Der Standardbauweg `lean` enthält keinen Browser. `FLIGHTOPT_VARIANT=hotels`
+baut Chromium mit; dafür zunächst `FLIGHTOPT_MEM_LIMIT=1g` verwenden und den
+tatsächlichen Verbrauch messen. Optionaler Discord-Versand wird mit
+`FLIGHTOPT_DISCORD_WEBHOOK` eingerichtet. Beispielvariablen stehen in
+`deploy/portainer.env.example`, persönliche Werte bleiben in der Umgebung.
 
 CLI:
 
@@ -74,9 +116,13 @@ flightopt/
   jobs/      Jobs, Scheduler, gespeicherte Profile
   search/    Kalender-Matrix, Optimierung, Verifikation
   sources/   Airline-Quellen
+  hotels/    Hotelquellen, Scans und Preisbewertung
+  trip/      Aufenthalte und Hotelanteil der Gesamtreise
+  hunt/      Preisalarme, Quellenbudgets und Discord
   storage/   SQLite, Cache, Baselines
   web/       lokale Oberfläche
 tests/       Unit-Tests und aufgezeichnete Fixtures
+scripts/     Datenaufbereitung, Migration und Datenbank-Backup
 ```
 
 ## Projektgrenzen
