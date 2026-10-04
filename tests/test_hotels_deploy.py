@@ -9,8 +9,14 @@ versehentlich mitbaut, merkt es erst auf dem Server.
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import sys
+import textwrap
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCKERFILE = (ROOT / "Dockerfile").read_text(encoding="utf-8")
@@ -88,6 +94,58 @@ def test_the_application_is_copied_after_the_browser():
 
 def test_the_compose_passes_the_variant_as_a_build_argument():
     assert f"{VARIANT}: ${{{VARIANT}:-lean}}" in COMPOSE
+
+
+def compose_launcher() -> tuple[str, list[str]]:
+    command = re.search(r"^    command:\n((?:      .*\n|\n)+)", COMPOSE, re.M)
+    assert command is not None, "Compose must preserve image defaults before starting uvicorn"
+    body = command.group(1)
+    script = re.search(r"^      - \|\n((?:        .*\n|\n)+)", body, re.M)
+    assert script is not None
+    arguments = re.findall(r"^      - (.+)$", body, re.M)
+    assert arguments[:3] == ["python", "-c", "|"]
+    return textwrap.dedent(script.group(1)).replace("$$", "$"), [
+        argument.strip('"') for argument in arguments[3:]
+    ]
+
+
+@pytest.mark.parametrize("variant", ["lean", "hotels"])
+@pytest.mark.parametrize("override", [None, "", "0", "false", "no", "off", "1"])
+def test_booking_runtime_preserves_image_defaults_and_explicit_overrides(
+    variant, override, monkeypatch
+):
+    assert "FLIGHTOPT_HOTELS_BOOKING_OVERRIDE: ${FLIGHTOPT_HOTELS_BOOKING:-}" in COMPOSE
+    assert not re.search(r"^\s+FLIGHTOPT_HOTELS_BOOKING:", COMPOSE, re.M)
+    script, _ = compose_launcher()
+    image_setting = re.search(
+        r"^ENV FLIGHTOPT_HOTELS_BOOKING=(\S+)$", stages()[f"{variant}-env"], re.M
+    )
+    image_default = image_setting.group(1) if image_setting else None
+    monkeypatch.delenv("FLIGHTOPT_HOTELS_BOOKING", raising=False)
+    monkeypatch.delenv("FLIGHTOPT_HOTELS_BOOKING_OVERRIDE", raising=False)
+    if image_default is not None:
+        monkeypatch.setenv("FLIGHTOPT_HOTELS_BOOKING", image_default)
+    if override is not None:
+        monkeypatch.setenv("FLIGHTOPT_HOTELS_BOOKING_OVERRIDE", override)
+    executions = []
+    monkeypatch.setattr(sys, "argv", ["-c", "launcher-probe", "--test"])
+    monkeypatch.setattr(os, "execvp", lambda *args: executions.append(args))
+    exec(compile(script, "<compose booking launcher>", "exec"), {})
+    assert os.environ.get("FLIGHTOPT_HOTELS_BOOKING", "0") == (
+        override or image_default or "0"
+    )
+    assert executions == [("launcher-probe", ["launcher-probe", "--test"])]
+
+
+def test_the_compose_launcher_executes_the_image_command():
+    _, arguments = compose_launcher()
+    image_command = re.search(r"^CMD (\[.*\])$", DOCKERFILE, re.M)
+    assert image_command is not None
+    assert arguments == json.loads(image_command.group(1))
+
+
+def test_the_compose_passes_the_optional_discord_webhook():
+    assert "FLIGHTOPT_DISCORD_WEBHOOK: ${FLIGHTOPT_DISCORD_WEBHOOK:-}" in COMPOSE
 
 
 def test_the_compose_keeps_a_memory_limit_and_makes_it_settable():

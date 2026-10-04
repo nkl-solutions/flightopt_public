@@ -19,10 +19,10 @@ services:
       # deckelt den bezahlten Monatsverbrauch (Standard siehe DEFAULT_CAP).
       SERPAPI_KEY: ${SERPAPI_KEY:-}
       SERPAPI_MONTHLY_CAP: ${SERPAPI_MONTHLY_CAP:-}
-      # Ohne Browser im Image bleibt die Quelle draussen, auch wenn hier eine
-      # Eins steht - der Katalog prueft beides. Der `hotels`-Bauweg setzt den
-      # Schalter selbst, diese Zeile ist der Notausschalter daneben.
-      FLIGHTOPT_HOTELS_BOOKING: ${FLIGHTOPT_HOTELS_BOOKING:-}
+      FLIGHTOPT_DISCORD_WEBHOOK: ${FLIGHTOPT_DISCORD_WEBHOOK:-}
+      # Leer erhaelt den Image-Standard: hotels an, lean aus. Ein gesetzter
+      # Wert wird vor dem Start uebernommen, auch 0/false/no/off.
+      FLIGHTOPT_HOTELS_BOOKING_OVERRIDE: ${FLIGHTOPT_HOTELS_BOOKING:-}
       # Das Budget des langlebigen Chromium. Seiten je Prozess, Hoechstdauer
       # und Leerlauffrist in Sekunden; leer heisst, die Voreinstellung des
       # Codes gilt (60 Seiten, 1800 s, 120 s).
@@ -30,6 +30,24 @@ services:
       FLIGHTOPT_HOTELS_BROWSER_MAX_AGE: ${FLIGHTOPT_HOTELS_BROWSER_MAX_AGE:-}
       FLIGHTOPT_HOTELS_BROWSER_IDLE: ${FLIGHTOPT_HOTELS_BROWSER_IDLE:-}
       MALLOC_ARENA_MAX: "2"
+    command:
+      - python
+      - -c
+      - |
+        import os, sys
+        override = os.environ.get("FLIGHTOPT_HOTELS_BOOKING_OVERRIDE", "")
+        if override:
+            os.environ["FLIGHTOPT_HOTELS_BOOKING"] = override
+        os.execvp(sys.argv[1], sys.argv[1:])
+      - uv
+      - run
+      - --frozen
+      - uvicorn
+      - flightopt.api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
     volumes:
       - flightopt-data:/app/data
     networks:

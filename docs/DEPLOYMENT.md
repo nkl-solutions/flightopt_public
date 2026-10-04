@@ -22,6 +22,8 @@ uebertragen wird mit `scripts/sync_public.py`.
      und die Suche laeuft ohne diese Verify-Schicht.
    - `SERPAPI_MONTHLY_CAP` optional, Standard 200. Deckelt die bezahlten
      Aufrufe je Kalendermonat; der Free Tier liegt bei 250.
+   - `FLIGHTOPT_DISCORD_WEBHOOK` optional. Ohne Wert werden Funde gespeichert,
+     aber keine Discord-Meldungen gesendet.
 3. Stack starten.
 4. Einen HTTPS-Reverse-Proxy davor setzen, z.B. Nginx Proxy Manager, Caddy oder
    Traefik.
@@ -218,6 +220,13 @@ Kopie der Anwendung waere ausserdem eine zweite Wahrheit, die auseinanderlaeuft.
 Der `hotels`-Abschnitt setzt `FLIGHTOPT_HOTELS_BOOKING=1` selbst - ein Image
 mit Browser und ohne Schalter waere ein Image ohne Zweck. Die Stack-Variable
 gleichen Namens bleibt daneben als Notausschalter stehen.
+
+Seit 2026-10-04 reicht Compose diesen optionalen Wert intern als
+`FLIGHTOPT_HOTELS_BOOKING_OVERRIDE` durch. Der Startbefehl uebernimmt ihn nur,
+wenn er nicht leer ist, und startet danach den normalen Image-Befehl. So
+bleibt ohne Override `hotels` eingeschaltet und `lean` ausgeschaltet. Die
+Werte `0`, `false`, `no` und `off` schalten Booking explizit ab. In Portainer
+wird weiterhin nur `FLIGHTOPT_HOTELS_BOOKING` gepflegt.
 
 Umstellen heisst: `FLIGHTOPT_VARIANT=hotels` **und** `FLIGHTOPT_MEM_LIMIT`
 hochsetzen, danach "Pull and redeploy". Wer nur das erste tut, bekommt einen
