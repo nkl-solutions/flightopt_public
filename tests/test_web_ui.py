@@ -204,8 +204,10 @@ assert.strictEqual($("#progressbar").attributes["aria-valuenow"], "45");
 def test_results_copy_separates_favorite_from_candidates():
     result = run_ui_assertion(
         r"""
-assert.strictEqual(resultTitle([{}, {}, {}]), "Favorit + 2 Kandidaten");
-assert.strictEqual(resultRankLabel(0), "Favorit");
+assert.strictEqual(resultTitle([{}, {}, {}]), "3 Kandidaten");
+assert.strictEqual(resultTitle([{verified:true}, {}, {}]), "1 geprüfte Route, 2 Kandidaten");
+assert.strictEqual(resultRankLabel(0), "#1");
+assert.strictEqual(resultRankLabel(2, true), "Favorit");
 assert.strictEqual(resultRankLabel(1), "#2");
 """
     )
@@ -930,7 +932,7 @@ renderTable([
 ]);
 
 assert.strictEqual($("#outsummary").textContent,
-  "2 Varianten sichtbar, günstigste ab 220,00 €");
+  "2 Varianten sichtbar, geprüfte Flüge ab 300,00 €; Kandidaten ab 220,00 €");
 
 renderTable([]);
 assert.strictEqual($("#outsummary").textContent, "");

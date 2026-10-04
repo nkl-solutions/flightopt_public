@@ -397,8 +397,9 @@ function drawRoute(){  const box = $("#route"); box.innerHTML = "";
     grip.setAttribute("aria-hidden","true");
     cell.append(grip, inp, ghost, badge, menu, empty);
 
-    let items=[], sel=-1, timer;
+    let items=[], sel=-1, timer, queryVersion=0;
     const close = () => { menu.classList.remove("on"); empty.classList.remove("on");
+                          queryVersion++; clearTimeout(timer);
                           menu.innerHTML=""; items=[]; sel=-1;
                           ghost.innerHTML="";
                           inp.setAttribute("aria-expanded","false");
@@ -444,18 +445,22 @@ function drawRoute(){  const box = $("#route"); box.innerHTML = "";
       hops[i] = {code:a.code, label:a.city};
       inp.value = a.city; badge.textContent = a.code; close(); size(); updateRouteGlance(); saveForm();
       const all = $("#route").querySelectorAll("input");
-      if (all[i+1] && !(hops[i+1]||{}).code) all[i+1].focus();
+      if (all[i+1]) all[i+1].focus();
+      else $("#from").focus();
     };
     inp.oninput = () => {
       hops[i] = {code:"", label:inp.value}; badge.textContent=""; size(); updateRouteGlance();
       clearTimeout(timer);
+      const version = ++queryVersion;
       const q = inp.value.trim();
-      if (q.length < 2){ close(); return; }
+      if (!q){ close(); return; }
       timer = setTimeout(async () => {
         try {
           const r = await fetch(`/api/airports?q=${encodeURIComponent(q)}&limit=8`);
-          items = (await r.json()).results || []; sel = items.length?0:-1; paint();
-        } catch { close(); }
+          const data = await r.json();
+          if (version !== queryVersion || inp.value.trim() !== q) return;
+          items = data.results || []; sel = items.length?0:-1; paint();
+        } catch { if (version === queryVersion) close(); }
       }, 140);
     };
     inp.onkeydown = e => {
@@ -483,11 +488,13 @@ function drawRoute(){  const box = $("#route"); box.innerHTML = "";
       // form, so resolve it to the best match instead of blaming the person.
       const typed = inp.value.trim();
       if (!typed || hops[i].code) return;
+      const version = queryVersion;
       try {
         const r = await fetch(`/api/airports?q=${encodeURIComponent(typed)}&limit=1`);
         const top = ((await r.json()).results || [])[0];
+        if (version !== queryVersion || inp.value.trim() !== typed) return;
         if (top){ hops[i] = {code:top.code, label:top.city};
-                  inp.value = top.city; badge.textContent = top.code; size(); updateRouteGlance(); }
+                  inp.value = top.city; badge.textContent = top.code; size(); updateRouteGlance(); saveForm(); }
       } catch { /* leave it as typed; the form will say what is missing */ }
     }, 140);
 
@@ -1266,8 +1273,9 @@ function sortResults(results){
   return copy;
 }
 function resultQuality(o){
+  if ((o.legs || []).some(l => l.indicative)) return "indicative";
   if (o.verified) return "verified";
-  return (o.legs || []).some(l => l.indicative) ? "indicative" : "estimate";
+  return "estimate";
 }
 function filterResults(results){
   const carrier = $("#resultCarrier").value;
@@ -1321,22 +1329,45 @@ function resetResultFilters(){
 function airlineSummary(results){
   const cheapest = new Map();
   results.forEach(o => carriersOf(o).forEach(c => {
-    if (!cheapest.has(c) || o.total < cheapest.get(c)) cheapest.set(c, o.total);
+    const verified = resultQuality(o) === "verified", current = cheapest.get(c);
+    if (!current || (verified && !current.verified)
+        || (verified === current.verified && o.total < current.price)){
+      cheapest.set(c, {price:o.total, verified});
+    }
   }));
   if (!cheapest.size){ $("#usedby").textContent = ""; return; }
   const nameOf = c => {
     const a = AIRLINES.find(x => x.code === c);
     return a ? a.name : c;
   };
-  const parts = [...cheapest.entries()].sort((a,b) => a[1]-b[1]).map(([c,p]) =>
-    `${tailMark(c)}<span>${esc(nameOf(c))} ab ${money(p)} €</span>`);
+  const parts = [...cheapest.entries()].sort((a,b) => a[1].price-b[1].price).map(([c,p]) =>
+    `${tailMark(c)}<span>${esc(nameOf(c))} ${p.verified ? "geprüft" : "Kandidat"} ab ${money(p.price)} €</span>`);
   $("#usedby").innerHTML = `<span>Beteiligte Airlines:</span>` + parts.join("");
 }
 function resultTitle(results){
-  if (results.length <= 1) return `${results.length} Favorit`;
-  return `Favorit + ${results.length - 1} Kandidaten`;
+  const verified = results.filter(o => resultQuality(o) === "verified").length;
+  const candidates = results.length - verified;
+  return [verified ? `${verified} geprüfte ${verified === 1 ? "Route" : "Routen"}` : "",
+    candidates ? `${candidates} ${candidates === 1 ? "Kandidat" : "Kandidaten"}` : ""]
+    .filter(Boolean).join(", ") || "Ergebnisse";
 }
-function resultRankLabel(index){ return index === 0 ? "Favorit" : `#${index + 1}`; }
+function resultRankLabel(index, favorite=false){ return favorite ? "Favorit" : `#${index + 1}`; }
+function resultOverview(results, total){
+  if (!results.length) return resultSummaryLine(0, total, 0);
+  const verified = results.filter(o => resultQuality(o) === "verified");
+  const candidates = results.filter(o => resultQuality(o) !== "verified");
+  const prices = [];
+  if (verified.length) prices.push(`geprüfte Flüge ab ${money(Math.min(...verified.map(o => o.total)))} €`);
+  if (candidates.length) prices.push(`Kandidaten ab ${money(Math.min(...candidates.map(o => o.total)))} €`);
+  return `${resultFilterSummary(results.length, total)}, ${prices.join("; ")}`;
+}
+function itineraryDates(o){
+  return (o.dates || []).map((day, i) => {
+    const leg = (o.legs || [])[i] || {};
+    const pair = [leg.origin, leg.destination].filter(Boolean).join(" - ");
+    return `<span>${pair ? `<b>${esc(pair)}</b> ` : ""}<time datetime="${esc(day)}">${esc(fmtDay(day))}</time></span>`;
+  }).join("");
+}
 /* Eine Live-Region um die ganze Tabelle liest bei jeder Sortierung alles neu
    vor. Angesagt wird deshalb nur dieser eine Satz. */
 function resultSummaryLine(visible, total, cheapest){
@@ -1352,7 +1383,7 @@ function routeBadge(o){
    wird die Tabelle mehrmals pro Sekunde neu geschrieben, und dabei darf weder
    ein geoeffnetes Detail zuklappen noch die ganze Liste neu aufblinken. */
 let openRows = new Set(), seenRows = new Set();
-function rowMarkup(o, n){
+function rowMarkup(o, n, favorite=false){
   const dots = o.dates.map((d, i) => {
     const l = o.legs[i] || {};
     const t = esc(`${l.origin||""}-${l.destination||""} ${fmtDay(d)}: ${money(l.price)} €`);
@@ -1369,11 +1400,11 @@ function rowMarkup(o, n){
   const fresh = seenRows.has(key) ? "" : " fresh";
   const band = rowBand(o);
   const status = statusLabel(o);
-  return `<tr class="opt${n === 0 ? " best" : ""}${open ? " open" : ""}${fresh}"
+  return `<tr class="opt${favorite ? " best" : ""}${open ? " open" : ""}${fresh}"
       data-n="${n}" data-key="${esc(key)}" style="animation-delay:${n * 18}ms">
     <td class="c-rank"><button type="button" class="rowtoggle" data-n="${n}"
       aria-expanded="${open}" aria-controls="det-${n}"
-      >${esc(resultRankLabel(n))}</button></td>
+      >${esc(resultRankLabel(n, favorite))}</button></td>
     <td class="c-price">${money(o.total)}<small>€</small
       ><small class="rowstatus">${esc(status)}</small></td>
     <td class="c-price c-grand">${grandCell(o)}</td>
@@ -1381,7 +1412,8 @@ function rowMarkup(o, n){
     <td class="c-status c-band" data-signal="${esc(band.tier)}"
       >${bandCell(band.tier)}</td>
     <td class="c-rail"><span class="rail"><i class="line"
-      style="left:${railLeft(first)};width:${railWidth(last - first)}"></i>${dots}${gaps}</span></td>
+      style="left:${railLeft(first)};width:${railWidth(last - first)}"></i>${dots}${gaps}</span>
+      <span class="itinerarydates">${itineraryDates(o)}</span></td>
     <td class="c-num c-nights">${nightsOf(o)}</td>
     <td class="c-num c-stops">${esc(stopsLabel(stopsOf(o)))}</td>
     <td class="c-air">${routeBadge(o)}${carriersOf(o).map(tailMark).join("")}</td>
@@ -1471,15 +1503,22 @@ function renderTable(results){
     $("#out").classList.add("on");
     return;
   }
-  const rows = sortResults(visible);
+  const verified = sortResults(visible.filter(o => resultQuality(o) === "verified"));
+  const candidates = sortResults(visible.filter(o => resultQuality(o) !== "verified"));
+  const rows = [...verified, ...candidates];
+  const favorite = verified.reduce((best, row) => !best || row.total < best.total ? row : best, null);
   airlineSummary(rows);
   const all = rows.flatMap(o => o.dates.map(d => new Date(d + "T00:00:00")));
   axis = {start:new Date(Math.min(...all)), end:new Date(Math.max(...all))};
   drawRuler();
   $("#outtitle").textContent = resultTitle(rows);
-  announceSummary(
-    resultSummaryLine(rows.length, found, Math.min(...rows.map(o => o.total))));
-  body.innerHTML = rows.map(rowMarkup).join("");
+  announceSummary(resultOverview(rows, found));
+  const group = (label, count, note) => `<tr class="resultgroup"><th colspan="${RESULT_COLUMNS}" scope="rowgroup">`
+    + `${label} <span>${count}</span><small>${note}</small></th></tr>`;
+  body.innerHTML = (verified.length ? group("Geprüfte Routen", verified.length, "Alle Teilstrecken geprüft") : "")
+    + verified.map((o, n) => rowMarkup(o, n, o === favorite)).join("")
+    + (candidates.length ? group("Kandidaten", candidates.length, "Schätzung oder Richtwert · noch kein bestätigter Gesamtpreis") : "")
+    + candidates.map((o, n) => rowMarkup(o, n + verified.length)).join("");
   rows.forEach(o => seenRows.add(resultKey(o)));
   wireRows(body);
   $("#out").classList.add("on");

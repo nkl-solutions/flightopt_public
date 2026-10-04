@@ -37,8 +37,8 @@ def test_static_mount_serves_the_split_assets():
 def test_index_references_the_split_assets_and_has_no_inline_code():
     page = (main.WEB_DIR / "index.html").read_text(encoding="utf-8")
 
-    assert '<link rel="stylesheet" href="/static/app.css">' in page
-    assert '<script src="/static/app.js"></script>' in page
+    assert re.search(r'<link rel="stylesheet" href="/static/app\.css\?v=\d+">', page)
+    assert re.search(r'<script src="/static/app\.js\?v=\d+"></script>', page)
     # Auch `<style media=...>` waere Inline-CSS, deshalb nicht auf `<style>` pruefen.
     assert re.search(r"<style", page) is None
     # Nur Script-Tags mit src sind erlaubt, jedes andere waere Inline-Code.

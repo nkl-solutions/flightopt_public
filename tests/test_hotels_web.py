@@ -80,7 +80,7 @@ def hotel_query(**kwargs) -> HotelQuery:
 def test_the_hotel_page_is_served_and_carries_no_inline_code():
     page = HOTELS_HTML.read_text(encoding="utf-8")
 
-    assert '<link rel="stylesheet" href="/static/app.css">' in page
+    assert re.search(r'<link rel="stylesheet" href="/static/app\.css\?v=\d+">', page)
     assert '<script src="/static/hotels.js"></script>' in page
     assert re.search(r"<style", page) is None
     assert re.search(r"<script(?![^>]*\ssrc=)", page) is None

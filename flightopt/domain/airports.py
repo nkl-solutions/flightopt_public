@@ -292,6 +292,13 @@ def search(query: str, limit: int = 8) -> list[Airport | AirportGroup]:
         return []
 
     wanted = query.strip().upper()
+    # One letter is type-ahead, not a country or code fragment. Prefer local
+    # city matches so "B" suggests Berlin rather than a broad airport group.
+    if len(q) == 1:
+        matches = [a for keys, a in folded if keys.city.startswith(q)
+                   or any(alias.startswith(q) for alias in keys.aliases)]
+        matches.sort(key=lambda a: (a.cc != "DE", a.size != "large", _fold(a.city), a.code))
+        return matches[:limit]
     exact = by_c.get(wanted)
     exact_group = GROUPS.get(wanted)
     scored: list[tuple[int, int, int, str, str, Airport | AirportGroup]] = []

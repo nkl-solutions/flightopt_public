@@ -27,9 +27,9 @@
    dieses Codes und der gerechnete Kontrast gegen --bg. */
 :root{
   /* Flaechen */
-  --bg:oklch(97.5% 0.006 90);          /* #f8f7f2  Papier */
-  --paper:oklch(99.5% 0.004 90);       /* #fefdfa  erhoehte Flaeche, Dropdown, Sticky-Kopf */
-  --wash:oklch(95.5% 0.006 90);        /* #f2f0ec  Hover, offene Zeile */
+  --bg:#f7f8fa;                      /* #f7f8fa */
+  --paper:#ffffff;                   /* #ffffff */
+  --wash:#edf0f3;                    /* #edf0f3 */
 
   /* Schrift */
   --ink:oklch(22% 0.010 60);           /* #1e1a16  16.13:1 auf --bg */
@@ -78,7 +78,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 /* Kein 300-ms-Warten auf einen Doppeltipp, kein blauer Blitz beim Antippen. */
 button,a,summary,label,input,select,.chip,tr.opt{touch-action:manipulation;
   -webkit-tap-highlight-color:transparent}
-h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
+h1,h2{margin:0;font-weight:700;letter-spacing:0}
 .wrap{max-width:1180px;margin:0 auto;
   padding:0 max(var(--gut),env(safe-area-inset-left)) calc(var(--s8) + env(safe-area-inset-bottom))
           max(var(--gut),env(safe-area-inset-right))}
@@ -100,7 +100,7 @@ h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
 /* --- Kopf ---------------------------------------------------------------- */
 .mast{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s5);
   padding:var(--s6) 0 var(--s3);border-bottom:1px solid var(--ink);flex-wrap:wrap}
-.mark{font-size:var(--t28);letter-spacing:-.03em}
+.mark{font-size:var(--t28);letter-spacing:0}
 .mark span{color:var(--signal)}
 .tagline{margin:0;font-size:var(--t16);color:var(--ink-subtle);max-width:46ch}
 /* Umschalter zwischen den beiden Bereichen. Dieselbe Form wie die Reiseart,
@@ -133,8 +133,8 @@ h1,h2{margin:0;font-weight:700;letter-spacing:-.01em}
 .panel{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
   gap:var(--s5) var(--s7);padding-bottom:var(--s5)}
 @media(max-width:840px){.panel{grid-template-columns:1fr}}
-.lab{display:block;font-size:var(--t12);font-weight:500;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--ink-subtle);margin-bottom:var(--s1)}
+.lab{display:block;font-size:var(--t14);font-weight:500;letter-spacing:0;
+  color:var(--ink-muted);margin-bottom:var(--s1)}
 
 /* Ein Muster fuer jede Rueckmeldung. Ton steuert nur die Farbe. */
 .msg{display:block;margin:var(--s1) 0 0;font-size:var(--t12);min-height:1.2em;
@@ -280,7 +280,7 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
 .chip:disabled{cursor:not-allowed;background:var(--wash);border-color:var(--rule-1);
   color:var(--ink-subtle)}
 .tail{width:22px;height:22px;border-radius:var(--r);display:inline-grid;place-items:center;
-  flex:none;font-size:10px;font-weight:500;letter-spacing:-.02em;font-style:normal;
+  flex:none;font-size:10px;font-weight:500;letter-spacing:0;font-style:normal;
   /* Gelbe und hellgruene Marken liegen bei 1.4:1 gegen Papier: ohne Kante schwebt
      das Kuerzel frei. Eine Haarlinie aus der Marke selbst gibt der Flaeche Form. */
   outline:1px solid color-mix(in oklab,var(--ink) 20%,transparent);outline-offset:-1px}
@@ -304,8 +304,8 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
    Profil und Scanner sitzen in seiner Kopfzeile, weil beide nur hier etwas
    bewirken. */
 .deals{margin-top:var(--s7);padding-top:var(--s4);border-top:1px solid var(--rule-2)}
-.deals h2{font-size:var(--t12);letter-spacing:.08em;text-transform:uppercase;
-  color:var(--ink-subtle);font-weight:500}
+.deals h2{font-size:var(--t21);letter-spacing:0;
+  color:var(--ink);font-weight:500}
 .dealshead{display:grid;gap:var(--s2);padding-bottom:var(--s3);
   border-bottom:1px solid var(--rule-1)}
 #dealstable td.mono{font-family:var(--mono);font-size:var(--t12);color:var(--ink-muted)}
@@ -328,8 +328,8 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
    hat, steht ueber dem, was sie beobachtet - die Frage "was ist da" kommt vor
    der Frage "was wird beobachtet". */
 .hunt{margin-top:var(--s7);padding-top:var(--s4);border-top:1px solid var(--rule-2)}
-.hunt h2{font-size:var(--t12);letter-spacing:.08em;text-transform:uppercase;
-  color:var(--ink-subtle);font-weight:500}
+.hunt h2{font-size:var(--t21);letter-spacing:0;
+  color:var(--ink);font-weight:500}
 .hunthead{display:grid;gap:var(--s2);padding-bottom:var(--s3);
   border-bottom:1px solid var(--rule-1)}
 .hunthead .scanbar{margin-top:0}
@@ -437,8 +437,8 @@ svg.curve .cfind{stroke:var(--signal);stroke-width:2;
    gespeicherten Scans, weil beides dasselbe ist - etwas, das ohne Zutun
    weiterlaeuft und hier nachgesehen wird. */
 .watch{margin-top:var(--s7);padding-top:var(--s4);border-top:1px solid var(--rule-2)}
-.watch h2{font-size:var(--t12);letter-spacing:.08em;text-transform:uppercase;
-  color:var(--ink-subtle);font-weight:500}
+.watch h2{font-size:var(--t21);letter-spacing:0;
+  color:var(--ink);font-weight:500}
 .watchhead{display:grid;gap:var(--s2);padding-bottom:var(--s3);
   border-bottom:1px solid var(--rule-1)}
 .watchform{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)}
@@ -571,7 +571,7 @@ svg.curve .cfind{stroke:var(--signal);stroke-width:2;
 table.kursbuch{width:100%;border-collapse:collapse;font-size:var(--t14)}
 table.kursbuch thead th{position:sticky;top:0;z-index:2;background:var(--paper);
   border-bottom:1px solid var(--ink);padding:var(--s2) var(--s3);text-align:left;
-  font-size:var(--t12);font-weight:500;letter-spacing:.08em;text-transform:uppercase;
+  font-size:var(--t12);font-weight:500;letter-spacing:0;
   color:var(--ink-subtle);white-space:nowrap}
 table.kursbuch td{padding:var(--s2) var(--s3);border-bottom:1px solid var(--rule-1);
   vertical-align:middle}
@@ -591,6 +591,14 @@ tr.opt.best td{border-top:2px solid var(--signal)}
 tr.opt.best td.c-rank{border-left:3px solid var(--signal)}
 .c-rank{font-family:var(--mono);font-size:var(--t12);color:var(--ink-subtle);width:78px}
 tr.opt.best .c-rank{color:var(--signal);font-weight:500}
+.resultgroup th{text-align:left;padding:var(--s3);background:var(--wash);
+  border-bottom:1px solid var(--rule-2);font-size:var(--t16);font-weight:500}
+.resultgroup th>span{margin-left:var(--s2);font-size:var(--t12);color:var(--ink-muted)}
+.resultgroup small{display:block;font-size:var(--t12);font-weight:400;color:var(--ink-subtle)}
+.itinerarydates{display:flex;gap:var(--s1) var(--s3);flex-wrap:wrap;
+  font-size:var(--t12);color:var(--ink-muted);margin-top:var(--s1)}
+.itinerarydates>span{white-space:nowrap}
+.itinerarydates b{display:none;font-weight:500}
 .c-price{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
   font-size:var(--t21);font-weight:700;white-space:nowrap;width:136px}
 tr.opt.best .c-price{font-size:var(--t28)}
@@ -702,6 +710,21 @@ tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
    wann, wie gut, wie sicher. Naechte, Umstiege und Airlines stehen weiter im
    aufgeklappten Detail. */
 @media(max-width:560px){
+  #resulttable .c-rail{min-width:140px}
+  #resulttable .rail{display:none}
+  .itinerarydates{display:grid;gap:var(--s1);margin-top:0}
+  .itinerarydates b{display:block}
+  .itinerarydates>span{white-space:normal}
+  #ruler{display:none}
+  .tools{display:grid;grid-template-columns:auto minmax(0,1fr);width:100%}
+  .tools select{width:100%;min-width:0}
+  .tools .check,.tools .key,.tools .linkbtn{grid-column:1/-1}
+  .route{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s2)}
+  .hop{width:100%;min-width:0}
+  .hop>input{flex:1;min-width:0}
+  .sep{display:none}
+  .ac{width:100%}
+  .addhop{justify-self:start}
   #resulttable .c-nights,#resulttable .c-stops{display:none}
   #dealstable .c-route,#dealstable .c-scan{display:none}
   /* Vorlauf, Tage und der rohe Zaehler weichen: die Aussage sagt in Worten,

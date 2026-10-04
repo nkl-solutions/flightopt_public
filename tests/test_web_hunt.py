@@ -11,6 +11,7 @@ denen die Oberflaeche sicherer aussah als die Daten waren.
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 from tests.test_web_ui import run_ui_assertion
 from tests.test_web_price_band import token_hex
@@ -396,7 +397,7 @@ assert.ok(!one.includes("<path"), one);
     assert "vector-effect:non-scaling-stroke" in css
     # Keine Bibliothek, kein Aufbauschritt, kein externer Request.
     page = INDEX.read_text(encoding="utf-8")
-    assert "<script" not in page.replace('<script src="/static/app.js"></script>', "")
+    assert "<script" not in re.sub(r'<script src="/static/app\.js\?v=\d+"></script>', "", page)
 
 
 def test_a_gap_in_the_data_never_becomes_a_price_of_zero():

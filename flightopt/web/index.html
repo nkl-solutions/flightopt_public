@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>flightopt: Multi-Stop-Flugpreise</title>
 <meta name="description" content="Feste Route, bewegliche Daten. flightopt zeigt, an welchen Tagen dieselbe Multi-Stop-Reise am wenigsten kostet.">
-<meta name="theme-color" content="#f8f7f2">
+<meta name="theme-color" content="#f7f8fa">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23f8f7f2'/%3E%3Crect x='2' y='3' width='12' height='1.4' fill='%231e1a16'/%3E%3Crect x='2' y='7.3' width='12' height='1.4' fill='%23b01003'/%3E%3Crect x='2' y='11.6' width='12' height='1.4' fill='%231e1a16'/%3E%3C/svg%3E">
 <link rel="preload" href="/static/fonts/archivo-narrow-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/sometype-mono-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v=20261004">
 </head>
 <body>
 <a class="skip" href="#main">Zum Inhalt springen</a>
@@ -21,7 +21,7 @@
     <a href="/" aria-current="page">Flüge</a>
     <a href="/hotels">Hotels</a>
   </nav>
-  <p class="tagline">Feste Route, bewegliche Daten. Zeigt, wann dieselbe Reise am wenigsten kostet.</p>
+  <p class="tagline">Feste Route. Flexible Reisedaten.</p>
 </header>
 
 <main id="main">
@@ -186,12 +186,10 @@
     </div>
   </div>
   <p class="outsummary" id="outsummary" aria-live="polite"></p>
-  <p class="legend">Zwei Spalten, zwei Aussagen: <b>Status</b> sagt, wie sicher der
-    Preis ist. <b>Preislage</b> sagt, ob er für diese Strecke gut ist. Ohne genug
-    Preishistorie steht dort <b>keine Basis</b>, das ist kein schlechtes Zeichen,
-    sondern gar keins. <b>Fehltarif</b> ist keine Steigerung von günstig: der
-    Preis liegt so weit unter dem Üblichen, dass er vermutlich nicht so gemeint
-    war. Woran das gemessen wurde, steht in der aufgeklappten Zeile.</p>
+  <p class="legend"><b>Status:</b> wie sicher der Preis ist.
+    <b>Preislage:</b> Vergleich mit bisherigen Preisen; <b>keine Basis</b> bedeutet
+    zu wenig Vergleichsdaten. <b>Fehltarif:</b> ungewöhnlich niedriger Preis,
+    Verfügbarkeit offen.</p>
   <p class="usedby" id="usedby"></p>
   <div class="ruler" id="ruler"></div>
   <div class="tablewrap" tabindex="0" role="region" aria-label="Ergebnisse, seitlich scrollbar">
@@ -375,6 +373,6 @@
   Privater Gebrauch.
 </footer>
 </div>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=20261004"></script>
 </body>
 </html>
