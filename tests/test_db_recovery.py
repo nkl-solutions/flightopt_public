@@ -178,3 +178,34 @@ def test_a_file_from_before_the_hunt_still_opens(tmp_path):
     }
     assert "ix_watch_hot" in indexes
     again.close()
+
+
+def test_existing_jobs_gain_a_nullable_profile_link_without_guessing(tmp_path):
+    path = tmp_path / "old-profiles.db"
+    with sqlite3.connect(path) as old:
+        old.execute(
+            "CREATE TABLE search_job (id INTEGER PRIMARY KEY, spec TEXT NOT NULL, "
+            "status TEXT NOT NULL, created_at TEXT NOT NULL)"
+        )
+        old.execute(
+            "INSERT INTO search_job VALUES(1, '{}', 'done', '2026-09-05T08:00:00')"
+        )
+
+    for _ in range(2):
+        conn = db.connect(path)
+        try:
+            columns = {
+                row["name"]: row for row in conn.execute("PRAGMA table_info(search_job)")
+            }
+            assert "profile_id" in columns
+            assert columns["profile_id"]["notnull"] == 0
+            assert conn.execute(
+                "SELECT profile_id FROM search_job WHERE id=1"
+            ).fetchone()["profile_id"] is None
+            assert "ix_job_profile" in {
+                row["name"] for row in conn.execute("PRAGMA index_list(search_job)")
+            }
+            assert db.add_missing_columns(conn) == []
+            assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        finally:
+            conn.close()

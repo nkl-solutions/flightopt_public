@@ -36,7 +36,14 @@ async def test_dispatch_endpoint_starts_due_profiles(monkeypatch, tmp_path):
 
     class Runner(JobRunner):
         def start(self, job_id, specs, *, airlines=None):
-            started.append((job_id, specs, airlines))
+            conn = self._conn()
+            try:
+                profile_id = conn.execute(
+                    "SELECT profile_id FROM search_job WHERE id=?", (job_id,)
+                ).fetchone()["profile_id"]
+            finally:
+                conn.close()
+            started.append((job_id, specs, airlines, profile_id))
 
     runner = Runner(str(tmp_path / "dispatch.db"))
     monkeypatch.setattr(main, "runner", runner)
@@ -54,6 +61,7 @@ async def test_dispatch_endpoint_starts_due_profiles(monkeypatch, tmp_path):
 
     assert response["jobs"][0]["name"] == "Athen"
     assert started[0][1][0].route == "BER-ATH"
+    assert started[0][3] == response["jobs"][0]["profile_id"]
 
 
 @pytest.mark.asyncio

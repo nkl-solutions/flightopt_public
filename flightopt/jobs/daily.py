@@ -116,6 +116,10 @@ def dispatch_due_profiles(conn: sqlite3.Connection, runner, *,
     jobs: list[dict[str, int | str]] = []
     for profile in due_profiles(conn, now=current):
         job_id = runner.create(profile.specs)
+        conn.execute(
+            "UPDATE search_job SET profile_id=? WHERE id=?",
+            (profile.id, job_id),
+        )
         runner.start(job_id, profile.specs, airlines=profile.airlines)
         mark_scanned(
             conn,
@@ -149,9 +153,10 @@ def collect_deals(conn: sqlite3.Connection, *, limit: int = 50,
                   now: datetime | None = None) -> list[dict[str, Any]]:
     """Der beste Treffer je abgeschlossenem Profil-Scan, mit Abstand zur Baseline.
 
-    `search_job` traegt keine Profilspalte. Die Verbindung laeuft ueber die
-    Spec-Zeichenkette: `save_profile` und `JobRunner.create` schreiben beide
-    `json.dumps(specs_to_dict(specs))`, die Strings sind also zeichengleich.
+    Nur explizit zugeordnete Jobs zaehlen. Manuelle Suchen und alte Jobs
+    behalten `profile_id=NULL`: ihre Herkunft laesst sich aus identischen
+    Specs nicht bestimmen. Bestehende Profile erscheinen nach dem naechsten
+    abgeschlossenen Profil-Scan wieder in der Deals-Ansicht.
     """
     rows = conn.execute(
         "SELECT j.id AS job_id, j.finished_at AS scanned_at, p.id AS profile_id, "
@@ -159,7 +164,7 @@ def collect_deals(conn: sqlite3.Connection, *, limit: int = 50,
         "r.currency AS currency, r.is_estimate AS is_estimate, r.detail AS detail "
         "FROM itinerary_result r "
         "JOIN search_job j ON j.id = r.job_id "
-        "JOIN search_profile p ON p.spec = j.spec "
+        "JOIN search_profile p ON p.id = j.profile_id "
         "WHERE r.rank = 1 AND j.status = 'done' "
         "ORDER BY j.finished_at DESC, j.id DESC "
         "LIMIT ?",

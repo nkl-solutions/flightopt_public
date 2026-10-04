@@ -7,7 +7,7 @@ from datetime import date, datetime
 
 from flightopt.api import main
 from flightopt.domain.models import LegSpec, SearchSpec, StayRange
-from flightopt.jobs.daily import collect_deals, save_profile
+from flightopt.jobs.daily import collect_deals, dispatch_due_profiles, save_profile
 from flightopt.jobs.runner import JobRunner, specs_to_dict
 from flightopt.storage import db
 from flightopt.storage.baseline import refresh_baselines
@@ -35,10 +35,12 @@ def legs(price_out: float, price_back: float) -> list[dict]:
     ]
 
 
-def add_job(conn, spec_json: str, *, finished_at: str, status: str = "done") -> int:
+def add_job(conn, spec_json: str, *, finished_at: str, status: str = "done",
+            profile_id: int | None = None) -> int:
     cur = conn.execute(
-        "INSERT INTO search_job(spec, status, created_at, finished_at) VALUES(?,?,?,?)",
-        (spec_json, status, finished_at, finished_at),
+        "INSERT INTO search_job(spec, status, created_at, finished_at, profile_id) "
+        "VALUES(?,?,?,?,?)",
+        (spec_json, status, finished_at, finished_at, profile_id),
     )
     return int(cur.lastrowid)
 
@@ -89,8 +91,9 @@ def seed_both_baselines(conn) -> None:
 def test_collect_deals_returns_rank_one_with_profile_and_signal(tmp_path):
     conn = db.connect(tmp_path / "deals.db")
     spec_json = json.dumps(specs_to_dict([spec()]))
-    save_profile(conn, "Athen Oktober", [spec()], now=OBSERVED)
-    job_id = add_job(conn, spec_json, finished_at="2026-09-06T07:00:00")
+    profile_id = save_profile(conn, "Athen Oktober", [spec()], now=OBSERVED)
+    job_id = add_job(conn, spec_json, finished_at="2026-09-06T07:00:00",
+                     profile_id=profile_id)
     add_result(conn, job_id, 1, 16000, legs(79.0, 81.0))
     add_result(conn, job_id, 2, 19000, legs(95.0, 95.0))
     seed_both_baselines(conn)
@@ -116,6 +119,92 @@ def test_collect_deals_returns_rank_one_with_profile_and_signal(tmp_path):
     assert deals[0]["approximate"] is True
 
 
+def test_a_manual_search_matching_a_saved_profile_is_not_a_profile_deal(tmp_path):
+    conn = db.connect(tmp_path / "manual.db")
+    try:
+        save_profile(conn, "Athen Oktober", [spec()], now=OBSERVED)
+        job_id = add_job(
+            conn, json.dumps(specs_to_dict([spec()])),
+            finished_at="2026-09-06T07:00:00",
+        )
+        add_result(conn, job_id, 1, 16000, legs(79.0, 81.0))
+
+        assert collect_deals(conn, now=OBSERVED) == []
+    finally:
+        conn.close()
+
+
+def test_identical_profiles_keep_their_own_jobs_and_ignore_manual_searches(tmp_path):
+    path = tmp_path / "identical.db"
+    conn = db.connect(path)
+    try:
+        first = save_profile(conn, "Athen FR", [spec()], airlines=["FR"], now=OBSERVED)
+        second = save_profile(conn, "Athen A3", [spec()], airlines=["A3"], now=OBSERVED)
+        started = []
+
+        class Runner(JobRunner):
+            def start(self, job_id, specs, *, airlines=None):
+                started.append((job_id, airlines))
+                conn.execute(
+                    "UPDATE search_job SET status='done', finished_at=? WHERE id=?",
+                    ("2026-09-06T07:00:00", job_id),
+                )
+                add_result(conn, job_id, 1, 16000, legs(79.0, 81.0))
+
+        runner = Runner(str(path))
+        jobs = dispatch_due_profiles(conn, runner, now=OBSERVED)
+        manual = runner.create([spec()])
+        conn.execute(
+            "UPDATE search_job SET status='done', finished_at=? WHERE id=?",
+            ("2026-09-06T08:00:00", manual),
+        )
+        add_result(conn, manual, 1, 15000, legs(75.0, 75.0))
+
+        deals = collect_deals(conn, now=OBSERVED)
+
+        assert len(deals) == 2
+        assert {(deal["job_id"], deal["profile_id"]) for deal in deals} == {
+            (jobs[0]["job_id"], first), (jobs[1]["job_id"], second),
+        }
+        assert [airlines for _, airlines in started] == [["FR"], ["A3"]]
+        assert conn.execute(
+            "SELECT profile_id FROM search_job WHERE id=?", (manual,)
+        ).fetchone()["profile_id"] is None
+        assert collect_deals(conn, limit=1, now=OBSERVED)[0]["profile_id"] == second
+
+        # Editing a profile's parameters does not change the job's origin.
+        conn.execute("UPDATE search_profile SET spec='{}' WHERE id=?", (first,))
+        assert {deal["profile_id"] for deal in collect_deals(conn, now=OBSERVED)} == {
+            first, second,
+        }
+    finally:
+        conn.close()
+
+
+def test_deleting_a_profile_keeps_its_job_without_attributing_its_deal(tmp_path):
+    conn = db.connect(tmp_path / "deleted-profile.db")
+    try:
+        profile_id = save_profile(conn, "Athen", [spec()], now=OBSERVED)
+        job_id = add_job(
+            conn, json.dumps(specs_to_dict([spec()])),
+            finished_at="2026-09-06T07:00:00", profile_id=profile_id,
+        )
+        add_result(conn, job_id, 1, 16000, legs(79.0, 81.0))
+
+        conn.execute("DELETE FROM search_profile WHERE id=?", (profile_id,))
+
+        assert conn.execute(
+            "SELECT profile_id FROM search_job WHERE id=?", (job_id,)
+        ).fetchone()["profile_id"] is None
+        assert conn.execute(
+            "SELECT COUNT(*) FROM itinerary_result WHERE job_id=?", (job_id,)
+        ).fetchone()[0] == 1
+        assert collect_deals(conn, now=OBSERVED) == []
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    finally:
+        conn.close()
+
+
 def test_a_chain_is_never_judged_against_a_single_leg(tmp_path):
     """Der Kettenpreis liegt zwischen den beiden Leg-Medianen.
 
@@ -126,8 +215,9 @@ def test_a_chain_is_never_judged_against_a_single_leg(tmp_path):
     """
     conn = db.connect(tmp_path / "deals.db")
     spec_json = json.dumps(specs_to_dict([spec()]))
-    save_profile(conn, "Athen Oktober", [spec()], now=OBSERVED)
-    job_id = add_job(conn, spec_json, finished_at="2026-09-06T07:00:00")
+    profile_id = save_profile(conn, "Athen Oktober", [spec()], now=OBSERVED)
+    job_id = add_job(conn, spec_json, finished_at="2026-09-06T07:00:00",
+                     profile_id=profile_id)
     add_result(conn, job_id, 1, 39000, legs(210.0, 180.0))
     seed_both_baselines(conn)
 
@@ -141,8 +231,9 @@ def test_a_chain_without_a_baseline_for_every_leg_says_nothing(tmp_path):
     """Eine fehlende Teilsumme setzt die Vergleichsgroesse zu tief an."""
     conn = db.connect(tmp_path / "deals.db")
     spec_json = json.dumps(specs_to_dict([spec()]))
-    save_profile(conn, "Athen Oktober", [spec()], now=OBSERVED)
-    job_id = add_job(conn, spec_json, finished_at="2026-09-06T07:00:00")
+    profile_id = save_profile(conn, "Athen Oktober", [spec()], now=OBSERVED)
+    job_id = add_job(conn, spec_json, finished_at="2026-09-06T07:00:00",
+                     profile_id=profile_id)
     add_result(conn, job_id, 1, 16000, legs(79.0, 81.0))
     seed_baseline(conn)
 
@@ -163,8 +254,9 @@ def test_a_single_leg_chain_is_judged_exactly(tmp_path):
         window_end=date(2026, 10, 10),
     )
     spec_json = json.dumps(specs_to_dict([one_way]))
-    save_profile(conn, "Nur hin", [one_way], now=OBSERVED)
-    job_id = add_job(conn, spec_json, finished_at="2026-09-06T07:00:00")
+    profile_id = save_profile(conn, "Nur hin", [one_way], now=OBSERVED)
+    job_id = add_job(conn, spec_json, finished_at="2026-09-06T07:00:00",
+                     profile_id=profile_id)
     conn.execute(
         "INSERT INTO itinerary_result("
         "job_id, rank, dates, price_total_minor, currency, is_estimate, detail) "
@@ -189,8 +281,9 @@ async def test_deals_endpoint_reads_the_runner_database(monkeypatch, tmp_path):
     path = tmp_path / "endpoint.db"
     conn = db.connect(path)
     spec_json = json.dumps(specs_to_dict([spec()]))
-    save_profile(conn, "Athen Oktober", [spec()], now=OBSERVED)
-    job_id = add_job(conn, spec_json, finished_at="2026-09-06T07:00:00")
+    profile_id = save_profile(conn, "Athen Oktober", [spec()], now=OBSERVED)
+    job_id = add_job(conn, spec_json, finished_at="2026-09-06T07:00:00",
+                     profile_id=profile_id)
     add_result(conn, job_id, 1, 16000, legs(79.0, 81.0))
     conn.close()
     monkeypatch.setattr(main, "runner", JobRunner(str(path)))

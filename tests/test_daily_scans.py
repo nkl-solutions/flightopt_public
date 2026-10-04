@@ -11,6 +11,7 @@ from flightopt.jobs.daily import (
     mark_scanned,
     save_profile,
 )
+from flightopt.jobs.runner import JobRunner
 from flightopt.storage import db
 from flightopt.storage.baseline import detect_price_signal, refresh_baselines
 
@@ -65,21 +66,25 @@ def test_dispatch_due_profiles_starts_jobs_and_reschedules(tmp_path):
     now = datetime(2026, 9, 5, 8, 0, 0)
     profile_id = save_profile(conn, "Athen Oktober", [spec()], now=now)
 
-    class Runner:
+    class Runner(JobRunner):
         def __init__(self) -> None:
+            super().__init__(str(tmp_path / "dispatch.db"))
             self.created = []
             self.started = []
 
         def create(self, specs):
             self.created.append(specs)
-            return 7
+            return super().create(specs)
 
         def start(self, job_id, specs, *, airlines=None):
+            assert conn.execute(
+                "SELECT profile_id FROM search_job WHERE id=?", (job_id,)
+            ).fetchone()["profile_id"] == profile_id
             self.started.append((job_id, specs, airlines))
 
     jobs = dispatch_due_profiles(conn, Runner(), now=now)
 
-    assert jobs == [{"profile_id": profile_id, "job_id": 7, "name": "Athen Oktober"}]
+    assert jobs == [{"profile_id": profile_id, "job_id": 1, "name": "Athen Oktober"}]
     assert due_profiles(conn, now=now) == []
     assert due_profiles(conn, now=now + timedelta(days=1, minutes=1))[0].id == profile_id
 

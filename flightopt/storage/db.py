@@ -49,6 +49,7 @@ CREATE INDEX IF NOT EXISTS ix_obs_entity
 
 CREATE TABLE IF NOT EXISTS search_job (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id     INTEGER REFERENCES search_profile(id) ON DELETE SET NULL,
     spec           TEXT NOT NULL,
     status         TEXT NOT NULL,          -- pending|running|done|failed|cancelled
     created_at     TEXT NOT NULL,
@@ -298,6 +299,7 @@ CREATE INDEX IF NOT EXISTS ix_alert_event_recent ON alert_event(created_at);
 
 
 ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("search_job", "profile_id", "INTEGER REFERENCES search_profile(id) ON DELETE SET NULL"),
     ("price_observation", "is_indicative", "INTEGER NOT NULL DEFAULT 0"),
     ("hotel_scan", "retries", "INTEGER NOT NULL DEFAULT 0"),
     ("watch_route", "cadence", "TEXT NOT NULL DEFAULT 'daily'"),
@@ -323,6 +325,7 @@ LATE_SCHEMA = """
 -- ist alles gruen, auf der laufenden kommt der Dienst nicht mehr hoch.
 CREATE INDEX IF NOT EXISTS ix_watch_hot
     ON watch_route(enabled, cadence, last_hot_run_at);
+CREATE INDEX IF NOT EXISTS ix_job_profile ON search_job(profile_id);
 """
 
 
