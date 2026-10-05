@@ -148,6 +148,14 @@ def test_the_compose_passes_the_optional_discord_webhook():
     assert "FLIGHTOPT_DISCORD_WEBHOOK: ${FLIGHTOPT_DISCORD_WEBHOOK:-}" in COMPOSE
 
 
+def test_scheduled_scans_can_be_disabled_or_configured_in_portainer():
+    assert "FLIGHTOPT_DAILY_SCANS: ${FLIGHTOPT_DAILY_SCANS:-1}" in COMPOSE
+    assert "FLIGHTOPT_SCAN_INTERVAL_SECONDS: ${FLIGHTOPT_SCAN_INTERVAL_SECONDS:-600}" in COMPOSE
+    example = (ROOT / "deploy" / "portainer.env.example").read_text(encoding="utf-8")
+    assert "FLIGHTOPT_DAILY_SCANS=" in example
+    assert "FLIGHTOPT_SCAN_INTERVAL_SECONDS=" in example
+
+
 def test_the_compose_keeps_a_memory_limit_and_makes_it_settable():
     """Ein Chromium ohne Speichergrenze nimmt den Wirt mit.
 
