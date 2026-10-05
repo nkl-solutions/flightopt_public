@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#f7f8fa">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23f8f7f2'/%3E%3Crect x='2' y='3' width='12' height='1.4' fill='%231e1a16'/%3E%3Crect x='2' y='7.3' width='12' height='1.4' fill='%23b01003'/%3E%3Crect x='2' y='11.6' width='12' height='1.4' fill='%231e1a16'/%3E%3C/svg%3E">
 <link rel="preload" href="/static/fonts/sometype-mono-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/app.css?v=2026100501">
+<link rel="stylesheet" href="/static/app.css?v=2026100502">
 </head>
 <body>
 <a class="skip" href="#main">Zum Inhalt springen</a>
@@ -235,6 +235,23 @@
       <button id="runScanner" type="button">Jetzt aktualisieren</button>
     </div>
   </div>
+  <div class="profilehead">
+    <h2>Meine Suchen</h2>
+    <button id="reloadProfiles" type="button">Liste aktualisieren</button>
+  </div>
+  <p class="msg" id="profilesmsg" role="status"></p>
+  <ul class="profilelist" id="profileList" aria-label="Gespeicherte Suchprofile"></ul>
+  <form class="profileeditor" id="profileEditor" hidden>
+    <h3>Suche bearbeiten</h3>
+    <div class="profileeditfields">
+      <label>Name<input id="profileEditName" type="text" maxlength="120" required></label>
+      <label>Alle wie viele Tage?<input id="profileCadence" type="number" min="1" max="30" step="1" required></label>
+    </div>
+    <div class="profileactions">
+      <button id="profileEditSave" type="submit">Änderungen speichern</button>
+      <button id="profileEditCancel" type="button">Abbrechen</button>
+    </div>
+  </form>
   <h2 class="sectiontitle scanheading">Letzte Ergebnisse</h2>
   <p class="msg" id="dealssummary" data-tone=""></p>
   <div class="tablewrap" tabindex="0" role="region" aria-label="Gespeicherte Scans, seitlich scrollbar">
@@ -371,6 +388,6 @@
   Preise pro Person in Euro. Zusatzkosten stehen im Flugdetail.
 </footer>
 </div>
-<script src="/static/app.js?v=2026100501"></script>
+<script src="/static/app.js?v=2026100502"></script>
 </body>
 </html>

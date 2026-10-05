@@ -356,6 +356,42 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
 .saveprofile button:hover,.scanbar button:hover{border-color:var(--ink);color:var(--ink)}
 .scanbar{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s3);
   font-size:var(--t12);color:var(--ink-subtle)}
+.profilehead{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
+  flex-wrap:wrap;margin-top:var(--s5)}
+.profilehead h2{margin:0}
+.profilelist{list-style:none;padding:0;margin:var(--s3) 0;overflow-anchor:none}
+.profilerow{display:flex;justify-content:space-between;align-items:center;gap:var(--s4);
+  padding:var(--s3) 0;border-bottom:1px solid var(--rule-1)}
+.profileinfo{flex:1;min-width:0;overflow-wrap:anywhere}
+.profileinfo strong{display:block;font-weight:600;font-size:var(--t16)}
+.profilefacts{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s3);margin-top:var(--s1);
+  color:var(--ink-muted);font-size:var(--t14)}
+.profilestate{font-weight:600}
+.profilestate[data-status="expired"]{color:var(--warn)}
+.profilestate[data-status="running"]{color:var(--ok)}
+.profileroutes{margin-top:var(--s1);font-size:var(--t14);color:var(--ink-muted)}
+.profileroutes summary{cursor:pointer}
+.profileroutes p{margin:var(--s1) 0;overflow-wrap:anywhere}
+.profileactions{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.profileactions .check{min-height:44px;margin:0}
+.profileactions button,.profilehead button{min-height:44px;padding:var(--s2) var(--s3);
+  border:1px solid var(--rule-3);background:var(--paper);border-radius:var(--r);
+  color:var(--ink);font-size:var(--t14);cursor:pointer}
+.profileactions button:hover,.profilehead button:hover{border-color:var(--ink)}
+.profileactions button:disabled,.profileactions input:disabled{cursor:default;opacity:.55}
+.profileeditor{margin-top:var(--s4);padding:var(--s3) 0;border-bottom:1px solid var(--rule-1)}
+.profileeditor h3{font-size:var(--t16);font-weight:600;margin-bottom:var(--s3)}
+.profileeditfields{display:flex;flex-wrap:wrap;gap:var(--s3);margin-bottom:var(--s3)}
+.profileeditfields label{display:flex;flex-direction:column;gap:var(--s1);min-width:0;
+  font-size:var(--t14)}
+.profileeditfields label:first-child{flex:1 1 240px}
+.profileeditfields label:last-child{flex:0 1 180px}
+.profileeditfields input{width:100%;min-height:44px}
+@media(max-width:640px){
+  .profilerow{flex-direction:column;align-items:stretch;gap:var(--s2)}
+  .profileactions{justify-content:flex-start}
+  .profileeditfields label:last-child{flex-basis:100%}
+}
 
 /* Fehltarif-Jagd: derselbe nachgeordnete Bereichsschnitt. Was sie gefunden
    hat, steht ueber dem, was sie beobachtet - die Frage "was ist da" kommt vor

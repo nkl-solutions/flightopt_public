@@ -237,11 +237,11 @@ def test_scanner_summary_names_state_and_due_profiles():
         r"""
 assert.strictEqual(
   scannerSummary({scanner:{running:true}, due:{profiles:[{name:"Athen"}]}}),
-  "Suchen werden aktualisiert. Als Nächstes: Athen"
+  "Automatische Suche aktiv. Als Nächstes: Athen"
 );
 assert.strictEqual(
   scannerSummary({scanner:{running:false}, due:{profiles:[]}}),
-  "Automatische Suche bereit. Keine fälligen Suchen."
+  "Automatische Suche aus. Keine fälligen Suchen."
 );
 """
     )
@@ -772,7 +772,7 @@ def test_live_regions_sit_only_where_they_belong():
     # wenn jemand am Server eine Umgebungsvariable setzt.
     assert live_region_ids(page) == {
         "voiceStatus", "progresslabel", "note", "outsummary",
-        "aiStatus", "savedmsg", "scanstate", "watchmsg", "huntmsg",
+        "aiStatus", "savedmsg", "scanstate", "watchmsg", "huntmsg", "profilesmsg",
     }
     assert '<section class="log" id="log" aria-label="Verlauf der Suche">' in page
     assert '<h2 id="outtitle" tabindex="-1">' in page

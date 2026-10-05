@@ -62,6 +62,7 @@ function workspaceViewFromHash(hash){
   return WORKSPACE_VIEWS.includes(name) ? name : "search";
 }
 function setWorkspaceView(name, {updateHash=false, focus=false}={}){
+  const previousView = workspaceView;
   workspaceView = WORKSPACE_VIEWS.includes(name) ? name : "search";
   WORKSPACE_VIEWS.forEach(view => {
     const panel = $(`#view-${view}`), link = $(`#nav-${view}`);
@@ -80,6 +81,10 @@ function setWorkspaceView(name, {updateHash=false, focus=false}={}){
     if (heading && typeof heading.focus === "function") heading.focus({preventScroll:true});
     if (typeof window !== "undefined" && typeof window.scrollTo === "function") window.scrollTo(0, 0);
   }
+  if (workspaceView === "saved" && previousView !== "saved"){
+    loadProfiles({quiet:true}); loadDeals(); loadScanner();
+  }
+  scheduleProfileRefresh();
   return workspaceView;
 }
 function setupWorkspaceNavigation(){
@@ -798,6 +803,10 @@ function size(){
 }
 
 async function saveProfileNow(){
+  if (profileMutationBusy) return;
+  profileMutationBusy = true;
+  ++profileLoadGeneration;
+  $("#saveProfile").disabled = true;
   const msg = $("#savedmsg");
   msg.dataset.tone = "";
   msg.textContent = "Speichere Profil";
@@ -808,11 +817,172 @@ async function saveProfileNow(){
     if (!r.ok) throw new Error(detail(d.detail) || "Profil konnte nicht gespeichert werden");
     msg.dataset.tone = "ok";
     msg.textContent = `${d.name} gespeichert`;
+    await loadProfiles();
     await loadDeals();
   } catch (err) {
     msg.dataset.tone = "err";
     msg.textContent = err.message || "Profil konnte nicht gespeichert werden";
+  } finally {
+    profileMutationBusy = false;
+    $("#saveProfile").disabled = false;
+    renderProfiles();
   }
+}
+
+let savedProfiles = [], profileMutationBusy = false, profileLoadGeneration = 0;
+let editingProfileId = null, profileRefreshTimer = null;
+
+function profileDate(value){
+  if (!value) return "";
+  const day = new Date(`${value}T00:00:00`);
+  return Number.isNaN(day.getTime()) ? "" : day.toLocaleDateString("de-DE", {
+    day:"2-digit",month:"2-digit",year:"numeric",
+  });
+}
+
+function profileRowMarkup(row){
+  const status = {expired:"Abgelaufen",paused:"Pausiert",due:"Fällig",
+    scheduled:"Geplant",running:"Suche läuft"}[row.status] || "Status unbekannt";
+  const locked = profileMutationBusy ? " disabled" : "";
+  const cannotRun = profileMutationBusy || row.expired || !row.enabled || row.status === "running";
+  const routes = row.routes || [];
+  const route = routes.length > 1
+    ? `<details class="profileroutes"><summary>${routes.length} Flughafenvarianten</summary><p>${routes.map(esc).join(" · ")}</p></details>`
+    : `<p class="profileroutes">${esc(routes[0] || "")}</p>`;
+  const cadence = row.cadence_days === 1 ? "Täglich" : `Alle ${row.cadence_days || 1} Tage`;
+  const next = row.status === "scheduled" ? `Nächster Scan: ${scanTime(row.next_run_at)}` : "";
+  return `<li class="profilerow">
+    <div class="profileinfo"><strong>${esc(row.name)}</strong>${route}
+      <div class="profilefacts"><span>${esc(profileDate(row.window_start))} bis ${esc(profileDate(row.window_end))}</span>
+        <span>${esc(cadence)}</span><span class="profilestate" data-status="${esc(row.status)}">${status}</span></div>
+      ${next ? `<div class="profilefacts">${esc(next)}</div>` : ""}
+    </div>
+    <div class="profileactions">
+      <label class="check"><input type="checkbox" data-profile-id="${row.id}" data-profile-action="toggle"
+        aria-label="${esc(row.name)} aktiv"${row.enabled ? " checked" : ""}${locked}>Aktiv</label>
+      <button type="button" data-profile-id="${row.id}" data-profile-action="edit"${locked}>Bearbeiten</button>
+      <button type="button" data-profile-id="${row.id}" data-profile-action="run"${cannotRun ? " disabled" : ""}>Jetzt suchen</button>
+    </div></li>`;
+}
+
+function renderProfiles(){
+  const list = $("#profileList"), focused = document.activeElement;
+  const focusId = focused && focused.dataset && focused.dataset.profileId;
+  const focusAction = focused && focused.dataset && focused.dataset.profileAction;
+  list.innerHTML = savedProfiles.map(profileRowMarkup).join("");
+  list.querySelectorAll("[data-profile-action]").forEach(control => {
+    const id = Number(control.dataset.profileId), action = control.dataset.profileAction;
+    if (action === "toggle") control.onchange = () => changeProfile(id, {enabled:control.checked});
+    else control.onclick = () => action === "edit" ? editProfile(id) : changeProfile(id, {}, {run:true});
+  });
+  if (focusId && (document.activeElement === focused || document.activeElement === document.body)){
+    const replacement = list.querySelector(`[data-profile-id="${Number(focusId)}"][data-profile-action="${focusAction}"]`);
+    if (replacement && !replacement.disabled) replacement.focus({preventScroll:true});
+  }
+  $("#saveProfile").disabled = profileMutationBusy;
+  $("#profileEditSave").disabled = profileMutationBusy;
+  $("#profileEditCancel").disabled = profileMutationBusy;
+}
+
+function scheduleProfileRefresh(){
+  if (typeof window === "undefined" || typeof window.setTimeout !== "function") return;
+  window.clearTimeout(profileRefreshTimer);
+  if (workspaceView !== "saved" || !savedProfiles.some(row => row.status === "running" || (row.enabled && !row.expired))) return;
+  const delay = savedProfiles.some(row => row.status === "running") ? 5000 : 30000;
+  profileRefreshTimer = window.setTimeout(async () => {
+    if (workspaceView === "saved" && !document.hidden && !profileMutationBusy && editingProfileId === null){
+      await loadProfiles({quiet:true}); await loadDeals();
+    } else scheduleProfileRefresh();
+  }, delay);
+}
+
+async function loadProfiles({quiet=false}={}){
+  const version = ++profileLoadGeneration;
+  try {
+    const r = await fetch("/api/profiles"), d = await r.json();
+    if (!r.ok) throw Error(detail(d.detail) || `HTTP ${r.status}`);
+    if (version !== profileLoadGeneration) return;
+    savedProfiles = d.profiles || [];
+    renderProfiles();
+    if (!quiet){
+      $("#profilesmsg").dataset.tone = "";
+      $("#profilesmsg").textContent = savedProfiles.length
+        ? `${savedProfiles.length} gespeicherte ${savedProfiles.length === 1 ? "Suche" : "Suchen"}`
+        : "Noch keine gespeicherten Suchen.";
+    }
+  } catch (err) {
+    if (version !== profileLoadGeneration) return;
+    $("#profilesmsg").dataset.tone = "err";
+    $("#profilesmsg").textContent = `Suchen nicht abrufbar: ${err.message || err}`;
+  } finally {
+    if (version === profileLoadGeneration) scheduleProfileRefresh();
+  }
+}
+
+async function changeProfile(id, changes, {run=false}={}){
+  if (profileMutationBusy) return false;
+  const originalFocus = document.activeElement;
+  const focusId = originalFocus && originalFocus.dataset && originalFocus.dataset.profileId;
+  const focusAction = originalFocus && originalFocus.dataset && originalFocus.dataset.profileAction;
+  profileMutationBusy = true;
+  ++profileLoadGeneration;
+  renderProfiles();
+  const msg = $("#profilesmsg");
+  msg.dataset.tone = ""; msg.textContent = run ? "Suche wird gestartet" : "Änderungen werden gespeichert";
+  let changed = false;
+  try {
+    const r = await fetch(`/api/profiles/${id}${run ? "/run-once" : ""}`, {
+      method:run ? "POST" : "PATCH", headers:{"content-type":"application/json"},
+      ...(run ? {} : {body:JSON.stringify(changes)}),
+    });
+    const d = await r.json();
+    if (!r.ok) throw Error(detail(d.detail) || `HTTP ${r.status}`);
+    savedProfiles = savedProfiles.map(row => row.id === id ? d.profile : row);
+    changed = true;
+    renderProfiles();
+    msg.dataset.tone = "ok"; msg.textContent = run ? "Suche gestartet" : "Änderungen gespeichert";
+    await loadProfiles({quiet:true});
+    await loadScanner();
+  } catch (err) {
+    msg.dataset.tone = "err"; msg.textContent = err.message || "Änderung fehlgeschlagen.";
+  } finally {
+    profileMutationBusy = false;
+    renderProfiles(); scheduleProfileRefresh();
+    if (focusId && (document.activeElement === document.body || document.activeElement === originalFocus)){
+      const control = $("#profileList").querySelector(`[data-profile-id="${Number(focusId)}"][data-profile-action="${focusAction}"]`);
+      if (control && !control.disabled) control.focus({preventScroll:true});
+    }
+  }
+  return changed;
+}
+
+function editProfile(id){
+  if (profileMutationBusy) return;
+  const row = savedProfiles.find(profile => profile.id === id);
+  if (!row) return;
+  editingProfileId = id;
+  $("#profileEditName").value = row.name;
+  $("#profileCadence").value = row.cadence_days;
+  $("#profileEditor").hidden = false;
+  $("#profileEditName").focus({preventScroll:true});
+}
+
+function closeProfileEditor(){
+  $("#profileEditor").hidden = true;
+  const control = $("#profileList").querySelector(`[data-profile-id="${editingProfileId}"][data-profile-action="edit"]`);
+  editingProfileId = null;
+  if (control) control.focus({preventScroll:true});
+}
+
+async function saveProfileEdit(){
+  if (editingProfileId === null || profileMutationBusy) return;
+  const name = $("#profileEditName").value.trim(), cadence = Number($("#profileCadence").value);
+  if (!name || name.length > 120 || !Number.isInteger(cadence) || cadence < 1 || cadence > 30){
+    $("#profilesmsg").dataset.tone = "err";
+    $("#profilesmsg").textContent = "Name angeben und Abstand von 1 bis 30 Tagen wählen.";
+    return;
+  }
+  if (await changeProfile(editingProfileId, {name,cadence_days:cadence})) closeProfileEditor();
 }
 
 /* Enter im Namensfeld soll das Profil sichern, nicht die Suche starten. Das
@@ -827,7 +997,7 @@ async function profileNameKeydown(e){
 function scannerSummary(state){
   const running = state.scanner && state.scanner.running;
   const profiles = (state.due && state.due.profiles) || [];
-  const head = running ? "Suchen werden aktualisiert." : "Automatische Suche bereit.";
+  const head = running ? "Automatische Suche aktiv." : "Automatische Suche aus.";
   if (!profiles.length) return `${head} Keine fälligen Suchen.`;
   return `${head} Als Nächstes: ${profiles.map(p=>p.name).join(", ")}`;
 }
@@ -843,16 +1013,22 @@ async function loadScanner(){
   }
 }
 $("#runScanner").onclick = async () => {
+  const button = $("#runScanner");
+  if (button.disabled) return;
+  button.disabled = true;
   $("#scanstate").textContent = "Fällige Suchen werden gestartet";
   try {
-    const d = await fetch("/api/scanner/run-once",{method:"POST"}).then(r=>r.json());
+    const r = await fetch("/api/scanner/run-once",{method:"POST"}), d = await r.json();
+    if (!r.ok) throw Error(detail(d.detail) || `HTTP ${r.status}`);
     const names = (d.jobs || []).map(j=>j.name);
     $("#scanstate").textContent = names.length
       ? `Gestartet: ${names.join(", ")}`
       : "Keine fälligen Suchen.";
-    await loadDeals();
-  } catch {
-    $("#scanstate").textContent = "Gespeicherte Suchen konnten nicht gestartet werden.";
+    await loadProfiles(); await loadDeals();
+  } catch (err) {
+    $("#scanstate").textContent = `Gespeicherte Suchen konnten nicht gestartet werden: ${err.message || err}`;
+  } finally {
+    button.disabled = false;
   }
 };
 
@@ -2848,6 +3024,9 @@ $("#aiApply").onclick = parseNaturalSearch;
 $("#resetfilters").onclick = resetResultFilters;
 $("#saveProfile").onclick = saveProfileNow;
 $("#profileName").onkeydown = profileNameKeydown;
+$("#reloadProfiles").onclick = async () => { await loadProfiles(); await loadDeals(); await loadScanner(); };
+$("#profileEditor").onsubmit = e => {e.preventDefault(); saveProfileEdit();};
+$("#profileEditCancel").onclick = closeProfileEditor;
 $("#watchAdd").onclick = addWatchRoute;
 $("#watchRun").onclick = runWatchlistNow;
 $("#huntRun").onclick = runHuntNow;
@@ -2865,6 +3044,7 @@ drawTrips(); drawRoute(); loadAirlines().then(() => {
 });
 size();
 loadScanner();
+loadProfiles();
 loadDeals();
 loadWatchlist();
 loadHunt();
