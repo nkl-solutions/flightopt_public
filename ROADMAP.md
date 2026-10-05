@@ -37,6 +37,8 @@ Teilstrecke. Ein Hotel-Richtwert macht eine Gesamtreise nicht buchungsbestätigt
 - [x] Lokale Satz-Eingabe als Eingabeschicht über der normalen Suche.
 - [x] Browser-Spracheingabe mit anschließender Bestätigung.
 - [x] Gespeicherte Flugprofile, Scheduler und eindeutige Profil-Job-Zuordnung.
+- [x] Profilverwaltung: Name, Scanrhythmus, Pausieren und gezielter Einzelstart.
+- [x] Ablaufprüfung fester Profilfenster und Schutz vor doppelten laufenden Jobs.
 - [x] Rollende Strecken-Watchlist und tägliche Preisbeobachtung.
 - [x] Optionaler 20-Minuten-Takt mit Quellenbudgets und Cache-Frische.
 - [x] Getrennte Preisbaselines, Ausreißer- und Fehltarif-Erkennung.
@@ -45,6 +47,7 @@ Teilstrecke. Ein Hotel-Richtwert macht eine Gesamtreise nicht buchungsbestätigt
 - [x] Hotelsuche über Trivago MCP und optional Booking/Playwright.
 - [x] Gespeicherte Hotelbeobachtungen, Tagesplaner und Preisfehler-Signale.
 - [x] Hotelüberwachung in der UI: speichern, pausieren und fällige Suchen prüfen.
+- [x] Neue Hotelbeobachtungen explizit je Watch und erfolgreichem Scan zuordnen.
 - [x] Sichtbare sichere Buchungslinks je Flug-Teilstrecke und Hotelangebot.
 - [x] Fehlende Buchungslinks ausdrücklich markieren, keine Gesamtbuchung erfinden.
 - [x] Getrennte Flug-/Hotel-Scheduler-Bahnen, Sammler gegen Überlappung gesperrt.
@@ -75,15 +78,17 @@ Vor weiterer Funktionsbreite abschließen oder dauerhaft prüfen.
 - [ ] Buchungslink-Abdeckung je Adapter mit realen Antworten prüfen.
   Abschluss: die besten geprüften Routen haben für jede Teilstrecke einen
   passenden Link; fehlende oder allgemeine Links bleiben eine sichtbare Lücke.
-- [ ] Hotel-Historie eindeutig der gespeicherten Überwachung zuordnen.
+- [x] Hotel-Historie eindeutig der gespeicherten Überwachung zuordnen.
   Abschluss: Bereitschaft und Beobachtungszahlen je Ziel/Filter sind nicht
-  aus der gemeinsamen Historie gleicher Belegung abgeleitet.
+  aus der gemeinsamen Historie gleicher Belegung abgeleitet. Altbestand bleibt
+  unzugeordnet; fehlgeschlagene und abgebrochene Scans zählen nicht zur Bereitschaft.
 - [ ] Gepäck- und Zuschlagsangaben je Ergebnis konsistent prüfen.
   Abschluss: Flugsumme und sichtbare Teilpreise passen; bekannte Zusatzkosten
   und nicht abgefragte Leistungen sind eindeutig benannt.
-- [ ] Vergangene Suchfenster gespeicherter Profile behandeln.
+- [x] Vergangene Suchfenster gespeicherter Profile behandeln.
   Abschluss: abgelaufene Profile starten keinen sinnlosen Dauerscan;
-  optionales rollendes Fenster ist ausdrücklich konfigurierbar.
+  Mindestaufenthalte werden berücksichtigt, vergangene Tage nicht abgefragt.
+  Das gespeicherte feste Fenster bleibt unverändert. Rollende Flugprofile sind separat offen.
 - [ ] Wiederverbindung und Wiederaufnahme von Suchläufen im Browser prüfen.
   Abschluss: Neuladen oder Netzverlust führt nicht zu einer doppelten Suche,
   und vorhandene Ergebnisse lassen sich wieder öffnen.
@@ -173,7 +178,9 @@ zum Beispiel bei umfangreichen Reisebeschreibungen oder Unterkunftstexten.
   mehrerer Aufenthalte, Hotels, leerer Treffer und Fehlerzustände.
 - [x] Flughafenfelder sichtbar als Start, Stopp und Rückkehr beziehungsweise Endziel benennen.
 - [ ] Quellenberichte und Preisalter näher an das betroffene Ergebnis setzen.
-- [ ] Gespeicherte Profile bearbeiten, pausieren und gezielt starten können.
+- [x] Namen und Scanrhythmus gespeicherter Profile bearbeiten, pausieren und gezielt starten.
+- [ ] Route und Reisezeitraum bestehender Profile ändern; alternativ explizite rollende Fenster.
+  Bis dahin wird eine geänderte Route als neue Suche gespeichert, ohne alte Ergebnisse umzudeuten.
 - [x] Erweiterte Scanner-/Jagd-Funktionen aus dem normalen Suchablauf lösen.
 - [x] Hotel- und Flugansicht in Navigation, Formularaufbau und Schrift angleichen.
 - [ ] Quellenalter und Preisvergleich in Flug- und Hoteldetails vereinheitlichen.

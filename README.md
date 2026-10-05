@@ -26,6 +26,8 @@ keine lokale Datenbank.
 - weltweite Flughafensuche mit Metro- und Ländergruppen wie `TYO`, `DE` und
   `DE-OST`, deutschen Aliasnamen und Tab-Vervollständigung
 - gespeicherte Suchprofile als Basis für tägliche Scans
+- Profilverwaltung mit Status, Pausieren, Name-/Rhythmusänderung und Einzelstart;
+  abgelaufene Reisezeiträume werden nicht mehr abgefragt
 - Preisbaseline aus Median und MAD, getrennt nach Kalenderpreisen,
   geprüften Angeboten und Richtwerten
 - transparente Aufgabegepäck-Annahmen je Airline
@@ -42,6 +44,7 @@ keine lokale Datenbank.
 - Fehltarif-Jagd mit Preisverläufen, Entdopplung und optionalem Discord-Versand
 - Hotelsuche über Trivago MCP und optional Booking mit Playwright
 - gespeicherte Hotelbeobachtungen und optionale Gesamtreise aus Flug und Hotel
+- eindeutige Hotel-Watch-Historie, ohne alte Daten fremden Zielen zuzurechnen
 - Hotelüberwachung in der Oberfläche: speichern, pausieren und fällige Suchen prüfen
 - sichtbare Buchungslinks je Flug-Teilstrecke und Hotelangebot
 - getrennte Flug-/Hotel-Scheduler-Bahnen mit Schutz vor überlappenden Sammelläufen
