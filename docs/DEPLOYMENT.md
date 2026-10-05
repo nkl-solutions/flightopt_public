@@ -43,6 +43,39 @@ gehoeren ausschliesslich in die Stack-Variablen von Portainer, nie ins Repo.
 
 Geaenderte Environment-Variablen wirken erst nach einem Redeploy.
 
+### Flug- und Hotelbeobachtung aktivieren
+
+- `FLIGHTOPT_DAILY_SCANS=1` startet den Planer (Standard).
+  `0` schaltet automatische Abrufe aus; manuelle Suchen bleiben erreichbar.
+- `FLIGHTOPT_SCAN_INTERVAL_SECONDS=600` prueft alle zehn Minuten auf faellige
+  Auftraege. Das ist der Planertakt, nicht die Abrufhaeufigkeit jeder Suche:
+  Tagesprofile und Hotelbeobachtungen laufen weiterhin hoechstens einmal am Tag.
+- Flugprofile unter **Gespeicherte Suchen**, Teilstrecken unter **Preisradar**
+  und Hotelbeobachtungen unter **Hotels / Hotelueberwachung** anlegen.
+  Hotelbeobachtungen uebernehmen Ziel, Naechte, Gaeste, Zimmer und Filter aus
+  dem Hotelformular. Vorlauf wird als rollendes Fenster in Tagen gespeichert.
+- Fuer Booking den Bauweg `FLIGHTOPT_VARIANT=hotels` und
+  `FLIGHTOPT_MEM_LIMIT=1g` verwenden; Browserlimits bleiben aktiv. Ohne diesen
+  Bauweg kann Trivago Richtwerte liefern, aber keine Booking-Preise.
+- Unter `/api/health/detail` nach Anmeldung pruefen: `scheduler.running`,
+  aktive Hotelquellen, faellige Beobachtungen und letzte Aufzeichnung.
+  Eine gespeicherte Suche allein bestaetigt noch keinen erfolgreichen Abruf.
+
+Flug- und Hotelbeobachtung laufen in getrennten asynchronen Bahnen. Die
+Flug-Watchlist laeuft weiterhin vor der Fehltarif-Jagd, damit frisch geholte
+Kalender wiederverwendet werden. Manuelle und automatische Sammler derselben
+Domäne werden serialisiert; die Faelligkeit wird nach dem Warten neu geprueft.
+Der Hotellauf bleibt auf drei Beobachtungen pro Durchgang begrenzt.
+
+**Ein Uvicorn-Prozess, eine Container-Instanz.** Scheduler und Sammelsperren
+leben im Prozess, nicht als verteilte Locks. Mehrere Worker oder Replikate
+koennten dieselben Suchen doppelt starten. Fuer horizontale Skalierung muss
+zuerst ein separater Worker mit Datenbank-Claims eingefuehrt werden.
+
+Pruefstand 2026-10-05: Compose-Konfiguration lokal validiert. Ein Docker-Image-
+Bau und Lastmessungen sind ohne laufenden Docker-Daemon nicht bestaetigt;
+ein aktualisiertes Repo ersetzt keinen Portainer-Redeploy.
+
 Die Compose-Datei haengt den Container an das vorhandene Docker-Netz
 `proxy-network`. Damit kann Nginx Proxy Manager den Dienst intern erreichen,
 ohne einen Host-Port oeffentlich freizugeben.

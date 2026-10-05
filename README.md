@@ -20,6 +20,8 @@ keine lokale Datenbank.
 - dynamischer Programmieralgorithmus für Multi-Stopp-Routen
 - responsive Web-UI in HTML, CSS und JavaScript ohne Build-Schritt,
   mit selbst gehosteten Schriften
+- klare Bereiche für Flugsuche, Hotels, gespeicherte Suchen und Preisradar;
+  kompakte Formulare und Ergebnisse mit aufklappbaren Details
 - Airline-Adapter mit aufgezeichneten Test-Fixtures
 - weltweite Flughafensuche mit Metro- und Ländergruppen wie `TYO`, `DE` und
   `DE-OST`, deutschen Aliasnamen und Tab-Vervollständigung
@@ -40,6 +42,9 @@ keine lokale Datenbank.
 - Fehltarif-Jagd mit Preisverläufen, Entdopplung und optionalem Discord-Versand
 - Hotelsuche über Trivago MCP und optional Booking mit Playwright
 - gespeicherte Hotelbeobachtungen und optionale Gesamtreise aus Flug und Hotel
+- Hotelüberwachung in der Oberfläche: speichern, pausieren und fällige Suchen prüfen
+- sichtbare Buchungslinks je Flug-Teilstrecke und Hotelangebot
+- getrennte Flug-/Hotel-Scheduler-Bahnen mit Schutz vor überlappenden Sammelläufen
 
 ## Warum das spannend ist
 

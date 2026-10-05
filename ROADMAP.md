@@ -1,6 +1,6 @@
 # flightopt Roadmap
 
-Stand: 4. Oktober 2026. Dieser Plan beschreibt den aktuellen Funktionsstand
+Stand: 5. Oktober 2026. Dieser Plan beschreibt den aktuellen Funktionsstand
 und die nächsten Entwicklungsschritte. Die Reihenfolge richtet sich nach
 verlässlichen Preisen, Multistop-Nutzen und einem stabilen täglichen Betrieb.
 Er ist kein Versprechen eines Fertigstellungstermins.
@@ -32,6 +32,8 @@ Teilstrecke. Ein Hotel-Richtwert macht eine Gesamtreise nicht buchungsbestätigt
 - [x] Getrennte Gruppen für geprüfte Routen und Kandidaten.
 - [x] Favorit aus geprüften Flugpreisen; mobile Strecke-/Datumsanzeige.
 - [x] Tab-Vervollständigung ab einem Buchstaben und Schutz vor alten Antworten.
+- [x] Getrennte Ansichten für Flugsuche, Hotels, gespeicherte Suchen und Preisradar.
+- [x] Sichtbare Routenlabels, kompakte Ergebnisliste und kurze Statusmeldungen.
 - [x] Lokale Satz-Eingabe als Eingabeschicht über der normalen Suche.
 - [x] Browser-Spracheingabe mit anschließender Bestätigung.
 - [x] Gespeicherte Flugprofile, Scheduler und eindeutige Profil-Job-Zuordnung.
@@ -42,6 +44,11 @@ Teilstrecke. Ein Hotel-Richtwert macht eine Gesamtreise nicht buchungsbestätigt
 - [x] Preisverläufe und Abhaken von Funden in der Oberfläche.
 - [x] Hotelsuche über Trivago MCP und optional Booking/Playwright.
 - [x] Gespeicherte Hotelbeobachtungen, Tagesplaner und Preisfehler-Signale.
+- [x] Hotelüberwachung in der UI: speichern, pausieren und fällige Suchen prüfen.
+- [x] Sichtbare sichere Buchungslinks je Flug-Teilstrecke und Hotelangebot.
+- [x] Fehlende Buchungslinks ausdrücklich markieren, keine Gesamtbuchung erfinden.
+- [x] Getrennte Flug-/Hotel-Scheduler-Bahnen, Sammler gegen Überlappung gesperrt.
+- [x] Fester Scrollbar-Platz und kein automatischer Scrollsprung bei Suchabschluss.
 - [x] Optionale Gesamtreise mit Flug- und Hotelanteil; fehlende Summe bleibt offen.
 - [x] Docker-Bauwege `lean` und `hotels`, Basic Auth, Healthcheck und SQLite-Volume.
 - [x] Datenbank-Backup, additive Migrationen, Tests und GitHub CI.
@@ -65,6 +72,12 @@ Vor weiterer Funktionsbreite abschließen oder dauerhaft prüfen.
   Abschluss: Wiederherstellung auf separater Testdatenbank ohne Datenverlust.
 - [ ] Laufzeit-Quellenstatus mit Messzeitpunkt und Fehlergrund verbessern.
   Abschluss: „kein Tarif“, „nicht abgefragt“ und „Quelle gestört“ unterscheidbar.
+- [ ] Buchungslink-Abdeckung je Adapter mit realen Antworten prüfen.
+  Abschluss: die besten geprüften Routen haben für jede Teilstrecke einen
+  passenden Link; fehlende oder allgemeine Links bleiben eine sichtbare Lücke.
+- [ ] Hotel-Historie eindeutig der gespeicherten Überwachung zuordnen.
+  Abschluss: Bereitschaft und Beobachtungszahlen je Ziel/Filter sind nicht
+  aus der gemeinsamen Historie gleicher Belegung abgeleitet.
 - [ ] Gepäck- und Zuschlagsangaben je Ergebnis konsistent prüfen.
   Abschluss: Flugsumme und sichtbare Teilpreise passen; bekannte Zusatzkosten
   und nicht abgefragte Leistungen sind eindeutig benannt.
@@ -158,11 +171,12 @@ zum Beispiel bei umfangreichen Reisebeschreibungen oder Unterkunftstexten.
 
 - [ ] Mobilen Multistop-Ablauf vollständig prüfen, inklusive Gruppen,
   mehrerer Aufenthalte, Hotels, leerer Treffer und Fehlerzustände.
-- [ ] Flughafenfelder sichtbar als Start, Stopp und Rückkehr benennen.
+- [x] Flughafenfelder sichtbar als Start, Stopp und Rückkehr beziehungsweise Endziel benennen.
 - [ ] Quellenberichte und Preisalter näher an das betroffene Ergebnis setzen.
 - [ ] Gespeicherte Profile bearbeiten, pausieren und gezielt starten können.
-- [ ] Erweiterte Scanner-/Jagd-Funktionen aus dem normalen Suchablauf lösen.
-- [ ] Hotelansicht und Flugansicht in Navigation und Ergebnisdetails angleichen.
+- [x] Erweiterte Scanner-/Jagd-Funktionen aus dem normalen Suchablauf lösen.
+- [x] Hotel- und Flugansicht in Navigation, Formularaufbau und Schrift angleichen.
+- [ ] Quellenalter und Preisvergleich in Flug- und Hoteldetails vereinheitlichen.
 - [ ] Airline-Logos nur mit geklärten Nutzungsbedingungen verwenden;
   verständliche Airline-Kürzel als Fallback behalten.
 - [ ] Projektlogo mit Multistop-Punkten und Globus konsistent einsetzen.
