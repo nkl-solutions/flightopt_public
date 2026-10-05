@@ -55,6 +55,41 @@ const active = () => hops.slice(0, trip==="multi" ? hops.length : 2);
 let AIRLINES = [], picked = new Set();
 let axis = null, es = null, lastResults = [], currentJob = null;
 
+const WORKSPACE_VIEWS = ["search", "saved", "radar"];
+let workspaceView = "search";
+function workspaceViewFromHash(hash){
+  const name = String(hash || "").replace(/^#/, "");
+  return WORKSPACE_VIEWS.includes(name) ? name : "search";
+}
+function setWorkspaceView(name, {updateHash=false, focus=false}={}){
+  workspaceView = WORKSPACE_VIEWS.includes(name) ? name : "search";
+  WORKSPACE_VIEWS.forEach(view => {
+    const panel = $(`#view-${view}`), link = $(`#nav-${view}`);
+    if (panel) panel.hidden = view !== workspaceView;
+    if (link) link.setAttribute("aria-current", view === workspaceView ? "page" : "false");
+  });
+  if (updateHash && typeof window !== "undefined" && window.location){
+    if (window.location.hash !== `#${workspaceView}`){
+      if (window.history && typeof window.history.pushState === "function"){
+        window.history.pushState(null, "", `#${workspaceView}`);
+      } else window.location.hash = `#${workspaceView}`;
+    }
+  }
+  if (focus){
+    const heading = $(`#${workspaceView === "search" ? "search" : workspaceView}heading`);
+    if (heading && typeof heading.focus === "function") heading.focus({preventScroll:true});
+    if (typeof window !== "undefined" && typeof window.scrollTo === "function") window.scrollTo(0, 0);
+  }
+  return workspaceView;
+}
+function setupWorkspaceNavigation(){
+  if (typeof window === "undefined" || !window.location) return;
+  setWorkspaceView(workspaceViewFromHash(window.location.hash));
+  window.addEventListener("hashchange", () => {
+    setWorkspaceView(workspaceViewFromHash(window.location.hash), {focus:true});
+  });
+}
+
 /* ---------------- trip type ---------------- */
 /* Drei sich ausschliessende Optionen sind eine Radiogruppe, keine Reiter.
    Reiter versprechen Panels, die es hier nicht gibt, und brauchen Pfeiltasten,
@@ -63,6 +98,8 @@ let axis = null, es = null, lastResults = [], currentJob = null;
    hat: der Fokus faellt dann auf <body> und die naechste Pfeiltaste bewegt
    nichts mehr. Also nur bauen, wenn die Gruppe fehlt, sonst bloss umhaken. */
 function drawTrips(){
+  const dateLabel = $("label[for=to]");
+  if (dateLabel) dateLabel.textContent = trip === "return" ? "Spätester Rückflug" : "Spätester Abflug";
   const box = $("#tripoptions");
   let inputs = [...box.querySelectorAll("input")];
   if (inputs.length !== TRIPS.length){
@@ -118,6 +155,11 @@ function updateRouteGlance(){
   $("#routeglance").innerHTML =
     `<b>${esc(g.route || "Route wählen")}</b> `+
     `<i>${esc(g.from)} bis ${esc(g.to)} · ${parts.map(esc).join(" · ")}</i>`;
+  const savedRoute = $("#saveRoutePreview");
+  const savedRouteLabel = trip === "return" && active()[0].code
+    ? `${g.route} - ${active()[0].label || active()[0].code}` : g.route;
+  if (savedRoute) savedRoute.innerHTML = `<b>${esc(savedRouteLabel || "Route wählen")}</b>`
+    + `<span>${esc(g.from)} bis ${esc(g.to)}</span><span>${parts.map(esc).join(" · ")}</span>`;
 }
 function applyNaturalSearch(data){
   trip = data.trip || ((data.hops || []).length > 2 ? "multi" : "one_way");
@@ -297,9 +339,9 @@ function syncStayControls(){
     const minId = stayInputId(i, "min"), maxId = stayInputId(i, "max");
     return `<div class="stayitem">
       <span class="stayname">${esc(stayLabel(i))}</span>
-      <div><label class="lab" for="${minId}">min</label>
+      <div><label class="lab" for="${minId}">Mindestens</label>
         <input type="number" id="${minId}" value="${esc(min)}" min="0" max="60"></div>
-      <div><label class="lab" for="${maxId}">max</label>
+      <div><label class="lab" for="${maxId}">Höchstens</label>
         <input type="number" id="${maxId}" value="${esc(max)}" min="0" max="60"></div>
     </div>`;
   }).join("");
@@ -348,10 +390,11 @@ function focusIsIdle(){
   return !here || here === document.body || here === $("#go") || here === $("#cancel");
 }
 function focusResults(){
+  if (workspaceView !== "search") return false;
   const heading = $("#outtitle");
   if (!heading || typeof heading.focus !== "function") return false;
   if (!focusIsIdle()) return false;
-  heading.focus();
+  heading.focus({preventScroll:true});
   return true;
 }
 function drawRoute(){  const box = $("#route"); box.innerHTML = "";
@@ -368,8 +411,14 @@ function drawRoute(){  const box = $("#route"); box.innerHTML = "";
     const inp = document.createElement("input");
     inp.type="text"; inp.autocomplete="off"; inp.spellcheck=false;
     inp.value = hop.label || hop.code || "";
-    inp.placeholder = i===0 ? "Von, z.B. Berlin" : "Nach, z.B. Athen";
-    inp.setAttribute("aria-label", i===0 ? "Startflughafen" : `Ziel ${i}`);
+    inp.id = `route-input-${i}`;
+    inp.placeholder = "Stadt, Flughafen oder Region";
+    const label = document.createElement("label");
+    label.className = "hoplabel";
+    label.setAttribute("for", inp.id);
+    label.textContent = i === 0 ? "Start" : trip !== "multi" ? "Ziel"
+      : i === list.length - 1 ? (hop.code && hop.code === list[0].code ? "Rückkehr" : "Endziel") : `Stopp ${i}`;
+    inp.setAttribute("aria-label", `${label.textContent}: Stadt, Flughafen oder Region`);
     inp.setAttribute("role", combo.role);
     inp.setAttribute("aria-autocomplete", "list");
     inp.setAttribute("aria-expanded", "false");
@@ -395,7 +444,7 @@ function drawRoute(){  const box = $("#route"); box.innerHTML = "";
     const ghost = document.createElement("span"); ghost.className="ghost";
     const grip = document.createElement("span"); grip.className="grip";
     grip.setAttribute("aria-hidden","true");
-    cell.append(grip, inp, ghost, badge, menu, empty);
+    cell.append(label, grip, inp, ghost, badge, menu, empty);
 
     let items=[], sel=-1, timer, queryVersion=0;
     const close = () => { menu.classList.remove("on"); empty.classList.remove("on");
@@ -778,9 +827,9 @@ async function profileNameKeydown(e){
 function scannerSummary(state){
   const running = state.scanner && state.scanner.running;
   const profiles = (state.due && state.due.profiles) || [];
-  const head = running ? "Scanner läuft." : "Scanner bereit.";
-  if (!profiles.length) return `${head} Keine fälligen Profile.`;
-  return `${head} Fällig: ${profiles.map(p=>p.name).join(", ")}`;
+  const head = running ? "Suchen werden aktualisiert." : "Automatische Suche bereit.";
+  if (!profiles.length) return `${head} Keine fälligen Suchen.`;
+  return `${head} Als Nächstes: ${profiles.map(p=>p.name).join(", ")}`;
 }
 async function loadScanner(){
   try {
@@ -790,20 +839,20 @@ async function loadScanner(){
     ]);
     $("#scanstate").textContent = scannerSummary({scanner, due});
   } catch {
-    $("#scanstate").textContent = "Scannerstatus nicht verfügbar.";
+    $("#scanstate").textContent = "Status der automatischen Suche nicht verfügbar.";
   }
 }
 $("#runScanner").onclick = async () => {
-  $("#scanstate").textContent = "Starte fällige Scans";
+  $("#scanstate").textContent = "Fällige Suchen werden gestartet";
   try {
     const d = await fetch("/api/scanner/run-once",{method:"POST"}).then(r=>r.json());
     const names = (d.jobs || []).map(j=>j.name);
     $("#scanstate").textContent = names.length
       ? `Gestartet: ${names.join(", ")}`
-      : "Keine fälligen Profile.";
+      : "Keine fälligen Suchen.";
     await loadDeals();
   } catch {
-    $("#scanstate").textContent = "Scans konnten nicht gestartet werden.";
+    $("#scanstate").textContent = "Gespeicherte Suchen konnten nicht gestartet werden.";
   }
 };
 
@@ -1169,6 +1218,39 @@ function legSourceNote(leg){
   // der Rand weg und die Notizen klebten aneinander.
   return ` <i class="src">Quelle ${esc(src)}</i>`;
 }
+function safeBookingUrl(value){
+  if (typeof value !== "string" || /[\u0000-\u001f\u007f\\]/.test(value)) return "";
+  const link = value.trim();
+  if (!/^https?:\/\//i.test(link)) return "";
+  try {
+    const url = new URL(link);
+    if (!["http:", "https:"].includes(url.protocol) || !url.hostname
+        || url.username || url.password) return "";
+    return link;
+  } catch { return ""; }
+}
+function legBookingMarkup(leg, index=null){
+  const l = leg || {};
+  const pair = [l.origin, l.destination].filter(Boolean).join(" - ");
+  const summary = index !== null;
+  const link = safeBookingUrl(l.deep_link);
+  if (!link) return `<span class="bookingmissing">${
+    summary && pair ? esc(pair) + ": " : ""}Buchungslink fehlt</span>`;
+  const action = l.indicative ? "Richtwert öffnen" : l.verified ? "buchen" : "Angebot öffnen";
+  const quality = l.indicative ? "Richtwert" : l.verified ? "geprüft" : "Schätzung";
+  const context = [pair, l.date, l.source, quality].filter(Boolean).join(" · ");
+  const label = `${summary ? `Teilstrecke ${index + 1}: ` : ""}${context}: ${action}`;
+  return `<a class="bookinglink" href="${esc(link)}" target="_blank" rel="noopener noreferrer"`
+    + ` aria-label="${esc(label)}" title="${esc(context)}">${
+      summary && pair ? esc(pair) + " " : ""}${action}</a>`;
+}
+function bookingLinksMarkup(o){
+  const legs = o.legs || [];
+  if (!legs.length) return `<span class="bookingmissing">Buchungslink fehlt</span>`;
+  return `<span class="bookinglinks" role="group" aria-label="Buchung je Teilstrecke">`
+    + (legs.length > 1 ? `<span class="bookingnote">Getrennte Tickets</span>` : "")
+    + legs.map((leg, index) => legBookingMarkup(leg, index)).join(" ") + "</span>";
+}
 /* Warum dieser Preis nicht live geprueft ist. Drei Faelle, nicht zwei: ein
    Richtwert, ein blosser Tagesbestpreis aus dem Kalender, und dazwischen das
    Angebot, das eine Quelle wirklich geliefert hat, nur ohne Flugzeiten. Das
@@ -1179,19 +1261,14 @@ function unverifiedNote(leg){
   const l = leg || {};
   if (l.indicative)
     return "Richtwert eines Vergleichsportals, echter Flugpreis liegt meist darunter";
-  if (l.source && l.deep_link)
+  if (l.source && safeBookingUrl(l.deep_link))
     return "Angebot der Quelle mit Buchungslink, aber ohne Flugzeiten und nicht"
       + " live nachgeprüft";
   return "Tagesbestpreis, kein konkreter Flug geprüft";
 }
 function detailRows(o){
   const rows = o.legs.map(l => {
-    /* Der Link haengt am Angebot, nicht am Pruefstand. Er stand bisher nur im
-       geprueften Zweig, und damit fiel er ausgerechnet dort weg, wo er das
-       einzige ist, was weiterhilft: bei einem Tagesangebot ohne Flugzeiten. */
-    const link = l.deep_link
-      ? `<a href="${esc(l.deep_link)}" target="_blank" rel="noopener noreferrer">buchen</a>`
-      : `<span></span>`;
+    const link = legBookingMarkup(l);
     if (!l.verified) {
       const why = unverifiedNote(l);
       const src = (l.carriers||[])[0];
@@ -1230,7 +1307,7 @@ function detailRows(o){
       <span class="fare">${money(l.price)} €</span>${link}</div>`;
   }).join("");
   let foot;
-  if (o.verified){
+  if (resultQuality(o) === "verified"){
     const d = o.drift;
     foot = (d===null||d===undefined||Math.abs(d)<0.01)
       ? "Live geprüft, Preis wie geschätzt."
@@ -1413,7 +1490,10 @@ function rowMarkup(o, n, favorite=false){
       >${bandCell(band.tier)}</td>
     <td class="c-rail"><span class="rail"><i class="line"
       style="left:${railLeft(first)};width:${railWidth(last - first)}"></i>${dots}${gaps}</span>
-      <span class="itinerarydates">${itineraryDates(o)}</span></td>
+      <span class="itinerarydates">${itineraryDates(o)}</span>
+      <span class="tripfacts">${esc([stopsLabel(stopsOf(o)),
+        carriersOf(o).map(code => (AIRLINES.find(a => a.code === code) || {}).name || code).join(", ")]
+        .filter(Boolean).join(" · "))}</span>${bookingLinksMarkup(o)}</td>
     <td class="c-num c-nights">${nightsOf(o)}</td>
     <td class="c-num c-stops">${esc(stopsLabel(stopsOf(o)))}</td>
     <td class="c-air">${routeBadge(o)}${carriersOf(o).map(tailMark).join("")}</td>
@@ -1442,7 +1522,7 @@ function wireRows(body){
     if (button) button.onclick = e => { e.stopPropagation(); toggle(); };
     tr.onclick = e => {
       // Der Knopf hat schon umgeschaltet, ein Link fuehrt woanders hin.
-      if (e.target.tagName === "A" || e.target.closest(".rowtoggle")) return;
+      if (e.target.tagName === "A" || e.target.closest("a") || e.target.closest(".rowtoggle")) return;
       toggle();
     };
   });
@@ -1797,6 +1877,13 @@ function optionsChanged(){
 }
 
 /* ---------------- Deals ---------------- */
+function setTableVisible(selector, visible){
+  const table = $(selector);
+  if (!table) return;
+  table.hidden = !visible;
+  const region = typeof table.closest === "function" ? table.closest(".tablewrap") : null;
+  if (region) region.hidden = !visible;
+}
 function dealsSummary(rows){
   const list = rows || [];
   if (!list.length) return "Noch keine gespeicherten Scans.";
@@ -1862,6 +1949,7 @@ function dealRowMarkup(row){
 
 function renderDeals(rows){
   const list = rows || [];
+  setTableVisible("#dealstable", list.length > 0);
   $("#dealssummary").dataset.tone = "";
   $("#dealssummary").textContent = dealsSummary(list);
   const body = $("#dealsrows");
@@ -1883,13 +1971,24 @@ function renderDeals(rows){
    wie eine frische Suche. Zwei Darstellungen fuer dieselbe Sache waeren eine
    Einladung, sie unterschiedlich zu lesen. */
 async function openDeal(jobId){
+  if (es || $("#go").disabled){
+    $("#savedmsg").dataset.tone = "warn";
+    $("#savedmsg").textContent = "Die Flugsuche läuft noch. Gespeicherte Ergebnisse lassen sich danach öffnen.";
+    return;
+  }
   try {
     // Ohne diese Pruefung wurde aus einem 404 ein stilles renderTable([]):
     // die Tabelle verschwand und niemand sagte, warum.
     const r = await fetch(`/api/jobs/${jobId}`);
     const d = await r.json();
     if (!r.ok) throw new Error(detail(d.detail) || `HTTP ${r.status}`);
+    if (es || $("#go").disabled){
+      $("#savedmsg").dataset.tone = "warn";
+      $("#savedmsg").textContent = "Die Flugsuche läuft noch. Gespeicherte Ergebnisse lassen sich danach öffnen.";
+      return;
+    }
     const results = d.results || [];
+    setWorkspaceView("search", {updateHash:true});
     openRows = new Set(); seenRows = new Set();
     if (!results.length){
       renderNoResults("Für diesen Scan sind keine Ergebnisse mehr gespeichert.");
@@ -1897,7 +1996,9 @@ async function openDeal(jobId){
       renderTable(results);
     }
     $("#dealssummary").dataset.tone = "";
-    focusResults();
+    const heading = $("#outtitle");
+    if (heading && typeof heading.focus === "function") heading.focus({preventScroll:true});
+    if (heading && typeof heading.scrollIntoView === "function") heading.scrollIntoView({block:"start"});
   } catch (err) {
     $("#dealssummary").dataset.tone = "err";
     $("#dealssummary").textContent =
@@ -1931,9 +2032,7 @@ function watchlistSummary(body){
   const sum = (body && body.summary) || {};
   const need = Number(sum.min_days || WATCH_MIN_DAYS);
   if (!rows.length){
-    return `Noch wird nichts aufgezeichnet. Trage eine Strecke ein: ab dann `
-      + `wird ihr Preiskalender täglich mitgeschrieben, und nach etwa ${need} `
-      + `Tagen trägt die erste Aussage zur Preislage.`;
+    return `Noch keine Strecken. Preisvergleich ab etwa ${need} Tagen.`;
   }
   const active = Number(sum.active || 0);
   const head = rows.length === 1 ? "1 Strecke" : `${rows.length} Strecken`;
@@ -1954,7 +2053,7 @@ function watchReadiness(row){
   const need = Number((row && row.min_days) || WATCH_MIN_DAYS);
   if (!days) return "noch nichts aufgezeichnet";
   if (days < need) return `noch ${need - days} von ${need} Tagen`;
-  return `trägt, ${days} Tage aufgezeichnet`;
+  return `Vergleich verfügbar, ${days} Tage`;
 }
 
 function watchLeadLabel(row){
@@ -1974,7 +2073,7 @@ function watchPayload(){
 
 /* Zwei Taktarten, zwei Woerter. "heiß" ist dasselbe Wort, das der Server
    benutzt und mit dem die Jagd beschrieben ist. */
-const CADENCE_LABELS = {daily:"täglich", hot:"heiß"};
+const CADENCE_LABELS = {daily:"täglich", hot:"häufig"};
 function cadenceLabel(row){
   return CADENCE_LABELS[String((row || {}).cadence || "daily")] || "täglich";
 }
@@ -1988,14 +2087,12 @@ function hotBudgetLine(summary){
   const hot = Number(s.hot || 0);
   const every = Math.max(1, Math.round(Number(s.hot_interval_seconds || 1200) / 60));
   if (hot > max){
-    return `${hot} Strecken heiß, getragen sind ${max}. Keine wird abgelehnt,`
-      + ` alle teilen sich dasselbe Budget und kommen damit seltener dran als`
-      + ` alle ${every} Minuten.`;
+    return `${hot} Strecken mit häufigen Prüfungen, Budget für ${max}. Alle bleiben aktiv,`
+      + ` der Abstand kann über ${every} Minuten liegen.`;
   }
-  const head = `${hot} von ${max} Strecken heiß, alle ${every} Minuten abgefragt.`;
+  const head = `${hot} von ${max} Strecken mit häufigen Prüfungen, alle ${every} Minuten.`;
   return hot >= max
-    ? `${head} Eine weitere wäre nicht abgelehnt, sondern langsamer: das Budget`
-      + ` bleibt gleich groß.`
+    ? `${head} Budget voll. Weitere Strecken werden seltener geprüft.`
     : head;
 }
 function watchCadenceCell(row){
@@ -2004,7 +2101,7 @@ function watchCadenceCell(row){
     ><span class="cadencenow">${esc(cadenceLabel(row))}</span
     ><button type="button" class="cadenceswitch" data-route="${esc(row.id)}"
       data-cadence="${hot ? "daily" : "hot"}">${
-      hot ? "auf täglich" : "heiß schalten"}</button></td>`;
+      hot ? "auf täglich" : "häufiger prüfen"}</button></td>`;
 }
 
 function watchRowMarkup(row){
@@ -2028,6 +2125,7 @@ function watchRowMarkup(row){
 
 function renderWatchlist(body){
   const rows = (body && body.routes) || [];
+  setTableVisible("#watchtable", rows.length > 0);
   lastWatchSummary = (body && body.summary) || {};
   $("#watchsummary").dataset.tone = "";
   $("#watchsummary").textContent = watchlistSummary(body);
@@ -2036,8 +2134,7 @@ function renderWatchlist(body){
   const table = $("#watchrows");
   table.innerHTML = rows.length
     ? rows.map(watchRowMarkup).join("")
-    : `<tr class="empty"><td colspan="${WATCH_COLUMNS}">Keine Strecke wird `
-      + `beobachtet. Das Formular darüber trägt die erste ein.</td></tr>`;
+    : `<tr class="empty"><td colspan="${WATCH_COLUMNS}">Noch keine beobachteten Strecken.</td></tr>`;
   table.querySelectorAll(".watchtoggle").forEach(button => {
     button.onclick = () => toggleWatchRoute(
       Number(button.dataset.route), button.dataset.enabled !== "1"
@@ -2114,15 +2211,14 @@ function cadenceSwitchLabel(route, summary){
   const max = Number(s.max_hot_routes || WATCH_MAX_HOT);
   const hot = Number(s.hot || 0);
   return hot > max
-    ? `${r.route} ist heiß. Das sind ${hot} heiße Strecken bei einem Budget für`
-      + ` ${max}: abgelehnt wird keine, jede kommt seltener dran.`
-    : `${r.route} ist heiß, ${hot} von ${max}`;
+    ? `${r.route} wird häufig geprüft. ${hot} Strecken teilen das Budget für ${max}; alle bleiben aktiv.`
+    : `${r.route} wird häufig geprüft, ${hot} von ${max}`;
 }
 
 async function setWatchCadence(id, cadence){
   const msg = $("#watchmsg");
   msg.dataset.tone = "";
-  msg.textContent = cadence === "hot" ? "Schalte heiß" : "Schalte auf täglich";
+  msg.textContent = cadence === "hot" ? "Häufige Prüfung wird aktiviert" : "Tägliche Prüfung wird aktiviert";
   try {
     const r = await fetch(`/api/watchlist/${id}`, {method:"PATCH",
       headers:{"content-type":"application/json"}, body:JSON.stringify({cadence})});
@@ -2268,10 +2364,8 @@ function findDistance(find){
    die Zeile klingen. Deshalb traegt sie nie einen Ton. */
 function channelLine(summary){
   const s = summary || {};
-  if (s.channel_configured) return "Discord-Kanal eingerichtet. Ein Fund geht als"
-    + " Meldung hinaus.";
-  return "Kein Discord-Kanal eingerichtet. Funde werden erkannt und aufgezeichnet,"
-    + " aber nicht gesendet.";
+  if (s.channel_configured) return "Discord-Meldungen aktiv.";
+  return "Discord-Meldungen aus. Funde bleiben hier gespeichert.";
 }
 
 function findsWord(n){
@@ -2280,8 +2374,7 @@ function findsWord(n){
 function huntSummary(body){
   const s = (body && body.summary) || {};
   const events = Number(s.events || 0);
-  if (!events) return "Noch kein Fehltarif gefunden. Die Jagd läuft auf den"
-    + " Strecken, die in der Beobachtungsliste heiß geschaltet sind.";
+  if (!events) return "Noch kein Fehltarif gefunden.";
   const open = Number(s.open || 0);
   const offen = open ? `${open} noch offen` : "alle abgehakt";
   const last = s.last_find_at ? ` Zuletzt ${scanTime(s.last_find_at)}.` : "";
@@ -2334,8 +2427,7 @@ function findRowMarkup(row, quietHours){
    ueberhaupt. Ohne den Unterschied sucht jemand einen Fehler, wo keiner ist. */
 function huntEmptyLine(summary, openOnly){
   if (!Number((summary || {}).events || 0))
-    return "Noch nichts gefunden. Ein Fehltarif ist selten, und das ist der"
-      + " Sinn der engen Schwelle.";
+    return "Noch nichts gefunden.";
   return openOnly
     ? "Keine offenen Funde. Der Filter darüber zeigt auch die abgehakten."
     : "Keine Funde in dieser Liste.";
@@ -2343,6 +2435,7 @@ function huntEmptyLine(summary, openOnly){
 
 function renderHunt(body){
   const rows = (body && body.finds) || [];
+  setTableVisible("#hunttable", rows.length > 0);
   const summary = (body && body.summary) || {};
   $("#huntsummary").dataset.tone = "";
   $("#huntsummary").textContent = huntSummary(body);
@@ -2417,7 +2510,7 @@ function huntRunLabel(report){
 async function runHuntNow(){
   const msg = $("#huntmsg");
   msg.dataset.tone = "";
-  msg.textContent = "Jage";
+  msg.textContent = "Preise werden geprüft";
   try {
     const d = await (await fetch("/api/hunt/run-once", {method:"POST"})).json();
     msg.dataset.tone = Number((d || {}).finds || 0) ? "ok" : "";
@@ -2778,3 +2871,4 @@ loadHunt();
 loadHuntHealth();
 $("#cancel").onclick = cancelSearch;
 updateRouteGlance();
+setupWorkspaceNavigation();

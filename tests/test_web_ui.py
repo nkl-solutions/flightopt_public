@@ -237,11 +237,11 @@ def test_scanner_summary_names_state_and_due_profiles():
         r"""
 assert.strictEqual(
   scannerSummary({scanner:{running:true}, due:{profiles:[{name:"Athen"}]}}),
-  "Scanner läuft. Fällig: Athen"
+  "Suchen werden aktualisiert. Als Nächstes: Athen"
 );
 assert.strictEqual(
   scannerSummary({scanner:{running:false}, due:{profiles:[]}}),
-  "Scanner bereit. Keine fälligen Profile."
+  "Automatische Suche bereit. Keine fälligen Suchen."
 );
 """
     )
@@ -1142,7 +1142,7 @@ def test_the_form_is_ordered_by_weight():
         '<div class="stayrow" id="stayrow">',
         '<details class="fold" id="optionsdetails">',
         '<select id="maxStops">',
-        '<details class="fold" id="airlinesdetails">',
+        '<div class="airlineoptions" id="airlinesdetails">',
         '<button class="go" id="go" type="submit">Suchen</button>',
         '</form>',
         '<section class="out" id="out">',
@@ -1159,6 +1159,12 @@ def test_the_form_is_ordered_by_weight():
     # Der alte Reiter-Block und die alte Airline-Sektion sind weg.
     assert '<div class="tabs"' not in page
     assert '<div class="air">' not in page
+    options = page[page.index('<details class="fold" id="optionsdetails">'):
+                   page.index('<div class="actions">')]
+    assert options.count("<details") == 1
+    assert '<h3 class="lab" id="airlinescount">Airlines eingrenzen</h3>' in options
+    assert '<div class="chips" id="chips"></div>' in options
+    assert '<p class="hint" id="airhint"></p>' in options
 
 
 def test_visible_copy_has_no_arrows_and_no_dashes():
@@ -1296,14 +1302,15 @@ const html = detailRows({
 });
 
 assert.ok(html.includes('href="https://example.invalid/buchen"'), html);
-assert.ok(html.includes(">buchen</a>"), html);
+assert.ok(html.includes(">Angebot öffnen</a>"), html);
 
-// Ein Kalendertag ohne Angebot hat keinen Link und behaelt die leere Spalte.
+// Ein Kalendertag ohne Angebot kennzeichnet den fehlenden Buchungslink.
 const bare = detailRows({
   verified: false, legs: [{origin:"BER", destination:"ATH", date:"2026-10-01",
                            price:120, verified:false}],
 });
-assert.ok(!bare.includes("<a href"), bare);
+assert.ok(!bare.includes("<a "), bare);
+assert.ok(bare.includes("Buchungslink fehlt"), bare);
 """
     )
 
@@ -1897,14 +1904,14 @@ def test_an_empty_watchlist_explains_itself_instead_of_being_blank():
 const text = watchlistSummary({routes: [], summary: {routes: 0, active: 0,
   observations: 0, last_run_at: null, min_days: 5}});
 
-assert.ok(text.includes("Noch wird nichts aufgezeichnet"), text);
-assert.ok(text.includes("täglich"), text);
-assert.ok(text.includes("5"), text);
+assert.strictEqual(text, "Noch keine Strecken. Preisvergleich ab etwa 5 Tagen.");
+assert.strictEqual(watchlistSummary({routes: [], summary: {min_days: 8}}),
+  "Noch keine Strecken. Preisvergleich ab etwa 8 Tagen.");
 
 renderWatchlist({routes: [], summary: {routes: 0, active: 0, observations: 0,
   last_run_at: null, min_days: 5}});
 const body = $("#watchrows").innerHTML;
-assert.ok(body.includes("Keine Strecke wird beobachtet"), body);
+assert.ok(body.includes("Noch keine beobachteten Strecken."), body);
 assert.ok(body.includes("colspan"), body);
 assert.strictEqual($("#watchsummary").textContent, text);
 """
@@ -1941,7 +1948,11 @@ assert.strictEqual(watchReadiness({days_recorded: 0, min_days: 5}),
 assert.strictEqual(watchReadiness({days_recorded: 2, min_days: 5}),
   "noch 3 von 5 Tagen");
 assert.strictEqual(watchReadiness({days_recorded: 5, min_days: 5, ready: true}),
-  "trägt, 5 Tage aufgezeichnet");
+  "Vergleich verfügbar, 5 Tage");
+assert.strictEqual(watchReadiness({days_recorded: 9, min_days: 5, ready: true}),
+  "Vergleich verfügbar, 9 Tage");
+assert.strictEqual(watchReadiness({days_recorded: 5, min_days: 8}),
+  "noch 3 von 8 Tagen");
 """
     )
 

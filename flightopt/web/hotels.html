@@ -4,52 +4,62 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>flightopt: Hotelpreise</title>
-<meta name="description" content="Ein Ziel, ein Fenster, ein Preis je Tag. flightopt zeigt, an welchen Nächten dasselbe Haus am wenigsten kostet.">
+<meta name="description" content="Hotelpreise für ein Datum oder einen Zeitraum vergleichen.">
 <meta name="theme-color" content="#f7f8fa">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23f8f7f2'/%3E%3Crect x='2' y='3' width='12' height='1.4' fill='%231e1a16'/%3E%3Crect x='2' y='7.3' width='12' height='1.4' fill='%23b01003'/%3E%3Crect x='2' y='11.6' width='12' height='1.4' fill='%231e1a16'/%3E%3C/svg%3E">
-<link rel="preload" href="/static/fonts/archivo-narrow-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/static/fonts/sometype-mono-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/app.css?v=20261004">
+<link rel="stylesheet" href="/static/app.css?v=2026100501">
 </head>
 <body>
 <a class="skip" href="#main">Zum Inhalt springen</a>
 <div class="wrap">
 
 <header class="mast">
-  <h1 class="mark">flightopt<span>.</span></h1>
-  <nav class="domainnav" aria-label="Bereich">
-    <a href="/">Flüge</a>
-    <a href="/hotels" aria-current="page">Hotels</a>
-  </nav>
-  <p class="tagline">Ein Ziel, ein Fenster, ein Preis je Nacht. Zeigt, wann dasselbe Haus am wenigsten kostet.</p>
+  <div class="mark">flightopt<span>.</span></div>
 </header>
+<nav class="worknav" aria-label="Bereich">
+  <a href="/">Flugsuche</a>
+  <a href="/hotels" aria-current="page">Hotels</a>
+  <a href="/#saved">Gespeicherte Suchen</a>
+  <a href="/#radar">Preisradar</a>
+</nav>
 
 <main id="main">
+<div class="pagehead">
+  <h1>Hotels</h1>
+  <p class="pageintro">Hotelpreise für ein Datum oder einen Zeitraum vergleichen.</p>
+</div>
 <form id="hf">
-  <fieldset class="seg">
-    <legend class="lab">Modus</legend>
-    <div class="segset" id="modeoptions"></div>
-  </fieldset>
-
-  <div class="panel">
-    <div>
-      <label class="lab" for="destination">Ziel</label>
+  <section class="formsection" aria-labelledby="destinationtitle">
+    <h2 id="destinationtitle">Reiseziel</h2>
+    <div class="row">
+      <div>
+      <label class="lab" for="destination">Stadt oder Ort</label>
       <input type="text" id="destination" value="Athen" required spellcheck="false"
         placeholder="Athen, Lissabon, Zürich" autocomplete="off"
         aria-describedby="destmsg">
       <p class="msg" id="destmsg" data-tone="" role="status"></p>
+      </div>
     </div>
+  </section>
 
-    <div>
+  <section class="formsection" aria-labelledby="datestitle">
+    <h2 id="datestitle">Reisedaten</h2>
+    <fieldset class="seg">
+      <legend class="lab">Anreise</legend>
+      <div class="segset" id="modeoptions"></div>
+    </fieldset>
       <div class="row">
         <div><label class="lab" for="from">Anreise ab</label>
           <input type="date" id="from" required aria-describedby="windowmsg"></div>
-        <div id="towrap"><label class="lab" for="to">bis</label>
+        <div id="towrap"><label class="lab" for="to">Anreise bis</label>
           <input type="date" id="to" aria-describedby="windowmsg"></div>
         <div><label class="lab" for="nights">Nächte</label><input type="number" id="nights" min="1" max="30" value="1"></div>
       </div>
       <p class="msg" id="windowmsg" data-tone=""></p>
+  </section>
 
+  <section class="formsection" aria-labelledby="gueststitle">
+    <h2 id="gueststitle">Gäste und Zimmer</h2>
       <div class="row">
         <div><label class="lab" for="adults">Erwachsene</label><input type="number" id="adults" min="1" max="12" value="2"></div>
         <div><label class="lab" for="kids">Kinder</label><input type="number" id="kids" min="0" max="6" value="0"></div>
@@ -58,23 +68,20 @@
       <div class="stayrow" id="agesrow" hidden>
         <div class="stayhead">
           <span class="lab">Alter der Kinder</span>
-          <span class="stayhint">Booking und trivago rechnen je Kind mit dem Alter</span>
         </div>
         <div class="row" id="ages"></div>
       </div>
-    </div>
-  </div>
+  </section>
 
-  <details class="fold" id="hoteloptions">
-    <summary>Optionen</summary>
-    <div class="foldbody">
+  <section class="formsection" id="hoteloptions" aria-labelledby="optionstitle">
+    <h2 id="optionstitle">Hotelwünsche</h2>
       <span class="lab" id="starslbl">Sterne</span>
       <div class="chips" id="stars" role="group" aria-labelledby="starslbl"></div>
       <div class="row stayrow">
         <div>
           <label class="lab" for="minReview">Mindestbewertung</label>
           <select id="minReview">
-            <option value="">ohne Vorgabe</option>
+            <option value="">Alle Bewertungen</option>
             <option value="7">ab 7,0</option>
             <option value="8">ab 8,0</option>
             <option value="9">ab 9,0</option>
@@ -89,18 +96,15 @@
           </select>
         </div>
       </div>
-      <p class="hint">Welche Quellen gelaufen sind, steht nach dem Start unter dem
-        Fortschritt. Eine abgeschaltete Quelle nennt dort ihren Grund.</p>
-    </div>
-  </details>
+  </section>
 
   <div class="actions">
-    <button class="go" id="hgo" type="submit">Suchen</button>
+    <button class="go" id="hgo" type="submit">Hotels suchen</button>
     <span class="msg sizing" id="sizing" data-tone=""></span>
   </div>
 </form>
 
-<section class="log" id="hlog" aria-label="Verlauf des Laufs">
+<section class="log" id="hlog" aria-label="Suchfortschritt">
   <div class="progressmeter">
     <div class="progressbar" id="progressbar" role="progressbar" aria-valuemin="0"
       aria-valuemax="100" aria-valuenow="0" aria-labelledby="progresslabel"
@@ -109,48 +113,52 @@
       <span id="progresslabel" aria-live="polite">Bereit</span>
       <span id="progresscount"></span>
       <button class="kill-search" id="hcancel" type="button" hidden>Abbrechen</button>
-      <button class="kill-search" id="resume" type="button" hidden>Lauf fortsetzen</button>
+      <button class="kill-search" id="resume" type="button" hidden>Fortsetzen</button>
     </div>
   </div>
   <p class="msg note" id="note" data-tone="" role="status" aria-live="polite"></p>
-  <ul class="sources" id="sourcehint"></ul>
+  <ul class="sources" id="sourcehint" aria-label="Quellenstatus"></ul>
   <p class="msg" id="runnotes" data-tone=""></p>
 </section>
 
 <section class="out" id="hout">
   <div class="outhead">
-    <h2 id="outtitle" tabindex="-1">Ergebnisse</h2>
+    <h2 class="sectiontitle" id="outtitle" tabindex="-1">Hotelpreise</h2>
     <div class="tools">
-      <label class="sortlbl" for="sort">Sortieren</label>
+      <label class="filterfield" for="sort"><span>Sortieren</span>
       <select id="sort">
-        <option value="signal">Signal</option>
+        <option value="signal">Preislage</option>
         <option value="price">Preis pro Nacht</option>
         <option value="date">Datum</option>
         <option value="stars">Sterne</option>
         <option value="rating">Bewertung</option>
         <option value="source">Quelle</option>
       </select>
-      <label class="sortlbl" for="filterSignal">Signal</label>
+      </label>
+      <label class="filterfield" for="filterSignal"><span>Preislage</span>
       <select id="filterSignal">
         <option value="">Alle</option>
-        <option value="error">Preisfehler</option>
+        <option value="error">Preis auffällig</option>
         <option value="encoding_suspect">Preis unklar</option>
         <option value="cheap">günstig</option>
         <option value="normal">normal</option>
         <option value="expensive">teuer</option>
-        <option value="unknown">keine Basis</option>
+        <option value="unknown">Kein Vergleich</option>
       </select>
-      <label class="sortlbl" for="filterStars">Sterne</label>
+      </label>
+      <label class="filterfield" for="filterStars"><span>Sterne</span>
       <select id="filterStars">
         <option value="">Alle</option>
         <option value="5">5</option>
         <option value="4">4</option>
         <option value="3">3</option>
       </select>
-      <label class="sortlbl" for="filterSource">Quelle</label>
+      </label>
+      <label class="filterfield" for="filterSource"><span>Quelle</span>
       <select id="filterSource">
         <option value="">Alle</option>
       </select>
+      </label>
       <button class="linkbtn" id="resetfilters" type="button" hidden>Filter zurücksetzen</button>
       <span class="filtercount" id="filtercount"></span>
     </div>
@@ -160,12 +168,12 @@
     <table class="kursbuch" id="hoteltable">
       <thead>
         <tr>
-          <th scope="col" class="c-object">Objekt</th>
+          <th scope="col" class="c-object">Hotel</th>
           <th scope="col" class="c-num c-stars">Sterne</th>
-          <th scope="col" class="c-rail">Datum</th>
+          <th scope="col" class="c-rail">Anreise</th>
           <th scope="col" class="c-price">Preis pro Nacht</th>
           <th scope="col" class="c-num c-rating">Bewertung</th>
-          <th scope="col" class="c-status">Signal</th>
+          <th scope="col" class="c-status">Preislage</th>
           <th scope="col" class="c-source">Quelle</th>
         </tr>
       </thead>
@@ -173,19 +181,44 @@
     </table>
   </div>
 
-  <section class="deals" id="scans">
-    <h2>Gespeicherte Läufe</h2>
-    <ul class="scanlist" id="scanlist"></ul>
-  </section>
+</section>
+<section class="watch" id="hwatch" aria-labelledby="hwatchtitle">
+  <div class="watchhead">
+    <h2 class="sectiontitle" id="hwatchtitle">Hotelüberwachung</h2>
+    <p class="hint" id="hwatchselection"></p>
+  </div>
+  <form class="watchform" id="hwatchform">
+    <div class="watchfield">
+      <label class="lab" for="hleadmin">Vorlauf ab (Tage)</label>
+      <input type="number" id="hleadmin" min="0" max="365" step="1" value="14" required>
+    </div>
+    <div class="watchfield">
+      <label class="lab" for="hleadmax">Bis (Tage)</label>
+      <input type="number" id="hleadmax" min="0" max="365" step="1" value="20" required>
+    </div>
+    <button type="submit" id="hwatchsave">Aktuelle Suche überwachen</button>
+  </form>
+  <p class="hint">Rollende Anreise, täglich. Maximal 31 Anreisetage je Suche.</p>
+  <div class="scanbar">
+    <button type="button" id="hwatchrun" disabled>Einmal prüfen</button>
+    <button type="button" id="hwatchreload">Aktualisieren</button>
+    <span id="hwatchsummary" aria-live="polite"></span>
+  </div>
+  <p class="msg" id="hwatchstatus" data-tone="" role="status" aria-live="polite"></p>
+  <ul class="sources" id="hwatchsources" aria-label="Quellen der Hotelüberwachung"></ul>
+  <p class="msg" id="hwatchnote" data-tone="" role="status" aria-live="polite"></p>
+  <div id="hwatchlist" aria-busy="true"><p class="hint">Überwachungen werden geladen.</p></div>
+</section>
+<section class="deals" id="scans" aria-labelledby="scanstitle">
+  <h2 class="sectiontitle" id="scanstitle">Letzte Hotelsuchen</h2>
+  <ul class="scanlist" id="scanlist"></ul>
 </section>
 </main>
 
 <footer>
-  Die Preise sind Richtwerte der Quelle, keine geprüften Bestpreise. Ein
-  Vergleichsportal nennt je Haus genau einen Preis und sortiert ihn
-  monetarisiert, es ist also kein Bestpreisnachweis. Privater Gebrauch.
+  Trivago zeigt je Hotel einen Preis, der nicht der günstigste sein muss. Privater Gebrauch.
 </footer>
 </div>
-<script src="/static/hotels.js"></script>
+<script src="/static/hotels.js?v=2026100501"></script>
 </body>
 </html>

@@ -7,24 +7,27 @@
 <meta name="description" content="Feste Route, bewegliche Daten. flightopt zeigt, an welchen Tagen dieselbe Multi-Stop-Reise am wenigsten kostet.">
 <meta name="theme-color" content="#f7f8fa">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23f8f7f2'/%3E%3Crect x='2' y='3' width='12' height='1.4' fill='%231e1a16'/%3E%3Crect x='2' y='7.3' width='12' height='1.4' fill='%23b01003'/%3E%3Crect x='2' y='11.6' width='12' height='1.4' fill='%231e1a16'/%3E%3C/svg%3E">
-<link rel="preload" href="/static/fonts/archivo-narrow-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/sometype-mono-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/app.css?v=20261004">
+<link rel="stylesheet" href="/static/app.css?v=2026100501">
 </head>
 <body>
 <a class="skip" href="#main">Zum Inhalt springen</a>
 <div class="wrap">
 
 <header class="mast">
-  <h1 class="mark">flightopt<span>.</span></h1>
-  <nav class="domainnav" aria-label="Bereich">
-    <a href="/" aria-current="page">Flüge</a>
-    <a href="/hotels">Hotels</a>
-  </nav>
-  <p class="tagline">Feste Route. Flexible Reisedaten.</p>
+  <a class="mark" href="/" aria-label="flightopt Startseite">flightopt<span>.</span></a>
+  <p class="tagline">Flüge und Aufenthalte</p>
 </header>
+<nav class="worknav" aria-label="Hauptnavigation">
+  <a id="nav-search" href="#search" aria-current="page">Flugsuche</a>
+  <a href="/hotels">Hotels</a>
+  <a id="nav-saved" href="#saved">Gespeicherte Suchen</a>
+  <a id="nav-radar" href="#radar">Preisradar</a>
+</nav>
 
 <main id="main">
+<div class="workspace" id="view-search" aria-labelledby="searchheading">
+<div class="pagehead"><h1 id="searchheading" tabindex="-1">Wohin soll die Reise gehen?</h1></div>
 <form id="f">
   <fieldset class="seg">
     <legend class="lab">Reiseart</legend>
@@ -33,13 +36,13 @@
 
   <div class="panel">
     <div>
-      <span class="lab" id="routelbl">Route</span>
+      <h2 class="sectiontitle" id="routelbl">Reiseroute</h2>
       <div class="route" id="route" role="group" aria-labelledby="routelbl"></div>
-      <p class="hint" id="routehint" hidden>Reihenfolge ändern: Feld ziehen oder
+      <p class="hint sr-only" id="routehint" hidden>Reihenfolge ändern: Feld ziehen oder
         mit Alt und den Pfeiltasten nach links und rechts schieben.</p>
 
       <details class="fold" id="freetext">
-        <summary>Als Satz beschreiben</summary>
+        <summary>Reise beschreiben oder diktieren</summary>
         <div class="foldbody">
           <div class="quickroute">
             <textarea id="aiText" rows="2" aria-label="Route als Satz beschreiben"
@@ -59,27 +62,28 @@
       </details>
     </div>
 
-    <div>
+    <div class="travelperiod">
+      <h2 class="sectiontitle">Reisezeitraum</h2>
       <div class="row">
-        <div><label class="lab" for="from">Fenster ab</label>
+        <div><label class="lab" for="from">Frühester Abflug</label>
           <input type="date" id="from" required aria-describedby="windowmsg"></div>
-        <div><label class="lab" for="to">bis</label>
+        <div><label class="lab" for="to">Spätester Rückflug</label>
           <input type="date" id="to" required aria-describedby="windowmsg"></div>
       </div>
       <p class="msg" id="windowmsg" data-tone=""></p>
 
+    </div>
       <div class="stayrow" id="stayrow">
         <div class="stayhead">
-          <span class="lab">Aufenthalt</span>
+          <h2 class="sectiontitle">Aufenthaltsdauer</h2>
           <span class="stayhint">Nächte je Stopp</span>
         </div>
         <div class="staylist" id="staylist"></div>
       </div>
-    </div>
   </div>
 
   <details class="fold" id="optionsdetails">
-    <summary>Optionen</summary>
+    <summary>Gepäck, Umstiege und Airlines</summary>
     <div class="foldbody">
       <div class="row">
         <div>
@@ -115,23 +119,20 @@
             <input type="number" id="hotelRooms" min="1" max="8" value="1">
           </div>
         </div>
-        <p class="hint" id="hotelhint">Für jeden Aufenthalt zwischen zwei Flügen wird
-          der günstigste Übernachtungspreis gesucht und zur Flugsumme addiert. Die
-          Flugergebnisse erscheinen wie bisher zuerst.</p>
+        <p class="hint" id="hotelhint">Hotelpreise sind Richtwerte, keine bestätigten Buchungspreise.</p>
       </div>
 
-      <details class="fold" id="airlinesdetails">
-        <summary id="airlinescount">Airlines eingrenzen</summary>
-        <div class="foldbody">
+      <div class="airlineoptions" id="airlinesdetails">
+        <h3 class="lab" id="airlinescount">Airlines eingrenzen</h3>
           <div class="chips" id="chips"></div>
           <p class="hint" id="airhint"></p>
-        </div>
-      </details>
+      </div>
     </div>
   </details>
 
   <div class="actions">
     <button class="go" id="go" type="submit">Suchen</button>
+    <a class="save-search" href="#saved">Suche speichern</a>
     <span class="msg sizing" id="sizing" data-tone=""></span>
   </div>
   <p class="routeglance" id="routeglance"></p>
@@ -148,16 +149,20 @@
       <button class="kill-search" id="cancel" type="button" hidden>Abbrechen</button>
     </div>
   </div>
-  <div class="steps" id="steps" aria-hidden="true"></div>
   <p class="msg note" id="note" data-tone="" role="status" aria-live="polite"></p>
+  <details class="fold searchdetails"><summary>Suchdetails und Quellen</summary>
+  <div class="steps" id="steps" aria-hidden="true"></div>
   <p class="msg" id="runnotes" data-tone=""></p>
   <div class="legs" id="legs" role="group" aria-label="Tage mit Preis je Teilstrecke"></div>
+  </details>
 </section>
 
 <section class="out" id="out">
   <div class="outhead">
     <h2 id="outtitle" tabindex="-1">Ergebnisse</h2>
+  </div>
     <div class="tools">
+      <div class="filterfield">
       <label class="sortlbl" for="sort">Sortieren</label>
       <select id="sort">
         <option value="price">Preis</option>
@@ -165,10 +170,12 @@
         <option value="depart">Abflugdatum</option>
         <option value="length">Reisedauer</option>
       </select>
+      </div><div class="filterfield">
       <label class="sortlbl" for="resultCarrier">Airline</label>
       <select id="resultCarrier">
         <option value="">Alle</option>
       </select>
+      </div><div class="filterfield">
       <label class="sortlbl" for="resultQuality">Status</label>
       <select id="resultQuality">
         <option value="">Alle</option>
@@ -176,32 +183,29 @@
         <option value="estimate">Schätzung</option>
         <option value="indicative">Richtwert</option>
       </select>
+      </div>
       <label class="check" for="directOnly">
         <input type="checkbox" id="directOnly"> nur Direktflüge
       </label>
       <button class="linkbtn" id="resetfilters" type="button" hidden>Filter zurücksetzen</button>
-      <div class="key"><span>günstig</span><span class="scale" aria-hidden="true"
-        ><i style="--d:.28"></i><i style="--d:.46"></i><i style="--d:.64"></i
-        ><i style="--d:.82"></i><i style="--d:1"></i></span><span>teuer</span></div>
     </div>
-  </div>
   <p class="outsummary" id="outsummary" aria-live="polite"></p>
-  <p class="legend"><b>Status:</b> wie sicher der Preis ist.
-    <b>Preislage:</b> Vergleich mit bisherigen Preisen; <b>keine Basis</b> bedeutet
-    zu wenig Vergleichsdaten. <b>Fehltarif:</b> ungewöhnlich niedriger Preis,
-    Verfügbarkeit offen.</p>
-  <p class="usedby" id="usedby"></p>
+  <details class="fold pricehelp"><summary>Preisstatus und Vergleich</summary>
+    <p class="legend"><b>Status:</b> wie sicher der Preis ist. <b>Preislage:</b> Vergleich mit bisherigen Preisen;
+      <b>keine Basis</b> heißt zu wenig Vergleichsdaten. Ein <b>Fehltarif</b> ist nicht bestätigt.</p>
+    <p class="usedby" id="usedby"></p>
+  </details>
   <div class="ruler" id="ruler"></div>
   <div class="tablewrap" tabindex="0" role="region" aria-label="Ergebnisse, seitlich scrollbar">
     <table class="kursbuch" id="resulttable">
       <thead>
         <tr>
-          <th scope="col" class="c-rank">Rang</th>
-          <th scope="col" class="c-price">Preis</th>
+          <th scope="col" class="c-rank">Details</th>
+          <th scope="col" class="c-price">Flugpreis</th>
           <th scope="col" class="c-price c-grand">Mit Hotel</th>
           <th scope="col" class="c-status">Status</th>
           <th scope="col" class="c-status c-band">Preislage</th>
-          <th scope="col" class="c-rail">Daten</th>
+          <th scope="col" class="c-rail">Reiseplan</th>
           <th scope="col" class="c-num c-nights">Nächte</th>
           <th scope="col" class="c-num c-stops">Umstiege</th>
           <th scope="col" class="c-air">Airlines</th>
@@ -211,30 +215,36 @@
     </table>
   </div>
 </section>
+</div>
 
+<div class="workspace" id="view-saved" aria-labelledby="savedheading" hidden>
+<div class="pagehead"><h1 id="savedheading" tabindex="-1">Gespeicherte Suchen</h1></div>
 <section class="deals" id="deals">
   <div class="dealshead">
-    <h2>Gespeicherte Scans</h2>
+    <h2>Aktuelle Suche speichern</h2>
+    <p class="savedroute" id="saveRoutePreview"></p>
+    <a class="textlink" href="#search">Route und Zeitraum ändern</a>
     <div class="saveprofile">
-      <label class="lab" for="profileName">Profilname</label>
+      <label class="lab" for="profileName">Name der Suche</label>
       <input id="profileName" type="text" placeholder="Berlin nach Athen, täglich">
-      <button id="saveProfile" type="button">Profil speichern</button>
+      <button id="saveProfile" type="button">Suche speichern</button>
       <span class="msg" id="savedmsg" data-tone="" role="status"></span>
     </div>
     <div class="scanbar">
       <span id="scanstate" role="status">Scanner wird geprüft</span>
-      <button id="runScanner" type="button">Fällige Scans starten</button>
+      <button id="runScanner" type="button">Jetzt aktualisieren</button>
     </div>
   </div>
+  <h2 class="sectiontitle scanheading">Letzte Ergebnisse</h2>
   <p class="msg" id="dealssummary" data-tone=""></p>
   <div class="tablewrap" tabindex="0" role="region" aria-label="Gespeicherte Scans, seitlich scrollbar">
     <table class="kursbuch" id="dealstable">
       <thead>
         <tr>
-          <th scope="col">Profil</th>
+          <th scope="col">Suche</th>
           <th scope="col">Route</th>
           <th scope="col" class="c-dates">Reisedaten</th>
-          <th scope="col">Scan</th>
+          <th scope="col">Geprüft am</th>
           <th scope="col" class="c-price">Preis</th>
           <th scope="col" class="c-num">Abweichung</th>
           <th scope="col" class="c-status">Signal</th>
@@ -244,13 +254,16 @@
     </table>
   </div>
 </section>
+</div>
 
+<div class="workspace" id="view-radar" aria-labelledby="radarheading" hidden>
+<div class="pagehead"><h1 id="radarheading" tabindex="-1">Preisradar</h1></div>
 <section class="hunt" id="hunt">
   <div class="hunthead">
-    <h2>Fehltarif-Jagd</h2>
+    <h2>Auffällig günstige Flüge</h2>
     <p class="msg" id="huntchannel" data-tone=""></p>
     <div class="scanbar">
-      <button id="huntRun" type="button">Jetzt jagen</button>
+      <button id="huntRun" type="button">Preise prüfen</button>
       <label class="check" for="huntOpenOnly">
         <input type="checkbox" id="huntOpenOnly" checked> nur offene Funde
       </label>
@@ -258,20 +271,14 @@
     </div>
   </div>
   <p class="msg" id="huntsummary" data-tone=""></p>
-  <p class="legend">Ein Fehltarif ist ein Preis, der so weit unter dem Üblichen
-    liegt, dass er vermutlich nicht so gemeint war. <b>Warum</b> sagt, worauf
-    das Urteil steht: drei Striche heißen eine Historie, die trägt, einer heißt,
-    dass allein die Entfernungsschranke urteilt. Das ist die schwächste Aussage,
-    die hier vorkommt, und sie sieht auch so aus. Ob ein Preis noch steht,
-    prüft die Jagd nicht nach: darum steht an jedem Fund, wie alt er ist, und
-    ältere Zeilen treten zurück.</p>
+  <p class="legend">Ungewöhnlich niedrige Preise, nicht live bestätigt. Alter und Preisgrund stehen am Fund.</p>
   <div class="tablewrap" tabindex="0" role="region" aria-label="Funde der Jagd, seitlich scrollbar">
     <table class="kursbuch" id="hunttable">
       <thead>
         <tr>
           <th scope="col" class="c-route">Strecke</th>
           <th scope="col" class="c-price">Preis</th>
-          <th scope="col" class="c-why">Warum</th>
+          <th scope="col" class="c-why">Preisvergleich</th>
           <th scope="col" class="c-status">Meldung</th>
           <th scope="col" class="c-act">Buchen und abhaken</th>
         </tr>
@@ -304,16 +311,13 @@
       <div class="curvebox" id="curvebox"></div>
       <div class="ruler curvedays" id="curvedays"></div>
     </div>
-    <p class="legend">Die Fläche ist die Spanne des Tages von Min bis Max, die
-      Linie der Median. Gestrichelt heißt: an diesem Tag stehen weniger als fünf
-      Beobachtungen dahinter. Die Balken unten zählen die Beobachtungen je Tag,
-      die senkrechten Marken sind Funde.</p>
+    <p class="legend">Linie: mittlerer Preis. Fläche: Preisspanne. Gestrichelt: weniger als fünf Beobachtungen.</p>
   </div>
 </section>
 
 <section class="watch" id="watch">
   <div class="watchhead">
-    <h2>Beobachtungsliste</h2>
+    <h2>Strecken beobachten</h2>
     <div class="watchform">
       <span class="watchfield">
         <label class="lab" for="watchFrom">Von</label>
@@ -324,11 +328,11 @@
         <input id="watchTo" type="text" placeholder="Athen" autocomplete="off">
       </span>
       <span class="watchfield">
-        <label class="lab" for="watchLeadMin">Vorlauf ab</label>
+        <label class="lab" for="watchLeadMin">Frühestens in Tagen</label>
         <input id="watchLeadMin" type="number" min="0" max="365" value="14">
       </span>
       <span class="watchfield">
-        <label class="lab" for="watchLeadMax">bis</label>
+        <label class="lab" for="watchLeadMax">Spätestens in Tagen</label>
         <input id="watchLeadMax" type="number" min="0" max="365" value="73">
       </span>
       <button id="watchAdd" type="button">Strecke beobachten</button>
@@ -341,12 +345,7 @@
   <p class="msg" id="watchsummary" data-tone=""></p>
   <p class="msg" id="watchhot" data-tone=""></p>
   <p class="msg" id="watchpause" data-tone=""></p>
-  <p class="legend">Der Vorlauf zählt ab heute und wandert mit: ein Eintrag mit
-    14 bis 73 Tagen fragt jeden Tag dieselbe Spanne ab, nur einen Tag weiter.
-    Aufgezeichnet wird einmal am Tag, bei denselben Quellen wie die Suche. Eine
-    <b>heiß</b> geschaltete Strecke wird zusätzlich alle 20 Minuten gefragt und
-    ihre Funde gehen an die Jagd. Heiß geht nur bis zu einem Vorlauffenster von
-    62 Tagen.</p>
+  <p class="legend">Der Zeitraum zählt ab heute und verschiebt sich täglich mit.</p>
   <div class="tablewrap" tabindex="0" role="region" aria-label="Beobachtete Strecken, seitlich scrollbar">
     <table class="kursbuch" id="watchtable">
       <thead>
@@ -365,14 +364,13 @@
     </table>
   </div>
 </section>
+</div>
 </main>
 
 <footer>
-  Der Status je Zeile sagt, wie sicher ein Preis ist: geprüft, Schätzung oder
-  Richtwert. Aufschläge für Gepäck und Sitzplatz sind nicht enthalten.
-  Privater Gebrauch.
+  Preise pro Person in Euro. Zusatzkosten stehen im Flugdetail.
 </footer>
 </div>
-<script src="/static/app.js?v=20261004"></script>
+<script src="/static/app.js?v=2026100501"></script>
 </body>
 </html>

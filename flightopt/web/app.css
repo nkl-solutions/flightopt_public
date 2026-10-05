@@ -20,11 +20,7 @@
   font-family:"Sometype Mono";font-style:normal;font-weight:500;font-display:swap;
   src:url("/static/fonts/sometype-mono-500.woff2") format("woff2");
 }
-/* flightopt: Kursbuch.
-   Papier, drei Linienstaerken, eine Signalfarbe, Zahlen in Mono mit tabular-nums,
-   damit Preisspalten untereinander stehen wie in einem Fahrplan.
-   Autorenwert ist OKLCH, der Hex daneben ist der Fallback fuer die Lesbarkeit
-   dieses Codes und der gerechnete Kontrast gegen --bg. */
+/* Shared search workspace. Compact numbers, readable labels and one action colour. */
 :root{
   /* Flaechen */
   --bg:#f7f8fa;                      /* #f7f8fa */
@@ -51,9 +47,9 @@
   --err:oklch(47% 0.160 25);           /* #a12628  6.90:1 */
 
   /* Typo: fuenf Stufen, mehr gibt es nicht */
-  --sans:"Archivo Narrow",ui-sans-serif,system-ui,"Segoe UI",sans-serif;
+  --sans:"Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
   --mono:"Sometype Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
-  --t12:12px; --t14:14px; --t16:16px; --t21:21px; --t28:28px;
+  --t12:13px; --t14:15px; --t16:16px; --t21:21px; --t28:28px;
 
   /* Raum: 4-pt-Raster */
   --s1:4px; --s2:8px; --s3:12px; --s4:16px;
@@ -61,7 +57,7 @@
   --gut:clamp(16px,3.5vw,40px);
 
   /* Form */
-  --r:2px;
+  --r:4px;
 
   /* Die Seite ist bewusst hell. Ohne diese Angabe faerbt ein Android-Browser im
      Zwangsdunkel Felder und Datumswaehler selbst um und trifft dabei keinen der
@@ -71,7 +67,8 @@
 
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:var(--t14);
+html{scrollbar-gutter:stable}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:var(--t14);
   line-height:1.45;-webkit-font-smoothing:antialiased}
 ::selection{background:var(--wash)}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -89,20 +86,51 @@ h1,h2{margin:0;font-weight:700;letter-spacing:0}
   background:var(--ink);color:var(--bg);text-decoration:none;border-radius:var(--r)}
 .skip:focus{left:var(--s2);top:var(--s2)}
 
-/* Zahlen, Codes und Daten immer Mono mit gleichbreiten Ziffern. */
-.num,.mono,input[type=date],input[type=number],
+/* Compact numeric data; native date pickers keep the label font. */
+.num,.mono,input[type=number],
 #progresscount,.hop .code,.ac .c,.tail,.sum,.fare,.legdays{
   font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+input[type=date]{font-variant-numeric:tabular-nums;min-width:0}
 
 :where(a,button,input,select,textarea,summary,[tabindex]):focus-visible{
   outline:2px solid var(--ink);outline-offset:1px}
 
 /* --- Kopf ---------------------------------------------------------------- */
-.mast{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s5);
-  padding:var(--s6) 0 var(--s3);border-bottom:1px solid var(--ink);flex-wrap:wrap}
-.mark{font-size:var(--t28);letter-spacing:0}
+.mast{display:flex;align-items:center;justify-content:space-between;gap:var(--s5);
+  padding:var(--s5) 0 var(--s4);flex-wrap:wrap}
+.mark{font-size:var(--t28);letter-spacing:0;color:var(--ink);text-decoration:none;font-weight:700}
 .mark span{color:var(--signal)}
 .tagline{margin:0;font-size:var(--t16);color:var(--ink-subtle);max-width:46ch}
+.worknav{display:flex;gap:var(--s5);border-bottom:1px solid var(--rule-1);flex-wrap:wrap}
+.worknav a{display:flex;align-items:center;min-height:48px;padding:var(--s2) 0;
+  text-decoration:none;color:var(--ink-subtle);border-bottom:3px solid transparent;
+  font-size:var(--t14);font-weight:500}
+.worknav a:hover{color:var(--ink)}
+.worknav a[aria-current="page"]{border-bottom-color:var(--signal);color:var(--ink);font-weight:600}
+.workspace[hidden]{display:none}
+.tablewrap[hidden]{display:none}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.pagehead{padding:var(--s6) 0 var(--s5)}
+.pagehead h1{font-size:26px;line-height:1.25;font-weight:600}
+.pagehead h1:focus{outline:0}
+.pageintro{color:var(--ink-subtle);margin:var(--s2) 0 0;font-size:var(--t14);max-width:65ch}
+.sectiontitle{font-size:var(--t16);font-weight:600;margin:0 0 var(--s3)}
+.formsection h2{font-size:var(--t16);font-weight:600;margin:0 0 var(--s3)}
+#hf{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s5) var(--s6)}
+#hf .actions{grid-column:1/-1}
+#hf .seg{margin:0 0 var(--s4)}
+#hf .stayrow{margin-top:var(--s3)}
+#scans{margin-top:var(--s6);padding-top:var(--s5);border-top:1px solid var(--rule-1)}
+@media(max-width:840px){#hf{grid-template-columns:1fr}}
+.savedroute{margin:0;display:grid;gap:var(--s1);color:var(--ink-muted)}
+.savedroute b{color:var(--ink);font-weight:600}
+.savedroute span{font-size:var(--t12)}
+.textlink,.save-search{color:var(--ink-muted);text-underline-offset:3px;font-size:var(--t14)}
+.save-search{margin-left:auto;min-height:44px;display:flex;align-items:center}
+.scanheading{margin-top:var(--s5)}
+.airlineoptions{margin-top:var(--s5)}
+.searchdetails{margin-top:var(--s2)}
 /* Umschalter zwischen den beiden Bereichen. Dieselbe Form wie die Reiseart,
    damit der Kopf nicht ein zweites Bedienmuster einfuehrt. Der Trenner ist die
    Linie, kein Schriftzeichen. */
@@ -115,7 +143,7 @@ h1,h2{margin:0;font-weight:700;letter-spacing:0}
 .domainnav a[aria-current="page"]{background:var(--ink);color:var(--bg);font-weight:500}
 
 /* --- Reiseart: Segmented Control aus Radios ------------------------------ */
-.seg{margin:var(--s5) 0 var(--s4);padding:0;border:0}
+.seg{margin:0 0 var(--s5);padding:0;border:0}
 .seg legend{padding:0;margin-bottom:var(--s2)}
 .segset{display:inline-flex;border:1px solid var(--rule-3);border-radius:var(--r)}
 .segopt{position:relative;display:block}
@@ -130,8 +158,9 @@ h1,h2{margin:0;font-weight:700;letter-spacing:0}
 .segopt:hover input:not(:checked) + span{background:var(--wash);color:var(--ink)}
 
 /* --- Formular ------------------------------------------------------------ */
-.panel{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
-  gap:var(--s5) var(--s7);padding-bottom:var(--s5)}
+.panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:var(--s5) var(--s6);padding-bottom:var(--s4)}
+.panel>div:first-child{grid-column:1/-1}
 @media(max-width:840px){.panel{grid-template-columns:1fr}}
 .lab{display:block;font-size:var(--t14);font-weight:500;letter-spacing:0;
   color:var(--ink-muted);margin-bottom:var(--s1)}
@@ -185,21 +214,24 @@ h1,h2{margin:0;font-weight:700;letter-spacing:0}
 }
 
 /* --- Route --------------------------------------------------------------- */
-.route{display:flex;align-items:flex-start;gap:var(--s2);flex-wrap:wrap}
-.hop{position:relative;display:flex;align-items:center;gap:var(--s1);cursor:grab}
-.hop>input{width:190px;padding:var(--s2) var(--s3) var(--s2) 20px;background:var(--paper);
+.route{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:var(--s3)}
+.hop{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;
+  gap:var(--s1);cursor:grab;min-width:0}
+.hoplabel{grid-column:1/-1;color:var(--ink-muted);font-size:var(--t14);font-weight:500}
+.hop>input{width:100%;padding:var(--s2) 58px var(--s2) 24px;background:var(--paper);
   color:var(--ink);border:1px solid var(--rule-3);border-radius:var(--r)}
 .hop>input::placeholder{color:var(--ink-subtle)}
-.hop .code{position:absolute;right:52px;top:11px;font-size:var(--t12);font-weight:500;
+.hop .code{position:absolute;right:60px;bottom:13px;font-size:var(--t12);font-weight:500;
   color:var(--ink-muted);pointer-events:none;background:var(--paper);padding-left:var(--s1)}
 .hop.nokill .code{right:var(--s3)}
-.hop .grip{position:absolute;left:var(--s1);top:50%;transform:translateY(-50%);
+.hop .grip{position:absolute;left:var(--s2);bottom:14px;
   width:10px;height:16px;cursor:grab;
   background:radial-gradient(circle,var(--rule-2) 1px,transparent 1px) 0 0/5px 5px}
+.hop.nokill .grip{display:none}
 /* Der Vorschlag hinter dem Getippten muss lesbar sein, sonst tippt niemand Tab.
    --ink-subtle liegt bei 5.60:1 auf --bg. */
-.hop .ghost{position:absolute;left:20px;top:10px;color:var(--ink-subtle);pointer-events:none;
-  white-space:pre;overflow:hidden;max-width:150px}
+.hop .ghost{position:absolute;left:24px;bottom:12px;color:var(--ink-subtle);pointer-events:none;
+  white-space:pre;overflow:hidden;max-width:calc(100% - 100px)}
 .hop .ghost i{font-style:normal;color:transparent}
 .hop.drag{opacity:.4;cursor:grabbing}
 .hop.over>input{border-color:var(--ink);border-left-width:3px}
@@ -209,11 +241,11 @@ h1,h2{margin:0;font-weight:700;letter-spacing:0}
   font-size:var(--t16);cursor:pointer;padding:0}
 .hop .kill:hover{border-color:var(--err);color:var(--err)}
 /* Trenner zwischen Routenfeldern: reine Dekoration, kein Pfeil, kein Textknoten. */
-.sep{align-self:center;color:var(--rule-2);user-select:none}
+.sep{display:none}
 .sep::before{content:"-"}
 /* rule-2 liegt bei 2.14:1 und traegt als einzige Kante eines Bedienelements zu
    wenig. rule-3 sind 3.39:1 und damit ueber der Schwelle fuer Bedienelemente. */
-.addhop{align-self:center;height:44px;padding:0 var(--s3);background:none;
+.addhop{align-self:end;justify-self:start;height:44px;padding:0 var(--s3);background:none;
   border:1px dashed var(--rule-3);border-radius:var(--r);font-size:var(--t14);
   color:var(--ink-subtle);cursor:pointer}
 .addhop:hover{border-color:var(--ink);color:var(--ink)}
@@ -243,7 +275,7 @@ input[type=date],input[type=number],input[type=text],select{width:100%;
   border:1px solid var(--rule-3);border-radius:var(--r)}
 input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
   border-color:var(--rule-1);cursor:not-allowed}
-.stayrow{margin-top:var(--s4)}
+.stayrow{margin-top:0}
 /* Ohne Aufenthalt gibt es keine Felder. Eine gedaempfte Ueberschrift ueber einer
    leeren Flaeche war nur schlechter lesbarer Platzhalter (2.28:1). */
 .stayrow.off{display:none}
@@ -288,22 +320,23 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
 .hint{font-size:var(--t12);color:var(--ink-subtle);margin:var(--s3) 0 0;max-width:90ch}
 
 /* --- Aktionen ------------------------------------------------------------ */
-.actions{display:flex;align-items:center;gap:var(--s5);padding:var(--s5) 0;
-  border-top:1px solid var(--rule-2);flex-wrap:wrap}
+.actions{display:flex;align-items:center;gap:var(--s3) var(--s5);padding:var(--s5) 0 var(--s3);
+  border-top:1px solid var(--rule-1);flex-wrap:wrap}
+.actions .sizing{flex-basis:100%}
 .go{min-height:44px;padding:0 var(--s6);background:var(--signal);color:var(--signal-fg);
   border:0;border-radius:var(--r);font-size:var(--t16);font-weight:700;cursor:pointer}
 .go:hover{background:oklch(42% 0.19 30)}
 .go:disabled{background:var(--rule-2);color:var(--ink-muted);cursor:not-allowed}
-.sizing{margin:0;font-size:var(--t14)}
-.routeglance{margin:0 0 var(--s5);padding:var(--s3);border:1px solid var(--rule-1);
-  background:var(--paper);border-radius:var(--r);font-size:var(--t14);color:var(--ink-muted)}
+.sizing{margin:0;font-size:var(--t14);min-height:1.45em}
+.routeglance{margin:0 0 var(--s5);padding:0;font-size:var(--t12);color:var(--ink-muted)}
+.routeglance b{display:none}
 .routeglance b{color:var(--ink);font-weight:500}
 .routeglance i{font-style:normal;color:var(--ink-subtle)}
 
 /* Gespeicherte Scans: eigener, nachgeordneter Bereich unter den Ergebnissen.
    Profil und Scanner sitzen in seiner Kopfzeile, weil beide nur hier etwas
    bewirken. */
-.deals{margin-top:var(--s7);padding-top:var(--s4);border-top:1px solid var(--rule-2)}
+.deals{margin-top:0;padding-top:0}
 .deals h2{font-size:var(--t21);letter-spacing:0;
   color:var(--ink);font-weight:500}
 .dealshead{display:grid;gap:var(--s2);padding-bottom:var(--s3);
@@ -316,7 +349,7 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
 #dealstable td.c-price{font-size:var(--t21)}
 .saveprofile{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)}
 .saveprofile .lab{margin:0}
-.saveprofile input{width:200px}
+.saveprofile input{width:min(100%,320px)}
 .saveprofile button,.scanbar button{min-height:44px;padding:0 var(--s3);background:var(--paper);
   border:1px solid var(--rule-3);border-radius:var(--r);font-size:var(--t14);
   color:var(--ink-muted);cursor:pointer}
@@ -327,7 +360,7 @@ input:disabled,select:disabled{background:var(--wash);color:var(--ink-subtle);
 /* Fehltarif-Jagd: derselbe nachgeordnete Bereichsschnitt. Was sie gefunden
    hat, steht ueber dem, was sie beobachtet - die Frage "was ist da" kommt vor
    der Frage "was wird beobachtet". */
-.hunt{margin-top:var(--s7);padding-top:var(--s4);border-top:1px solid var(--rule-2)}
+.hunt{margin-top:0;padding-top:0}
 .hunt h2{font-size:var(--t21);letter-spacing:0;
   color:var(--ink);font-weight:500}
 .hunthead{display:grid;gap:var(--s2);padding-bottom:var(--s3);
@@ -477,6 +510,7 @@ svg.curve .cfind{stroke:var(--signal);stroke-width:2;
 /* --- Fortschritt, Leitstand ---------------------------------------------- */
 .log{display:none;padding:var(--s4) 0 var(--s5);border-top:1px solid var(--rule-2)}
 .log.on{display:block}
+.log,.out{overflow-anchor:none}
 .progressmeter{display:grid;gap:var(--s2);margin-bottom:var(--s3)}
 .progressbar{height:8px;background:var(--wash);border:1px solid var(--rule-2);
   border-radius:var(--r);overflow:hidden}
@@ -487,7 +521,7 @@ svg.curve .cfind{stroke:var(--signal);stroke-width:2;
    das einzige, was diese Bewegung erklaert. */
 .progressbar.pending i{width:34%;background:var(--ink-subtle)}
 .progressmeta{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
-  font-size:var(--t12);color:var(--ink-subtle)}
+  min-height:44px;font-size:var(--t12);color:var(--ink-subtle)}
 #progresslabel{font-weight:500;color:var(--ink);font-size:var(--t14)}
 #progresscount{margin-left:auto}
 .kill-search{min-height:44px;min-width:44px;padding:0 var(--s4);background:var(--paper);
@@ -501,7 +535,7 @@ svg.curve .cfind{stroke:var(--signal);stroke-width:2;
 .step.now{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 .step.was{color:var(--ink);border-color:var(--rule-2)}
 .step.was::before{content:"ok ";color:var(--ok)}
-.note{font-size:var(--t14);color:var(--ink-muted);min-height:1.4em}
+.note{font-size:var(--t14);color:var(--ink-muted);min-height:2.9em}
 /* Was der Lauf nebenbei gemeldet hat: ausgefallene Quellen, uebersprungene Tage,
    erschoepfte Budgets. Ohne diese Zeile wird aus einem Teilausfall stillschweigend
    ein duenneres Ergebnis. */
@@ -533,9 +567,10 @@ svg.curve .cfind{stroke:var(--signal);stroke-width:2;
 .out.on{display:block}
 .outhead{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s4);
   flex-wrap:wrap;padding-bottom:var(--s2);border-bottom:1px solid var(--ink)}
-.outhead h2{font-size:var(--t16);color:var(--ink)}
+.outhead h2{font-size:var(--t21);color:var(--ink)}
 .outhead h2:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.tools{display:flex;align-items:center;gap:var(--s2) var(--s3);flex-wrap:wrap}
+.tools{display:flex;align-items:end;gap:var(--s3) var(--s4);flex-wrap:wrap;margin-top:var(--s4)}
+.filterfield{display:grid;gap:var(--s1);min-width:130px}
 .sortlbl{font-size:var(--t12);color:var(--ink-subtle)}
 .tools select{width:auto;min-height:44px;padding:0 var(--s2);font-size:var(--t14)}
 .tools label.check{display:flex;align-items:center;min-height:44px;gap:var(--s1);
@@ -556,7 +591,7 @@ svg.curve .cfind{stroke:var(--signal);stroke-width:2;
 .key .scale{display:flex;gap:1px}
 .key .scale i{width:14px;height:8px;border-radius:var(--r);
   background:color-mix(in oklab,var(--ink) calc(var(--d) * 100%),var(--bg))}
-.outsummary{margin:var(--s3) 0 0;font-size:var(--t12);color:var(--ink-subtle)}
+.outsummary{margin:var(--s3) 0 0;font-size:var(--t14);color:var(--ink-muted)}
 .usedby{margin:var(--s3) 0;font-size:var(--t12);color:var(--ink-subtle);display:flex;
   align-items:center;gap:var(--s2);flex-wrap:wrap}
 .ruler{position:relative;height:20px;border-bottom:1px solid var(--rule-2)}
@@ -599,6 +634,25 @@ tr.opt.best .c-rank{color:var(--signal);font-weight:500}
   font-size:var(--t12);color:var(--ink-muted);margin-top:var(--s1)}
 .itinerarydates>span{white-space:nowrap}
 .itinerarydates b{display:none;font-weight:500}
+.tripfacts{display:block;margin-top:var(--s2);font-size:var(--t12);color:var(--ink-subtle);white-space:normal}
+#resulttable .rail,#ruler{display:none}
+#resulttable .itinerarydates{display:grid;gap:var(--s2);margin:0;max-width:420px}
+#resulttable .itinerarydates b{display:inline;font-weight:500}
+#resulttable .itinerarydates>span{display:flex;justify-content:space-between;gap:var(--s3);white-space:normal}
+#resulttable .c-air,#resulttable .c-nights,#resulttable .c-stops,
+#resulttable .c-status:not(.c-band){display:none}
+#resulttable .rowstatus{display:block;white-space:normal;font-size:var(--t12);font-family:var(--sans);
+  color:var(--ink-subtle);font-weight:400;margin-top:var(--s1)}
+#resulttable .c-rank{width:90px;font-family:var(--sans)}
+#resulttable .c-rail{min-width:230px}
+#resulttable .c-price{width:155px}
+#resulttable td.c-price{font-size:var(--t21)}
+#resulttable .c-band{width:100px}
+#resulttable td{padding-top:var(--s4);padding-bottom:var(--s4)}
+#resulttable tr.detrow td{padding:0}
+#resulttable td.c-grand{font-size:var(--t16)}
+#resulttable .rowtoggle::before{content:"+";margin-right:var(--s2);font-size:var(--t16)}
+#resulttable .rowtoggle[aria-expanded="true"]::before{content:"-"}
 .c-price{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
   font-size:var(--t21);font-weight:700;white-space:nowrap;width:136px}
 tr.opt.best .c-price{font-size:var(--t28)}
@@ -716,9 +770,11 @@ tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
   .itinerarydates b{display:block}
   .itinerarydates>span{white-space:normal}
   #ruler{display:none}
-  .tools{display:grid;grid-template-columns:auto minmax(0,1fr);width:100%}
+  .tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+  .filterfield{min-width:0}
   .tools select{width:100%;min-width:0}
-  .tools .check,.tools .key,.tools .linkbtn{grid-column:1/-1}
+  .tools .check{grid-column:2;grid-row:2;font-size:var(--t12);white-space:normal}
+  .tools .key,.tools .linkbtn{grid-column:1/-1}
   .route{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s2)}
   .hop{width:100%;min-width:0}
   .hop>input{flex:1;min-width:0}
@@ -740,6 +796,32 @@ tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
   .c-rail{min-width:104px}
   .c-num{width:auto}
   .ruler span{font-size:10px}
+  #resulttable .c-rank{width:60px}
+  #resulttable .c-band{display:none}
+  #resulttable .c-price{width:auto;text-align:left}
+  #resulttable td.c-price{font-size:var(--t16)}
+  #resulttable td.c-grand{font-size:var(--t14)}
+  #resulttable .c-rail{min-width:125px}
+  #resulttable .itinerarydates>span{display:block}
+  #resulttable .itinerarydates b{display:block}
+  #resulttable .itinerarydates time{display:block;color:var(--ink-subtle)}
+  .worknav{gap:0;display:grid;grid-template-columns:auto auto}
+  .worknav a{justify-content:center;padding:var(--s2) var(--s1);font-size:14px}
+  .tagline{display:none}
+  .pagehead{padding-top:var(--s5)}
+  .pagehead h1{font-size:23px}
+  .segset{display:flex;width:100%}
+  .segopt{flex:1}
+  .segopt span{padding:var(--s2);justify-content:center;white-space:normal;text-align:center;font-size:13px}
+  .watchform{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end}
+  .watchfield{display:block;min-width:0}
+  .watchform input[type=text],.watchform input[type=number]{width:100%}
+  .watchform button,.watchform .msg{grid-column:1/-1}
+  .saveprofile{align-items:stretch}
+  .saveprofile .lab{flex-basis:100%}
+  .saveprofile input{width:100%}
+  input[type=text],input[type=date],input[type=number],select,textarea{font-size:16px}
+  .hop .ghost{font-size:16px}
 }
 
 /* --- Hotels ---------------------------------------------------------------
@@ -815,10 +897,37 @@ tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
 }
 #hoteltable td.c-object{overflow-wrap:anywhere}
 #hoteltable td.c-object .facts{display:none}
+#hoteltable .hoteldate,#hoteltable .hotelsignal{display:none}
 @media(max-width:560px){#hoteltable td.c-object .facts{display:block}}
-#hoteltable .c-price small.native{display:block;margin-left:0;font-weight:400}
+#hoteltable .c-price small.native{display:block;margin-left:0;font-weight:400;white-space:normal}
 #hoteltable a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 #hoteltable a:hover{color:var(--signal)}
+.bookinglinks{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s1) var(--s3);
+  margin-top:var(--s2);font-family:var(--sans);font-size:var(--t12);max-width:100%}
+.bookingnote{color:var(--ink-subtle);flex-basis:100%}
+.bookinglink,.hotelbook{display:inline-flex;align-items:center;min-height:32px;
+  color:var(--signal);text-decoration:underline;text-underline-offset:3px;
+  font-family:var(--sans);font-size:var(--t12);white-space:normal;overflow-wrap:anywhere}
+.bookinglink:hover{color:var(--ink)}
+.bookingmissing{color:var(--ink-subtle);font-family:var(--sans);font-size:var(--t12);
+  white-space:normal;overflow-wrap:anywhere}
+#hoteltable .hotelbook{display:flex;color:var(--signal)}
+.hotelwatchlist{list-style:none;padding:0;margin:var(--s3) 0 0}
+.hotelwatchlist li{display:flex;justify-content:space-between;align-items:center;
+  gap:var(--s4);padding:var(--s3) 0;border-top:1px solid var(--rule-1)}
+.hotelwatchlist li>div{min-width:0;overflow-wrap:anywhere}
+.hotelwatchlist small{display:block;color:var(--ink-subtle);font-size:var(--t12)}
+.hotelwatchlist .watchtoggle{flex-shrink:0;min-height:44px}
+@media(max-width:560px){
+  .bookinglinks{display:grid;gap:0}
+  .bookinglink,.hotelbook{min-height:44px}
+  .hotelwatchlist li{gap:var(--s2)}
+  .progressmeta{flex-wrap:wrap;min-height:44px}
+  #hoteltable .c-rail,#hoteltable .c-status{display:none}
+  #hoteltable .c-object{max-width:none;min-width:130px}
+  #hoteltable .c-price{width:130px;min-width:120px}
+  #hoteltable .hoteldate,#hoteltable .hotelsignal{display:block;white-space:normal}
+}
 
 footer{margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid var(--rule-2);
   font-size:var(--t12);color:var(--ink-subtle)}

@@ -197,7 +197,9 @@ assert.ok(/gefunden vor \d+ Tagen/.test(findRowMarkup(old, 6)),
     assert "opacity:" not in css.split("#hunttable tr.stale{")[1].split("}")[0]
     page = INDEX.read_text(encoding="utf-8")
     # Die Seite behauptet nirgends, ein Fund sei noch buchbar.
-    assert "prüft die Jagd nicht nach" in page
+    hunt = page[page.index('<section class="hunt" id="hunt">'):
+                page.index('<section class="watch" id="watch">')]
+    assert "nicht live bestätigt" in hunt
 
 
 def test_a_dry_run_is_neither_a_failure_nor_a_success():
@@ -218,17 +220,19 @@ assert.strictEqual(deliveryNote({delivery:"sent", error:"egal"}), "");
 
 // Der Kanalstand selbst: eine Feststellung, kein Urteil.
 assert.strictEqual(channelLine({channel_configured: true}),
-  "Discord-Kanal eingerichtet. Ein Fund geht als Meldung hinaus.");
+  "Discord-Meldungen aktiv.");
 assert.strictEqual(channelLine({channel_configured: false}),
-  "Kein Discord-Kanal eingerichtet. Funde werden erkannt und aufgezeichnet,"
-  + " aber nicht gesendet.");
+  "Discord-Meldungen aus. Funde bleiben hier gespeichert.");
 assert.strictEqual(channelLine({}), channelLine({channel_configured: false}));
 
 // Und er traegt nie einen Ton, auch nicht nach dem Rendern.
 renderHunt({finds: [], summary: {events: 0, channel_configured: false}});
 assert.strictEqual($("#huntchannel").dataset.tone, "");
-assert.ok($("#huntchannel").textContent.includes("nicht gesendet"),
-  $("#huntchannel").textContent);
+assert.strictEqual($("#huntchannel").textContent,
+  "Discord-Meldungen aus. Funde bleiben hier gespeichert.");
+renderHunt({finds: [], summary: {events: 0, channel_configured: true}});
+assert.strictEqual($("#huntchannel").dataset.tone, "");
+assert.strictEqual($("#huntchannel").textContent, "Discord-Meldungen aktiv.");
 """
     )
 
@@ -238,8 +242,7 @@ assert.ok($("#huntchannel").textContent.includes("nicht gesendet"),
 def test_the_hunt_summary_counts_finds_and_names_the_last_one():
     result = run_ui_assertion(
         r"""
-assert.ok(huntSummary({summary:{events:0}}).includes("Noch kein Fehltarif"),
-  huntSummary({summary:{events:0}}));
+assert.strictEqual(huntSummary({summary:{events:0}}), "Noch kein Fehltarif gefunden.");
 
 const many = huntSummary({summary:{events:12, open:3, sent:2, dry_run:9,
   failed:1, last_find_at:"2026-09-09T12:00:00"}});
@@ -265,8 +268,8 @@ def test_an_empty_find_list_says_which_kind_of_empty_it_is():
     ueberhaupt. Ohne den Unterschied sucht jemand einen Fehler, wo keiner ist."""
     result = run_ui_assertion(
         r"""
-assert.ok(huntEmptyLine({events: 0}, true).includes("Noch nichts gefunden"));
-assert.ok(huntEmptyLine({events: 0}, false).includes("Noch nichts gefunden"));
+assert.strictEqual(huntEmptyLine({events: 0}, true), "Noch nichts gefunden.");
+assert.strictEqual(huntEmptyLine({events: 0}, false), "Noch nichts gefunden.");
 assert.ok(huntEmptyLine({events: 8}, true).includes("Keine offenen Funde"));
 // Ohne Filter waere "keine offenen" die falsche Auskunft.
 assert.strictEqual(huntEmptyLine({events: 8}, false), "Keine Funde in dieser Liste.");
@@ -592,28 +595,33 @@ def test_the_cadence_switch_tells_the_truth_about_the_sixth_route():
     schlimmer ist als gar keine: sie koennte stimmen und tut es nicht."""
     result = run_ui_assertion(
         r"""
-assert.strictEqual(cadenceLabel({cadence:"hot"}), "heiß");
+assert.strictEqual(cadenceLabel({cadence:"hot"}), "häufig");
 assert.strictEqual(cadenceLabel({cadence:"daily"}), "täglich");
 assert.strictEqual(cadenceLabel({}), "täglich");
 
 const room = hotBudgetLine({hot:2, max_hot_routes:5, hot_interval_seconds:1200});
-assert.strictEqual(room, "2 von 5 Strecken heiß, alle 20 Minuten abgefragt.");
+assert.strictEqual(room, "2 von 5 Strecken mit häufigen Prüfungen, alle 20 Minuten.");
 
 // Voll: die Grenze steht da, und was jenseits von ihr wirklich passiert.
 const full = hotBudgetLine({hot:5, max_hot_routes:5, hot_interval_seconds:1200});
 assert.ok(full.includes("5 von 5"), full);
-assert.ok(full.includes("nicht abgelehnt"), full);
-assert.ok(full.includes("langsamer"), full);
+assert.ok(full.includes("alle 20 Minuten"), full);
+assert.ok(full.includes("Budget voll"), full);
+assert.ok(full.includes("Weitere Strecken werden seltener geprüft"), full);
 
 // Darueber: keine Beschoenigung und keine erfundene Sperre.
 const over = hotBudgetLine({hot:7, max_hot_routes:5, hot_interval_seconds:1200});
-assert.ok(over.includes("7 Strecken heiß"), over);
-assert.ok(over.includes("getragen sind 5"), over);
-assert.ok(over.includes("seltener dran"), over);
+assert.ok(over.includes("7 Strecken mit häufigen Prüfungen"), over);
+assert.ok(over.includes("Budget für 5"), over);
+assert.ok(over.includes("Alle bleiben aktiv"), over);
+assert.ok(over.includes("Abstand kann über 20 Minuten liegen"), over);
+assert.strictEqual(hotBudgetLine({hot:7, max_hot_routes:6, hot_interval_seconds:1800}),
+  "7 Strecken mit häufigen Prüfungen, Budget für 6. Alle bleiben aktiv,"
+  + " der Abstand kann über 30 Minuten liegen.");
 
 // Der Schalter sagt, was er tut, nicht in welchem Zustand die Zeile ist.
 const cold = watchCadenceCell({id:4, cadence:"daily"});
-assert.ok(cold.includes("heiß schalten"), cold);
+assert.ok(cold.includes("häufiger prüfen"), cold);
 assert.ok(cold.includes('data-cadence="hot"'), cold);
 assert.ok(cold.includes('data-route="4"'), cold);
 const hot = watchCadenceCell({id:4, cadence:"hot"});
@@ -623,9 +631,10 @@ assert.ok(hot.includes('data-cadence="daily"'), hot);
 // Nach dem Schalten steht die frische Zahl da.
 assert.strictEqual(
   cadenceSwitchLabel({route:"BER-ATH", hot:true},
-    {hot:3, max_hot_routes:5}), "BER-ATH ist heiß, 3 von 5");
-assert.ok(cadenceSwitchLabel({route:"BER-ATH", hot:true},
-  {hot:6, max_hot_routes:5}).includes("abgelehnt wird keine"));
+    {hot:3, max_hot_routes:5}), "BER-ATH wird häufig geprüft, 3 von 5");
+assert.strictEqual(cadenceSwitchLabel({route:"BER-ATH", hot:true},
+  {hot:6, max_hot_routes:5}),
+  "BER-ATH wird häufig geprüft. 6 Strecken teilen das Budget für 5; alle bleiben aktiv.");
 assert.strictEqual(
   cadenceSwitchLabel({route:"BER-ATH", hot:false}, {}),
   "BER-ATH läuft wieder im Tagestakt");

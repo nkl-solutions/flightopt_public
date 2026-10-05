@@ -11,6 +11,7 @@ import re
 import subprocess
 import tempfile
 from datetime import date
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -24,8 +25,26 @@ from flightopt.hotels.sources.base import HotelBatch, HotelSource
 WEB = main.WEB_DIR
 HOTELS_HTML = WEB / "hotels.html"
 HOTELS_JS = WEB / "hotels.js"
-INDEX = WEB / "index.html"
-APP_CSS = WEB / "app.css"
+
+
+class PageStructure(HTMLParser):
+    def __init__(self, page: str) -> None:
+        super().__init__()
+        self.elements = []
+        self.stack = []
+        self.feed(page)
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        self.elements.append((tag, attributes, tuple(self.stack)))
+        if tag not in {"meta", "link", "input", "br", "hr", "img"}:
+            self.stack.append((tag, attributes.get("id")))
+
+    def handle_endtag(self, tag):
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index][0] == tag:
+                self.stack = self.stack[:index]
+                break
 
 
 class StubSource(HotelSource):
@@ -81,22 +100,53 @@ def test_the_hotel_page_is_served_and_carries_no_inline_code():
     page = HOTELS_HTML.read_text(encoding="utf-8")
 
     assert re.search(r'<link rel="stylesheet" href="/static/app\.css\?v=\d+">', page)
-    assert '<script src="/static/hotels.js"></script>' in page
+    assert '<link rel="stylesheet" href="/static/app.css?v=2026100501">' in page
+    assert '<script src="/static/hotels.js?v=2026100501"></script>' in page
     assert re.search(r"<style", page) is None
     assert re.search(r"<script(?![^>]*\ssrc=)", page) is None
     assert re.search(r"\sstyle=", page) is None
 
 
-def test_both_pages_carry_the_same_switcher_and_mark_the_current_one():
-    for page_path, current in ((INDEX, "/"), (HOTELS_HTML, "/hotels")):
-        page = page_path.read_text(encoding="utf-8")
-        assert '<nav class="domainnav" aria-label="Bereich">' in page
-        assert f'<a href="{current}" aria-current="page">' in page
-    # Der Umschalter benutzt nur vorhandene Tokens, keine neue Farbe.
-    css = APP_CSS.read_text(encoding="utf-8")
-    block = css[css.index(".domainnav"):css.index("/* --- Reiseart")]
-    assert re.search(r"#[0-9a-fA-F]{3,8}\b", block) is None
-    assert "oklch(" not in block
+def test_the_hotel_page_names_each_work_area_and_marks_hotels_current():
+    page = HOTELS_HTML.read_text(encoding="utf-8")
+    assert '<nav class="worknav" aria-label="Bereich">' in page
+    nav = re.search(r'<nav class="worknav"[^>]*>(.*?)</nav>', page, re.S).group(1)
+    assert re.findall(r'<a href="([^"]+)"', nav) == [
+        "/", "/hotels", "/#saved", "/#radar"
+    ]
+    assert '<a href="/">Flugsuche</a>' in nav
+    assert '<a href="/hotels" aria-current="page">Hotels</a>' in nav
+    assert '<a href="/#saved">Gespeicherte Suchen</a>' in nav
+    assert '<a href="/#radar">Preisradar</a>' in nav
+    assert nav.count('aria-current="page"') == 1
+
+
+def test_the_hotel_form_has_clear_sections_and_preserves_its_controls():
+    page = HOTELS_HTML.read_text(encoding="utf-8")
+    structure = PageStructure(page)
+    assert re.findall(r"<h1[^>]*>(.*?)</h1>", page) == ["Hotels"]
+    headings = re.findall(r'<h2 id="[^"]+">(.*?)</h2>', page)
+    assert headings == ["Reiseziel", "Reisedaten", "Gäste und Zimmer", "Hotelwünsche"]
+    elements = {attrs["id"]: (tag, attrs, parents)
+                for tag, attrs, parents in structure.elements if "id" in attrs}
+    for control in ("destination", "from", "to", "nights", "adults", "kids",
+                    "rooms", "minReview", "currency", "hgo"):
+        assert ("form", "hf") in elements[control][2], control
+    assert elements["agesrow"][1].get("hidden") is None
+    assert "hidden" in elements["agesrow"][1]
+    assert elements["hoteloptions"][0] == "section"
+    assert elements["sourcehint"][1]["aria-label"] == "Quellenstatus"
+    assert "Richtwerte. Endpreis beim Anbieter prüfen." in HOTELS_JS.read_text(encoding="utf-8")
+    assert "Trivago zeigt je Hotel einen Preis, der nicht der günstigste sein muss." in page
+
+
+def test_saved_hotel_searches_are_visible_before_the_first_search():
+    structure = PageStructure(HOTELS_HTML.read_text(encoding="utf-8"))
+    _, _, parents = next(item for item in structure.elements
+                         if item[1].get("id") == "scanlist")
+    assert ("section", "scans") in parents
+    assert ("section", "hout") not in parents
+    assert ("form", "hf") not in parents
 
 
 HOTEL_HARNESS = r"""
@@ -216,7 +266,7 @@ def test_the_progress_meter_names_the_day_count_and_the_current_date():
         r"""
 setProgress({phase:"day", done:3, total:12, detail:{date:"2026-11-12"}});
 
-assert.strictEqual($("#progresslabel").textContent, "Tage werden geholt");
+assert.strictEqual($("#progresslabel").textContent, "Hotelpreise werden geladen");
 // Datum in deutscher Schreibweise wie in der Tabelle, nicht als ISO-Feld.
 assert.strictEqual($("#progresscount").textContent, "3 von 12 Tagen, Do., 12. Nov.");
 assert.strictEqual($("#progressbar").attributes["aria-valuenow"], "25");
@@ -243,10 +293,11 @@ draw();
 const html = $("#hotelrows").innerHTML;
 
 assert.ok(html.includes('data-signal="error"'), html);
-assert.ok(html.includes("Preisfehler"), html);
+assert.ok(html.includes("Preis auffällig"), html);
 assert.ok(html.includes('class="c-source">trivago'), html);
 assert.ok(html.includes('href="https://example.invalid/a"'), html);
-assert.strictEqual($("#filtercount").textContent, "1 Zeilen");
+assert.strictEqual($("#filtercount").textContent, "1 Angebot");
+assert.strictEqual($("#outsummary").textContent, "Richtwerte. Endpreis beim Anbieter prüfen.");
 
 rows[0].url = "javascript:alert(1)";
 draw();
@@ -267,7 +318,7 @@ assert.strictEqual($("#hcancel").hidden, false);
 
 setRunning(false);
 assert.strictEqual($("#hcancel").hidden, true);
-assert.strictEqual($("#hgo").textContent, "Suchen");
+assert.strictEqual($("#hgo").textContent, "Hotels suchen");
 
 // Wer gerade in einem Feld tippt, behaelt seinen Cursor.
 document.activeElement = $("#destination");
@@ -299,7 +350,7 @@ assert.strictEqual(
 drawScans([scan]);
 assert.ok($("#scanlist").innerHTML.includes('data-scan="7"'), $("#scanlist").innerHTML);
 drawScans([]);
-assert.ok($("#scanlist").innerHTML.includes("Noch kein Lauf"));
+assert.ok($("#scanlist").innerHTML.includes("Noch keine Hotelsuche gespeichert."));
 """
     )
 
@@ -545,7 +596,7 @@ drawSources([
 
 const html = $("#sourcehint").innerHTML;
 assert.ok(html.includes("booking"), html);
-assert.ok(html.includes("läuft"), html);
+assert.ok(html.includes("aktiv"), html);
 assert.ok(html.includes("FLIGHTOPT_HOTELS_BOOKING=1"), html);
 assert.ok(html.includes('data-active="false"'), html);
 
@@ -564,8 +615,8 @@ def test_skipped_days_and_source_errors_reach_the_screen():
 resetRunNotes();
 assert.strictEqual($("#runnotes").textContent, "");
 assert.strictEqual(skippedNote(0), "");
-assert.ok(skippedNote(1).startsWith("1 Tag wurde"));
-assert.ok(skippedNote(3).startsWith("3 Tage wurden"));
+assert.strictEqual(skippedNote(1), "1 Tag aus dem heutigen Zwischenspeicher.");
+assert.strictEqual(skippedNote(3), "3 Tage aus dem heutigen Zwischenspeicher.");
 
 addRunNotes([skippedNote(2), "2026-01-05: booking: HTTP 403 auf der Ergebnisseite"]);
 assert.strictEqual($("#runnotes").dataset.tone, "warn");
@@ -594,10 +645,10 @@ const html = rowHtml({
 // Bei mehreren Naechten ist der Nachtpreis nicht das, was abgebucht wird.
 assert.ok(html.includes("637,20 EUR für 3 Nächte"), html);
 // 9,2 aus acht Stimmen ist etwas anderes als 9,2 aus dreitausend.
-assert.ok(html.includes("3.184 Stimmen"), html);
+assert.ok(html.includes("3.184 Bewertungen"), html);
 // Worauf das Signal steht, haengt am Feld statt nirgends.
 assert.ok(html.includes("24 Vergleichspreise"), html);
-assert.ok(html.includes("vergleichbare Häuser"), html);
+assert.ok(html.includes("ähnliche Hotels"), html);
 // Datum deutsch, nicht als ISO-Feld.
 assert.ok(html.includes("Do., 12. Nov."), html);
 
@@ -611,20 +662,20 @@ assert.ok(!one.includes("für 1 Nächte"), one);
     assert result.returncode == 0, result.stderr or result.stdout
 
 
-def test_an_empty_result_says_what_to_change_instead_of_showing_nothing():
+def test_empty_results_distinguish_loading_no_offers_and_filtered_offers():
     result = run_hotel_assertion(
         r"""
 $("#filterSignal").value = ""; $("#filterStars").value = ""; $("#filterSource").value = "";
 rows = [];
 running = false;
 draw();
-assert.ok($("#hotelrows").innerHTML.includes("keine Quelle ein Angebot"),
+assert.ok($("#hotelrows").innerHTML.includes("Keine Angebote erhalten."),
   $("#hotelrows").innerHTML);
 
 // Waehrend der Lauf noch Tage holt, ist "nichts gefunden" eine Falschaussage.
 running = true;
 draw();
-assert.ok($("#hotelrows").innerHTML.includes("werden gerade geholt"),
+assert.ok($("#hotelrows").innerHTML.includes("Hotelpreise werden geladen."),
   $("#hotelrows").innerHTML);
 running = false;
 
@@ -632,13 +683,69 @@ rows = [{source:"booking", name:"X", date:"2026-11-12", nights:1,
          price_per_night:61, currency:"EUR", stars:3}];
 $("#filterStars").value = "5";
 draw();
-assert.ok($("#hotelrows").innerHTML.includes("keine passt zu diesen Filtern"),
+assert.ok($("#hotelrows").innerHTML.includes("Keine Angebote für diese Filter."),
   $("#hotelrows").innerHTML);
 assert.strictEqual($("#resetfilters").hidden, false);
 
 resetFilters();
 assert.strictEqual($("#filterStars").value, "");
 assert.strictEqual($("#resetfilters").hidden, true);
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+@pytest.mark.parametrize("phase", ["done", "failed", "cancelled"])
+def test_an_empty_finished_scan_stops_showing_the_loading_message(phase):
+    result = run_hotel_assertion(
+        "const phase = " + json.dumps(phase) + ";\n" + r"""
+rows = [];
+setRunning(true);
+listen(7);
+es.onmessage({data: JSON.stringify({phase, done:1, total:1, detail:{rows:[]}})});
+assert.strictEqual(running, false);
+assert.ok($("#hotelrows").innerHTML.includes("Keine Angebote erhalten."));
+assert.ok(!$("#hotelrows").innerHTML.includes("werden geladen"));
+assert.strictEqual($("#resume").hidden, phase === "done");
+"""
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_arrival_modes_count_days_and_preserve_the_search_payload():
+    result = run_hotel_assertion(
+        r"""
+$("#destination").value = " Athen ";
+$("#from").value = "2026-11-10";
+$("#to").value = "2026-11-12";
+$("#nights").value = "3";
+$("#adults").value = "2";
+$("#rooms").value = "1";
+$("#currency").value = "CHF";
+$("#minReview").value = "8";
+stars = new Set([5, 4]);
+mode = "single";
+applyMode();
+assert.strictEqual($("#towrap").hidden, true);
+assert.strictEqual($("#to").disabled, true);
+assert.strictEqual($("#sizing").textContent, "1 Anreisetag");
+assert.deepStrictEqual(payload(null), {
+  destination:"Athen", arrival:"2026-11-10", window_end:"2026-11-10",
+  nights:3, adults:2, children:[], rooms:1, stars:[4,5],
+  min_review_score:8, currency:"CHF", scan_id:null,
+});
+mode = "window";
+applyMode();
+assert.strictEqual($("#towrap").hidden, false);
+assert.strictEqual($("#to").disabled, false);
+assert.strictEqual($("#sizing").textContent, "3 Anreisetage");
+assert.strictEqual(payload(7).window_end, "2026-11-12");
+assert.strictEqual(payload(7).scan_id, 7);
+$("#to").value = "2026-11-09";
+assert.strictEqual(checkWindow(), false);
+assert.strictEqual($("#windowmsg").textContent, "Enddatum liegt vor dem Startdatum.");
 """
     )
 

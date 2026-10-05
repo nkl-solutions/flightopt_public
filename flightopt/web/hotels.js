@@ -34,7 +34,7 @@ function fmtMoment(iso){
 }
 
 const MODES = [
-  {id:"single", label:"Einzeltag"},
+  {id:"single", label:"Festes Datum"},
   {id:"window", label:"Zeitraum"},
 ];
 /* Fuenf Stufen plus "keine Basis". Die Reihenfolge ist die Sortierung im
@@ -43,19 +43,19 @@ const MODES = [
    als kaputt erkannter Preis fiel damit auf "keine Basis" und sah aus wie eine
    fehlende Aussage statt wie ein Befund. */
 const SIGNALS = {
-  error:             {label:"Preisfehler",   rank:0},
+  error:             {label:"Preis auffällig", rank:0},
   encoding_suspect:  {label:"Preis unklar",  rank:1},
   cheap:             {label:"günstig",       rank:2},
   normal:            {label:"normal",        rank:3},
   expensive:         {label:"teuer",         rank:4},
-  unknown:           {label:"keine Basis",   rank:5},
+  unknown:           {label:"Kein Vergleich", rank:5},
 };
 /* Woher die Einordnung kommt. Ohne das wirkt jede Stufe gleich belastbar,
    egal ob drei oder dreihundert Vergleichspreise dahinterstehen. */
-const BASIS_LABELS = {own:"eigene Historie", peer:"vergleichbare Häuser"};
+const BASIS_LABELS = {own:"bisherige Preise dieses Hotels", peer:"ähnliche Hotels"};
 const PHASE_LABELS = {
-  planning:  "Lauf wird vorbereitet",
-  day:       "Tage werden geholt",
+  planning:  "Suche startet",
+  day:       "Hotelpreise werden geladen",
   done:      "Fertig",
   failed:    "Fehler",
   cancelled: "Abgebrochen",
@@ -68,6 +68,7 @@ let stars = new Set();
 let rows = [];
 let lastScan = null;
 let es = null;
+let hotelViewGeneration = 0;
 
 /* ---------------- Formular ---------------- */
 
@@ -141,18 +142,16 @@ function sizeUp(){
   const out = $("#sizing");
   if (!n){ out.textContent = ""; out.dataset.tone = ""; return; }
   if (n < 0){
-    out.textContent = "Das Ende liegt vor dem Anfang.";
+    out.textContent = "Enddatum liegt vor dem Startdatum.";
     out.dataset.tone = "err";
     return;
   }
   if (n > MAX_DAYS){
-    out.textContent = `${n} Tage. Je Lauf sind ${MAX_DAYS} Tage vorgesehen, `
-                    + "teile den Zeitraum auf.";
+    out.textContent = `${n} Anreisetage. Maximal ${MAX_DAYS} pro Suche.`;
     out.dataset.tone = "err";
     return;
   }
-  out.textContent = n === 1 ? "1 Tag, eine Anfrage je Quelle."
-                            : `${n} Tage, ${n} Anfragen je Quelle.`;
+  out.textContent = n === 1 ? "1 Anreisetag" : `${n} Anreisetage`;
   out.dataset.tone = n > 60 ? "warn" : "";
 }
 
@@ -209,7 +208,7 @@ let running = false;
 function setRunning(on){
   running = on;
   $("#hgo").disabled = on;
-  $("#hgo").textContent = on ? "Suche läuft" : "Suchen";
+  $("#hgo").textContent = on ? "Suche läuft" : "Hotels suchen";
   // Eigenschaft statt Attribut: der Node-Harness kennt kein removeAttribute,
   // im Browser entfernt `hidden = false` das Attribut genauso.
   $("#hcancel").hidden = !on;
@@ -229,7 +228,7 @@ function focusResults(){
   const heading = $("#outtitle");
   if (!heading || typeof heading.focus !== "function") return false;
   if (!focusIsIdle()) return false;
-  heading.focus();
+  heading.focus({preventScroll:true});
   return true;
 }
 
@@ -238,10 +237,11 @@ function focusResults(){
 async function search(scanId){
   const body = payload(scanId);
   if (!body.destination){
-    $("#destmsg").textContent = "Ohne Ziel keine Suche.";
+    $("#destmsg").textContent = "Bitte Reiseziel eingeben.";
     $("#destmsg").dataset.tone = "err";
     return;
   }
+  const generation = ++hotelViewGeneration;
   if (es){ es.close(); es = null; }
   $("#destmsg").textContent = "";
   $("#hlog").classList.add("on");
@@ -261,8 +261,10 @@ async function search(scanId){
       body: JSON.stringify(body),
     });
     data = await response.json();
+    if (generation !== hotelViewGeneration) return;
     if (!response.ok) throw new Error(detail(data.detail) || `HTTP ${response.status}`);
   } catch (err) {
+    if (generation !== hotelViewGeneration) return;
     setProgress({phase:"failed"});
     $("#note").textContent = String(err.message || err);
     $("#note").dataset.tone = "err";
@@ -282,7 +284,7 @@ function drawSources(list){
   const items = Array.isArray(list) ? list : [];
   $("#sourcehint").innerHTML = items.map(s => {
     const on = s.active === true;
-    const why = on ? "läuft" : (s.reason || "abgeschaltet");
+    const why = on ? "aktiv" : (s.reason || "abgeschaltet");
     return `<li data-active="${on}"><b>${esc(s.name)}</b> <span>${esc(why)}</span></li>`;
   }).join("");
   return items;
@@ -308,13 +310,15 @@ function skippedNote(count){
   const n = Number(count) || 0;
   if (n <= 0) return "";
   return n === 1
-    ? "1 Tag wurde übersprungen, er war heute schon geholt."
-    : `${n} Tage wurden übersprungen, sie waren heute schon geholt.`;
+    ? "1 Tag aus dem heutigen Zwischenspeicher."
+    : `${n} Tage aus dem heutigen Zwischenspeicher.`;
 }
 
 function listen(scanId){
-  es = new EventSource(`/api/hotels/scan/${scanId}/events`);
-  es.onmessage = ev => {
+  const stream = new EventSource(`/api/hotels/scan/${scanId}/events`);
+  es = stream;
+  stream.onmessage = ev => {
+    if (es !== stream) return;
     const p = JSON.parse(ev.data);
     setProgress(p);
     if (p.message){
@@ -329,15 +333,15 @@ function listen(scanId){
     // bisher unsichtbar: das Ergebnis war einfach duenner.
     addRunNotes([skippedNote(p.detail && p.detail.skipped)]
       .concat((p.detail && p.detail.errors) || []));
-    draw();
     if (es){ es.close(); es = null; }
     setRunning(false);
+    draw();
     if (p.phase === "done"){ focusResults(); }
     else { $("#resume").hidden = false; }
     loadScans();
   };
-  es.onerror = () => {
-    if (!es) return;
+  stream.onerror = () => {
+    if (es !== stream) return;
     setProgress({phase:"failed"});
     $("#note").dataset.tone = "err";
     $("#note").textContent = "Verbindung zum Server verloren";
@@ -360,7 +364,7 @@ async function cancelScan(){
   setRunning(false);
   setProgress({phase:"cancelled"});
   $("#note").dataset.tone = "";
-  $("#note").textContent = "Durchlauf abgebrochen";
+  $("#note").textContent = "Suche abgebrochen";
   $("#resume").hidden = lastScan === null;
   if (lastScan === null) return;
   try {
@@ -368,7 +372,7 @@ async function cancelScan(){
     if (!r.ok) throw new Error(String(r.status));
   } catch {
     $("#note").dataset.tone = "warn";
-    $("#note").textContent = "Lauf lokal gestoppt, der Server hat den Abbruch nicht bestätigt.";
+    $("#note").textContent = "Abbruch vom Server nicht bestätigt.";
   }
   loadScans();
 }
@@ -423,7 +427,7 @@ function ratingCell(r){
   if (r.review_rating == null) return "-";
   const n = Number(r.review_count);
   const count = Number.isFinite(n) && n > 0
-    ? `<small class="sub">${n.toLocaleString("de-DE")} Stimmen</small>` : "";
+    ? `<small class="sub">${n.toLocaleString("de-DE")} ${n === 1 ? "Bewertung" : "Bewertungen"}</small>` : "";
   return `${grade(r.review_rating)}${count}`;
 }
 /* Worauf das Signal steht. Der Server liefert `basis` und `n`, die Oberflaeche
@@ -443,12 +447,12 @@ function signalTitle(r){
 }
 function rowHtml(r){
   const signal = SIGNALS[signalKey(r)];
-  /* Nur https, und nur nach esc. Eine Quelle, die eine javascript:-Adresse
-     liefert, bekommt hier keinen Link, sondern nur ihren Namen. */
-  const safe = typeof r.url === "string" && r.url.startsWith("https://");
-  const name = safe
-    ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.name)}</a>`
-    : esc(r.name);
+  const url = safeHotelUrl(r.url);
+  const name = esc(r.name);
+  const book = url ? `<a class="hotelbook" href="${esc(url)}" target="_blank" rel="noopener noreferrer"`
+    + ` aria-label="${esc(r.name)}: ${r.indicative === false ? "buchen" : "Angebot öffnen"}">`
+    + `${r.indicative === false ? "Buchen" : "Angebot öffnen"}</a>`
+    : `<small class="bookingmissing">Buchungslink fehlt</small>`;
   const native = r.native
     ? `<small class="native">umgerechnet aus ${money(r.native.amount)} ${esc(r.native.currency)}</small>`
     : "";
@@ -462,18 +466,30 @@ function rowHtml(r){
   /* Auf schmalen Geraeten fallen Sterne, Bewertung und Quelle als Spalten weg.
      Die Angaben bleiben, sie ruecken unter den Namen. */
   const facts = [r.stars == null ? "" : `${r.stars} Sterne`,
-                 r.review_rating == null ? "" : `${grade(r.review_rating)} Bewertung`,
+                 r.review_rating == null ? "" : `Bewertung ${grade(r.review_rating)}`,
                  r.source].filter(Boolean).join(" · ");
   return `<tr>
       <td class="c-object">${name}${r.city ? ` <small>${esc(r.city)}</small>` : ""}<small
-        class="facts">${esc(facts)}</small></td>
+        class="facts">${esc(facts)}</small><small class="hoteldate">${esc(fmtDay(r.date))}`
+        + `${nights > 1 ? ` · ${nights} Nächte` : ""}</small>${book}</td>
       <td class="c-num c-stars">${r.stars == null ? "-" : r.stars}</td>
       <td class="c-rail">${esc(fmtDay(r.date))}${nights > 1 ? ` (${nights} Nächte)` : ""}</td>
-      <td class="c-price">${money(r.price_per_night)} <small>${esc(r.currency)}</small>${native}${total}</td>
+      <td class="c-price">${money(r.price_per_night)} <small>${esc(r.currency)}</small>${native}${total}
+        <small class="sub">${r.indicative === false ? "Anbieterpreis" : "Richtwert"}</small>
+        <small class="hotelsignal"${why}>${signal.label}</small></td>
       <td class="c-num c-rating">${ratingCell(r)}</td>
       <td class="c-status" data-signal="${esc(signalKey(r))}"${why}>${signal.label}</td>
       <td class="c-source">${esc(r.source)}</td>
     </tr>`;
+}
+function safeHotelUrl(value){
+  if (typeof value !== "string" || /[\u0000-\u001f\u007f\\]/.test(value)) return "";
+  const link = value.trim();
+  if (!/^https:\/\//i.test(link)) return "";
+  try {
+    const url = new URL(link);
+    return url.hostname && !url.username && !url.password ? link : "";
+  } catch { return ""; }
 }
 
 function filtersActive(){
@@ -497,26 +513,23 @@ function draw(){
   $("#hout").classList.add("on");
   $("#resetfilters").hidden = !filtersActive();
   $("#filtercount").textContent = list.length === rows.length
-    ? `${rows.length} Zeilen` : `${list.length} von ${rows.length}`;
+    ? `${rows.length} ${rows.length === 1 ? "Angebot" : "Angebote"}` : `${list.length} von ${rows.length} Angeboten`;
   announce(rows.length
-    ? "Preise sind Richtwerte der Quelle. Je Haus nennt sie genau einen Preis."
+    ? (rows.every(r => r.indicative !== false)
+      ? "Richtwerte. Endpreis beim Anbieter prüfen."
+      : "Anbieterpreise und Richtwerte sind getrennt markiert. Endpreis beim Anbieter prüfen.")
     : "");
 
   if (!list.length){
     /* Ein leerer Tabellenkopf ueber nichts sieht aus wie ein Fehler. Beide
        Faelle sagen jetzt, was los ist und was als naechstes hilft. */
     if (rows.length){
-      $("#hotelrows").innerHTML = `<tr class="empty"><td colspan="7">Der Lauf hat `
-        + `${rows.length} Zeilen, aber keine passt zu diesen Filtern.</td></tr>`;
+      $("#hotelrows").innerHTML = `<tr class="empty"><td colspan="7">Keine Angebote für diese Filter.</td></tr>`;
     } else if (running){
       // Waehrend der Lauf noch Tage holt, ist "nichts gefunden" eine Falschaussage.
-      $("#hotelrows").innerHTML = `<tr class="empty"><td colspan="7">Noch keine `
-        + `Angebote. Die ersten Tage werden gerade geholt.</td></tr>`;
+      $("#hotelrows").innerHTML = `<tr class="empty"><td colspan="7">Hotelpreise werden geladen.</td></tr>`;
     } else {
-      $("#hotelrows").innerHTML = `<tr class="empty"><td colspan="7">Für dieses Ziel `
-        + `und dieses Fenster hat keine Quelle ein Angebot geliefert. Ein anderes `
-        + `Datum, weniger Sterne oder eine niedrigere Mindestbewertung bringen `
-        + `meist Treffer.</td></tr>`;
+      $("#hotelrows").innerHTML = `<tr class="empty"><td colspan="7">Keine Angebote erhalten.</td></tr>`;
     }
     return;
   }
@@ -557,7 +570,7 @@ function drawScans(list){
           <b>${esc(scanTitle(scan))}</b>
           <small>${esc(scanSummary(scan))}</small>
         </button></li>`).join("")
-    : `<li class="hint">Noch kein Lauf gespeichert.</li>`;
+    : `<li class="hint">Noch keine Hotelsuche gespeichert.</li>`;
 }
 
 async function loadScans(){
@@ -572,10 +585,13 @@ async function loadScans(){
 }
 
 async function openScan(scanId){
+  if (running) return;
+  const generation = ++hotelViewGeneration;
   try {
     const response = await fetch(`/api/hotels/scan/${scanId}/rows`);
     const data = await response.json();
     if (!response.ok) throw new Error(detail(data.detail) || `HTTP ${response.status}`);
+    if (running || generation !== hotelViewGeneration) return;
     lastScan = data.scan_id;
     rows = data.rows || [];
     $("#hlog").classList.add("on");
@@ -583,15 +599,157 @@ async function openScan(scanId){
                  done: data.days_done, total: data.days_total});
     $("#note").dataset.tone = "";
     $("#note").textContent = rows.length
-      ? `${scanTitle(data)}: ${rows.length} Angebote aus einem früheren Lauf`
-      : `${scanTitle(data)}: für diesen Lauf sind keine Zeilen mehr gespeichert`;
+      ? `${scanTitle(data)}: ${rows.length} gespeicherte ${rows.length === 1 ? "Angebot" : "Angebote"}`
+      : `${scanTitle(data)}: keine Angebote gespeichert`;
     $("#resume").hidden = data.status === "done";
     draw();
     focusResults();
   } catch (err) {
+    if (running || generation !== hotelViewGeneration) return;
     $("#note").dataset.tone = "err";
     $("#note").textContent = String(err.message || err);
   }
+}
+
+/* ---------------- Daily hotel monitoring ---------------- */
+
+let hotelWatches = [];
+let hotelWatchBusy = false;
+let hotelWatchLoad = 0;
+
+function hotelWatchMessage(text, tone=""){
+  $("#hwatchstatus").textContent = text;
+  $("#hwatchstatus").dataset.tone = tone;
+}
+function hotelWatchControls(){
+  $("#hwatchsave").disabled = hotelWatchBusy;
+  $("#hwatchreload").disabled = hotelWatchBusy;
+  $("#hwatchrun").disabled = hotelWatchBusy || !hotelWatches.some(w => w.enabled && w.due);
+  document.querySelectorAll("[data-hwatch]").forEach(b => { b.disabled = hotelWatchBusy; });
+}
+function hotelWatchPayload(){
+  const p = payload(null);
+  const low = Number($("#hleadmin").value), high = Number($("#hleadmax").value);
+  if (!p.destination) throw new Error("Bitte ein Reiseziel eingeben.");
+  if (!$("#hleadmin").value || !$("#hleadmax").value
+      || !Number.isInteger(low) || !Number.isInteger(high) || low < 0 || high > 365 || high < low)
+    throw new Error("Vorlauf: ganze Tage von 0 bis 365, Ende nicht vor dem Anfang.");
+  if (high - low + 1 > 31) throw new Error("Maximal 31 Anreisetage je Überwachung.");
+  const {arrival, window_end, scan_id, ...preferences} = p;
+  return {...preferences, country:"DE", lead_min_days:low, lead_max_days:high};
+}
+function updateHotelWatchSelection(){
+  const p = payload(null);
+  $("#hwatchselection").textContent = [p.destination || "Reiseziel fehlt",
+    `${p.nights} Nächte`, `${p.adults + p.children.length} Gäste`, `${p.rooms} Zimmer`].join(" · ");
+}
+function drawHotelWatches(data){
+  hotelWatches = Array.isArray(data.watches) ? data.watches : [];
+  const summary = data.summary || {};
+  $("#hwatchsummary").textContent = `${hotelWatches.length} gespeichert, ${Number(summary.due || 0)} fällig`;
+  $("#hwatchlist").innerHTML = hotelWatches.length ? `<ul class="hotelwatchlist">`
+    + hotelWatches.map(w => {
+      const state = !w.enabled ? "Pausiert" : w.due ? "Heute fällig" : "Heute geprüft";
+      const filters = [w.stars && w.stars.length ? `${w.stars.join(", ")} Sterne` : "",
+        w.min_review_score ? `Bewertung ab ${grade(w.min_review_score)}` : ""].filter(Boolean).join(" · ");
+      return `<li><div><b>${esc(w.destination)}</b><small>${Number(w.nights)} Nächte · `
+        + `${Number(w.adults) + (w.children || []).length} Gäste · ${Number(w.rooms)} Zimmer · `
+        + `${Number(w.lead_min_days)} bis ${Number(w.lead_max_days)} Tage Vorlauf</small>`
+        + `${filters ? `<small>${esc(filters)}</small>` : ""}<small>${state}`
+        + `${w.last_run_at ? " · " + esc(fmtMoment(w.last_run_at)) : ""}</small></div>`
+        + `<button class="watchtoggle" type="button" data-hwatch="${Number(w.id)}"`
+        + ` aria-pressed="${Boolean(w.enabled)}" aria-label="${esc(w.destination)}: Überwachung ${w.enabled ? "pausieren" : "aktivieren"}">`
+        + `${w.enabled ? "Pausieren" : "Aktivieren"}</button></li>`;
+    }).join("") + "</ul>" : `<p class="hint">Noch keine Hotelüberwachung gespeichert.</p>`;
+  hotelWatchControls();
+}
+async function hotelWatchRequest(url, options){
+  const response = await fetch(url, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(detail(data.detail) || `HTTP ${response.status}`);
+  return data;
+}
+async function loadHotelWatches(){
+  const version = ++hotelWatchLoad;
+  $("#hwatchlist").setAttribute("aria-busy", "true");
+  try {
+    const data = await hotelWatchRequest("/api/hotels/watchlist");
+    if (version !== hotelWatchLoad) return;
+    drawHotelWatches(data);
+    try {
+      const health = await hotelWatchRequest("/api/health/detail");
+      if (version !== hotelWatchLoad) return;
+      const sources = (health.sources && health.sources.hotel) || [];
+      $("#hwatchsources").innerHTML = sources.map(s => `<li data-active="${Boolean(s.active)}">`
+        + `<b>${esc(s.name)}</b> ${s.active ? "aktiv" : esc(s.reason || "nicht verfügbar")}</li>`).join("");
+      const notes = [];
+      if (!health.scheduler || !health.scheduler.running) notes.push("Automatische Suche nicht aktiv.");
+      if (!sources.some(s => s.active)) notes.push("Keine Hotelquelle aktiv.");
+      $("#hwatchnote").textContent = notes.join(" ");
+      $("#hwatchnote").dataset.tone = notes.length ? "warn" : "";
+    } catch {
+      if (version !== hotelWatchLoad) return;
+      $("#hwatchnote").textContent = "Status der automatischen Suche nicht verfügbar.";
+      $("#hwatchnote").dataset.tone = "warn";
+    }
+  } catch (err){
+    if (version === hotelWatchLoad) hotelWatchMessage(String(err.message || err), "err");
+  } finally {
+    if (version === hotelWatchLoad) $("#hwatchlist").setAttribute("aria-busy", "false");
+  }
+}
+async function saveHotelWatch(){
+  if (hotelWatchBusy) return;
+  let p;
+  try { p = hotelWatchPayload(); } catch (err){ hotelWatchMessage(err.message, "err"); return; }
+  hotelWatchBusy = true; hotelWatchControls();
+  hotelWatchMessage("Überwachung wird gespeichert.");
+  try {
+    await hotelWatchRequest("/api/hotels/watchlist", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(p)});
+    hotelWatchMessage("Hotelüberwachung gespeichert.", "ok");
+    await loadHotelWatches();
+  } catch (err){ hotelWatchMessage(String(err.message || err), "err"); }
+  finally { hotelWatchBusy = false; hotelWatchControls(); }
+}
+async function toggleHotelWatch(id){
+  if (hotelWatchBusy) return;
+  const watch = hotelWatches.find(w => Number(w.id) === id);
+  if (!watch) return;
+  const focused = document.activeElement;
+  const restoreFocus = focused && focused.dataset && Number(focused.dataset.hwatch) === id;
+  hotelWatchBusy = true; hotelWatchControls();
+  try {
+    const updated = await hotelWatchRequest(`/api/hotels/watchlist/${id}`, {method:"PATCH",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled:!watch.enabled})});
+    const watches = hotelWatches.map(w => Number(w.id) === id ? {...w, ...updated} : w);
+    drawHotelWatches({watches, summary:{due:watches.filter(w => w.enabled && w.due).length}});
+    hotelWatchMessage(watch.enabled ? "Überwachung pausiert." : "Überwachung aktiviert.", "ok");
+    await loadHotelWatches();
+  } catch (err){ hotelWatchMessage(String(err.message || err), "err"); }
+  finally {
+    hotelWatchBusy = false; hotelWatchControls();
+    const here = document.activeElement;
+    if (restoreFocus && (!here || here === document.body || here === focused)){
+      const button = document.querySelector(`[data-hwatch="${id}"]`);
+      if (button) button.focus({preventScroll:true});
+    }
+  }
+}
+async function runHotelWatches(){
+  if (hotelWatchBusy) return;
+  hotelWatchBusy = true; hotelWatchControls();
+  hotelWatchMessage("Fällige Hotelsuchen werden geprüft.");
+  try {
+    const data = await hotelWatchRequest("/api/hotels/watchlist/run-once", {method:"POST"});
+    const errors = Array.isArray(data.errors) ? data.errors : [];
+    hotelWatchMessage(`${Number(data.watches || 0)} Suchen geprüft, ${Number(data.observations || 0)} Preise gespeichert.`
+      + (data.due_left ? ` ${Number(data.due_left)} noch fällig.` : "")
+      + (errors.length ? " " + errors.slice(0, 3).map(String).join("; ") : ""), errors.length ? "warn" : "ok");
+    await loadHotelWatches();
+    await loadScans();
+  } catch (err){ hotelWatchMessage(String(err.message || err), "err"); }
+  finally { hotelWatchBusy = false; hotelWatchControls(); }
 }
 
 /* ---------------- Start ---------------- */
@@ -613,7 +771,7 @@ function checkWindow(){
   const from = $("#from").value, to = $("#to").value;
   if (mode === "window" && from && to && to < from){
     msg.dataset.tone = "err";
-    msg.textContent = "Das Ende des Fensters liegt vor dem Anfang.";
+    msg.textContent = "Enddatum liegt vor dem Startdatum.";
     $("#to").setAttribute("aria-invalid", "true");
     return false;
   }
@@ -633,6 +791,7 @@ function boot(){
   $("#to").value = today(66);
   drawAges();
   sizeUp();
+  updateHotelWatchSelection();
 
   $("#kids").addEventListener("input", drawAges);
   ["#from", "#to", "#nights"].forEach(id =>
@@ -647,6 +806,16 @@ function boot(){
     const button = e.target.closest("[data-scan]");
     if (button) openScan(Number(button.dataset.scan));
   });
+  $("#hwatchform").addEventListener("submit", e => { e.preventDefault(); saveHotelWatch(); });
+  $("#hwatchrun").addEventListener("click", runHotelWatches);
+  $("#hwatchreload").addEventListener("click", loadHotelWatches);
+  $("#hwatchlist").addEventListener("click", e => {
+    const button = e.target.closest("[data-hwatch]");
+    if (button) toggleHotelWatch(Number(button.dataset.hwatch));
+  });
+  $("#hf").addEventListener("input", updateHotelWatchSelection);
+  $("#hf").addEventListener("change", updateHotelWatchSelection);
+  loadHotelWatches();
   loadScans();
 }
 
