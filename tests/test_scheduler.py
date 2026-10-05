@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -407,3 +408,172 @@ async def test_the_hotel_pass_frees_its_sources_but_keeps_the_browser(
         assert shared_pool("booking", launcher) is pool
     finally:
         reset_shared_pools()
+
+
+@pytest.mark.asyncio
+async def test_hotel_collection_does_not_overlap_manual_and_scheduled_runs(tmp_path, monkeypatch):
+    scheduler = DailyScanScheduler(Runner(str(tmp_path / "overlap.db")))
+    started = asyncio.Event()
+    release = asyncio.Event()
+    calls = []
+
+    async def collect(conn, *, now=None):
+        calls.append(1)
+        started.set()
+        await release.wait()
+        return hotel_report()
+
+    monkeypatch.setattr(scheduler_module, "run_hotel_watches", collect)
+    first = asyncio.create_task(scheduler.hotels_once())
+    await started.wait()
+    second = asyncio.create_task(scheduler.hotels_once())
+    await asyncio.sleep(0)
+    assert len(calls) == 1
+    release.set()
+    await asyncio.gather(first, second)
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_watchlist_and_hunt_share_the_flight_collection_lock(tmp_path, monkeypatch):
+    scheduler = DailyScanScheduler(Runner(str(tmp_path / "flightoverlap.db")))
+    started = asyncio.Event()
+    release = asyncio.Event()
+    calls = []
+
+    async def collect(conn, *, now=None):
+        calls.append("watch")
+        started.set()
+        await release.wait()
+        return {}
+
+    async def hunt(conn, *, now=None):
+        calls.append("hunt")
+        return {}
+
+    monkeypatch.setattr(scheduler_module, "run_watchlist", collect)
+    monkeypatch.setattr(scheduler_module, "run_hunt", hunt)
+    first = asyncio.create_task(scheduler.collect_once())
+    await started.wait()
+    second = asyncio.create_task(scheduler.hunt_once())
+    await asyncio.sleep(0)
+    assert calls == ["watch"]
+    release.set()
+    await asyncio.gather(first, second)
+    assert calls == ["watch", "hunt"]
+
+
+@pytest.mark.asyncio
+async def test_hotel_lane_starts_while_flight_collection_is_waiting(tmp_path):
+    scheduler = DailyScanScheduler(Runner(str(tmp_path / "lanes.db")))
+    hotel_started = asyncio.Event()
+
+    async def slow_flights():
+        await asyncio.wait_for(hotel_started.wait(), timeout=1)
+        return {"observations": 2}
+
+    async def hotels():
+        hotel_started.set()
+        return hotel_report()
+
+    async def hunt():
+        return {}
+
+    scheduler.collect_once = slow_flights
+    scheduler.hotels_once = hotels
+    scheduler.hunt_once = hunt
+    report = await scheduler.tick()
+    assert report["watchlist"] == {"observations": 2}
+    assert report["hotels"]["observations"] == 14
+
+
+@pytest.mark.asyncio
+async def test_cancelled_collection_releases_lock_and_closes_connection(tmp_path, monkeypatch):
+    scheduler = DailyScanScheduler(Runner(str(tmp_path / "cancel.db")))
+    started = asyncio.Event()
+    connections = []
+
+    async def collect(conn, *, now=None):
+        connections.append(conn)
+        started.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(scheduler_module, "run_hotel_watches", collect)
+    task = asyncio.create_task(scheduler.hotels_once())
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        connections[0].execute("SELECT 1")
+
+    async def next_collect(conn, *, now=None):
+        return hotel_report(watches=0)
+
+    monkeypatch.setattr(scheduler_module, "run_hotel_watches", next_collect)
+    assert (await asyncio.wait_for(scheduler.hotels_once(), timeout=1))["watches"] == 0
+
+
+@pytest.mark.asyncio
+async def test_stopping_scheduler_cancels_both_background_lanes(tmp_path):
+    scheduler = DailyScanScheduler(Runner(str(tmp_path / "stoplanes.db")))
+    flights_started, hotels_started = asyncio.Event(), asyncio.Event()
+    closed = []
+
+    async def collect():
+        flights_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            closed.append("flights")
+
+    async def hotels():
+        hotels_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            closed.append("hotels")
+
+    scheduler.collect_once = collect
+    scheduler.hotels_once = hotels
+    scheduler.start()
+    await asyncio.wait_for(asyncio.gather(flights_started.wait(), hotels_started.wait()), timeout=1)
+    await scheduler.stop()
+    assert sorted(closed) == ["flights", "hotels"]
+    assert scheduler._task is None
+
+
+@pytest.mark.asyncio
+async def test_waiting_hotel_run_rechecks_due_watches(tmp_path, monkeypatch):
+    path = str(tmp_path / "deduplicated.db")
+    moment = datetime(2026, 10, 5, 8, 0)
+    conn = db.connect(path)
+    watch.add_watch(conn, "Athen", lead_min_days=14, lead_max_days=14, now=moment)
+    conn.close()
+    started, release = asyncio.Event(), asyncio.Event()
+
+    class SlowSource(ClosingStub):
+        calls = 0
+
+        async def search(self, query):
+            self.calls += 1
+            started.set()
+            await release.wait()
+            return await super().search(query)
+
+    source = SlowSource()
+    monkeypatch.setattr(watch, "build_hotel_sources", lambda env=None: [source])
+    monkeypatch.setattr(watch.fx_store, "current_rates", no_network_rates)
+    scheduler = DailyScanScheduler(Runner(path), now=lambda: moment)
+    first = asyncio.create_task(scheduler.hotels_once())
+    await asyncio.wait_for(started.wait(), timeout=1)
+    second = asyncio.create_task(scheduler.hotels_once())
+    await asyncio.sleep(0)
+    release.set()
+    first_report, second_report = await asyncio.gather(first, second)
+    assert first_report["watches"] == 1
+    assert first_report["observations"] == 1
+    assert second_report["watches"] == 0
+    assert second_report["observations"] == 0
+    assert source.calls == 1
+    assert source.closed == 1

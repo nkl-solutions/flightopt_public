@@ -44,6 +44,9 @@ class DailyScanScheduler:
         self.interval_seconds = interval_seconds
         self.now = now or datetime.now
         self._task: asyncio.Task | None = None
+        # Manual endpoints and the periodic task use these same lanes.
+        self._flight_collection_lock = asyncio.Lock()
+        self._hotel_collection_lock = asyncio.Lock()
 
     async def run_once(self) -> list[dict[str, Any]]:
         conn = self.runner._conn()
@@ -60,11 +63,12 @@ class DailyScanScheduler:
         gespeicherte Suche laeuft den ganzen Ablauf und liefert eine
         Ergebnisliste, eine Beobachtung holt nur Kalender und schreibt sie weg.
         """
-        conn = self.runner._conn()
-        try:
-            return await run_watchlist(conn, now=self.now())
-        finally:
-            conn.close()
+        async with self._flight_collection_lock:
+            conn = self.runner._conn()
+            try:
+                return await run_watchlist(conn, now=self.now())
+            finally:
+                conn.close()
 
     async def hunt_once(self) -> dict[str, Any]:
         """Die heissen Strecken abfragen und Fehltarife melden.
@@ -75,11 +79,12 @@ class DailyScanScheduler:
         verliert - ein verpasster Fehltarif ist aergerlich, eine verpasste
         Aufzeichnung ist fort.
         """
-        conn = self.runner._conn()
-        try:
-            return await run_hunt(conn, now=self.now())
-        finally:
-            conn.close()
+        async with self._flight_collection_lock:
+            conn = self.runner._conn()
+            try:
+                return await run_hunt(conn, now=self.now())
+            finally:
+                conn.close()
 
     async def hotels_once(self) -> dict[str, Any]:
         """Die faelligen Hotelbeobachtungen abarbeiten.
@@ -87,8 +92,7 @@ class DailyScanScheduler:
         Vierter Auftrag, und er ist ein vierter: eine Flugbeobachtung holt
         einen Kalender mit sechzig Tagen in einer Anfrage, ein Hotelfenster
         braucht eine Anfrage je Anreisetag und Quelle. Deshalb deckelt
-        `run_hotel_watches` sich selbst auf drei Beobachtungen je Durchgang,
-        und deshalb steht dieser Teil zuletzt.
+        `run_hotel_watches` sich selbst auf drei Beobachtungen je Durchgang.
 
         Ohne diesen Aufruf trieb nichts die Schleife an: `hotel_watch` fuellte
         sich mit Beobachtungen, die nie faellig wurden. Und ohne fuenf
@@ -101,30 +105,24 @@ class DailyScanScheduler:
         - der gemeinsame Browser-Pool bleibt mit Absicht stehen, sonst
         startete jeder Takt einen eigenen Chromium.
         """
-        conn = self.runner._conn()
-        try:
-            return await run_hotel_watches(conn, now=self.now())
-        finally:
-            conn.close()
+        async with self._hotel_collection_lock:
+            conn = self.runner._conn()
+            try:
+                return await run_hotel_watches(conn, now=self.now())
+            finally:
+                conn.close()
 
     async def tick(self) -> dict[str, Any]:
-        """Ein Durchgang: Versand, Aufzeichnung, Jagd, Hotels.
+        """Run independent hotel and flight lanes, retaining source budgets.
 
-        Jeder Teil steht fuer sich. Riss der Versand die Aufzeichnung mit,
-        hielte ein dauerhaft kaputtes Profil die Preishistorie fuer immer an -
-        und jeder Tag ohne Aufzeichnung ist unwiederbringlich, weil der Preis
-        von gestern morgen nicht mehr zu haben ist.
-
-        Die Jagd steht bewusst nach der Aufzeichnung. Sie fragt fremde Server
-        im Minutentakt; laeuft sie danach, hat eine heisse Strecke, die
-        ohnehin gerade dran war, ihren Zeitstempel schon gesetzt und wird
-        nicht zweimal geholt.
-
-        Die Hotels stehen zuletzt und mit eigenem `try`. Sie sind der einzige
-        Teil, der einen Browser fuehrt, und damit der, der am ehesten
-        ausfaellt. Ein kaputter Chromium darf die Flugjagd nicht anhalten -
-        und ein Ausfall der Jagd nicht die Hotels.
+        Flight recording precedes hunting so the same route is not fetched
+        twice. Hotels use different sources and need not wait behind flights.
+        Each lane owns its SQLite connections and collection lock.
         """
+        flights, hotels = await asyncio.gather(self._flight_tick(), self._hotel_tick())
+        return {**flights, "hotels": hotels}
+
+    async def _flight_tick(self) -> dict[str, Any]:
         jobs: list[dict[str, Any]] = []
         try:
             jobs = await self.run_once()
@@ -140,12 +138,14 @@ class DailyScanScheduler:
             hunt = await self.hunt_once()
         except Exception:  # noqa: BLE001 - Aufzeichnung und Versand sind durch
             logger.exception("Tagesplaner: Jagd gescheitert")
-        hotels: dict[str, Any] = {}
+        return {"jobs": jobs, "watchlist": watch, "hunt": hunt}
+
+    async def _hotel_tick(self) -> dict[str, Any]:
         try:
-            hotels = await self.hotels_once()
-        except Exception:  # noqa: BLE001 - die drei davor sind durch
+            return await self.hotels_once()
+        except Exception:  # noqa: BLE001 - flight collection remains independent
             logger.exception("Tagesplaner: Hotelbeobachtung gescheitert")
-        return {"jobs": jobs, "watchlist": watch, "hunt": hunt, "hotels": hotels}
+            return {}
 
     def start(self) -> None:
         if self._task is None or self._task.done():
