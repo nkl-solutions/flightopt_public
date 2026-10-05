@@ -31,7 +31,7 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from flightopt.domain import airlines as airline_registry
 from flightopt.domain import airports as airport_registry
@@ -49,7 +49,10 @@ from flightopt.jobs.daily import (
     collect_deals,
     dispatch_due_profiles,
     due_profiles,
+    list_profiles,
+    run_profile,
     save_profile,
+    update_profile,
 )
 from flightopt.jobs.hotel_runner import (
     MAX_HOTEL_DAYS,
@@ -381,6 +384,25 @@ class SearchRequest(BaseModel):
 class ProfileRequest(SearchRequest):
     name: str
     cadence_days: int = Field(default=1, ge=1, le=30)
+
+
+class ProfileUpdateRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    enabled: bool | None = Field(default=None, strict=True)
+    cadence_days: int | None = Field(default=None, ge=1, le=30, strict=True)
+
+    @model_validator(mode="after")
+    def validate_changes(self):
+        changes = self.model_dump(exclude_unset=True)
+        if not changes or any(value is None for value in changes.values()):
+            raise ValueError("Mindestens eine gültige Änderung erforderlich.")
+        if self.name is not None:
+            self.name = self.name.strip()
+            if not self.name:
+                raise ValueError("Name darf nicht leer sein.")
+        return self
 
 
 class WatchRouteRequest(BaseModel):
@@ -1151,6 +1173,45 @@ async def dispatch_profiles_endpoint() -> dict[str, Any]:
     conn = runner._conn()
     try:
         return {"jobs": dispatch_due_profiles(conn, runner)}
+    finally:
+        conn.close()
+
+
+@app.get("/api/profiles")
+async def profiles_endpoint() -> dict[str, Any]:
+    conn = runner._conn()
+    try:
+        return {"profiles": list_profiles(conn)}
+    finally:
+        conn.close()
+
+
+@app.patch("/api/profiles/{profile_id}")
+async def update_profile_endpoint(profile_id: int, req: ProfileUpdateRequest) -> dict[str, Any]:
+    conn = runner._conn()
+    try:
+        update_profile(conn, profile_id, **req.model_dump(exclude_unset=True))
+        return {"profile": next(row for row in list_profiles(conn) if row["id"] == profile_id)}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        conn.close()
+
+
+@app.post("/api/profiles/{profile_id}/run-once")
+async def run_profile_endpoint(profile_id: int) -> dict[str, Any]:
+    conn = runner._conn()
+    try:
+        job = run_profile(conn, runner, profile_id)
+        return {"job": job, "profile": next(
+            row for row in list_profiles(conn) if row["id"] == profile_id
+        )}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     finally:
         conn.close()
 

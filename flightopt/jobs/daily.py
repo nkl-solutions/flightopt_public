@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from typing import Any, Sequence
 
@@ -71,10 +71,13 @@ def save_profile(conn: sqlite3.Connection, name: str, specs: Sequence[SearchSpec
 
 
 def due_profiles(conn: sqlite3.Connection, *, now: datetime | None = None) -> list[SearchProfile]:
-    ts = (now or datetime.now()).isoformat(timespec="seconds")
+    current = now or datetime.now()
+    ts = current.isoformat(timespec="seconds")
     rows = conn.execute(
         "SELECT id, name, spec, airlines, cadence_days, next_run_at "
-        "FROM search_profile WHERE enabled=1 AND next_run_at<=? ORDER BY next_run_at, id",
+        "FROM search_profile p WHERE enabled=1 AND next_run_at<=? "
+        "AND NOT EXISTS (SELECT 1 FROM search_job j WHERE j.profile_id=p.id "
+        "AND j.status IN ('pending','running')) ORDER BY next_run_at, id",
         (ts,),
     ).fetchall()
     return [
@@ -86,8 +89,95 @@ def due_profiles(conn: sqlite3.Connection, *, now: datetime | None = None) -> li
             cadence_days=int(row["cadence_days"]),
             next_run_at=datetime.fromisoformat(row["next_run_at"]),
         )
-        for row in rows
+        for row in rows if _current_specs(_specs_from_json(row["spec"]), current.date())
     ]
+
+
+def _current_specs(specs: Sequence[SearchSpec], today: date) -> list[SearchSpec]:
+    """Keep feasible variants without modifying the profile's fixed window."""
+    return [
+        replace(spec, window_start=max(spec.window_start, today))
+        for spec in specs
+        if max(spec.window_start, today) + timedelta(
+            days=sum(stay.min_nights for stay in spec.stays)
+        ) <= spec.window_end
+    ]
+
+
+def list_profiles(conn: sqlite3.Connection, *, now: datetime | None = None) -> list[dict]:
+    current = now or datetime.now()
+    rows = conn.execute(
+        "SELECT p.*, (SELECT MAX(j.id) FROM search_job j WHERE j.profile_id=p.id "
+        "AND j.status IN ('pending','running')) AS active_job_id "
+        "FROM search_profile p ORDER BY p.id DESC"
+    ).fetchall()
+    profiles = []
+    for row in rows:
+        specs = _specs_from_json(row["spec"])
+        expired = not _current_specs(specs, current.date())
+        enabled = bool(row["enabled"])
+        due = datetime.fromisoformat(row["next_run_at"]) <= current
+        status = (
+            "running" if row["active_job_id"] is not None else
+            "expired" if expired else "paused" if not enabled else
+            "due" if due else "scheduled"
+        )
+        profiles.append({
+            "id": int(row["id"]), "name": row["name"], "enabled": enabled,
+            "status": status, "expired": expired, "cadence_days": int(row["cadence_days"]),
+            "next_run_at": row["next_run_at"], "last_run_at": row["last_run_at"],
+            "active_job_id": row["active_job_id"], "variants": len(specs),
+            "routes": [spec.route for spec in specs],
+            "window_start": min(spec.window_start for spec in specs).isoformat(),
+            "window_end": max(spec.window_end for spec in specs).isoformat(),
+            "airlines": json.loads(row["airlines"]),
+        })
+    return profiles
+
+
+def update_profile(conn: sqlite3.Connection, profile_id: int, *, name: str | None = None,
+                   enabled: bool | None = None, cadence_days: int | None = None) -> None:
+    row = conn.execute("SELECT * FROM search_profile WHERE id=?", (profile_id,)).fetchone()
+    if row is None:
+        raise LookupError("Gespeicherte Suche nicht gefunden.")
+    if name is not None and not 1 <= len(name.strip()) <= 120:
+        raise ValueError("Name muss 1 bis 120 Zeichen enthalten.")
+    if cadence_days is not None and not 1 <= cadence_days <= 30:
+        raise ValueError("Abstand muss 1 bis 30 Tage betragen.")
+    next_run_at = row["next_run_at"]
+    if cadence_days is not None and row["last_run_at"]:
+        next_run_at = (datetime.fromisoformat(row["last_run_at"]) + timedelta(
+            days=cadence_days
+        )).isoformat(timespec="seconds")
+    conn.execute(
+        "UPDATE search_profile SET name=?, enabled=?, cadence_days=?, next_run_at=? WHERE id=?",
+        (name.strip() if name is not None else row["name"],
+         int(enabled) if enabled is not None else row["enabled"],
+         cadence_days if cadence_days is not None else row["cadence_days"], next_run_at, profile_id),
+    )
+
+
+def run_profile(conn: sqlite3.Connection, runner, profile_id: int, *,
+                now: datetime | None = None) -> dict[str, int | str]:
+    current = now or datetime.now()
+    row = conn.execute("SELECT * FROM search_profile WHERE id=?", (profile_id,)).fetchone()
+    if row is None:
+        raise LookupError("Gespeicherte Suche nicht gefunden.")
+    if conn.execute(
+        "SELECT 1 FROM search_job WHERE profile_id=? AND status IN ('pending','running')",
+        (profile_id,),
+    ).fetchone():
+        raise ValueError("Diese Suche läuft bereits.")
+    if not row["enabled"]:
+        raise ValueError("Diese Suche ist pausiert.")
+    specs = _current_specs(_specs_from_json(row["spec"]), current.date())
+    if not specs:
+        raise ValueError("Der Reisezeitraum ist abgelaufen.")
+    job_id = runner.create(specs)
+    conn.execute("UPDATE search_job SET profile_id=? WHERE id=?", (profile_id, job_id))
+    runner.start(job_id, specs, airlines=json.loads(row["airlines"]))
+    mark_scanned(conn, profile_id, now=current)
+    return {"profile_id": profile_id, "job_id": job_id, "name": row["name"]}
 
 
 def mark_scanned(conn: sqlite3.Connection, profile_id: int, *, now: datetime | None = None,
@@ -115,19 +205,7 @@ def dispatch_due_profiles(conn: sqlite3.Connection, runner, *,
     current = now or datetime.now()
     jobs: list[dict[str, int | str]] = []
     for profile in due_profiles(conn, now=current):
-        job_id = runner.create(profile.specs)
-        conn.execute(
-            "UPDATE search_job SET profile_id=? WHERE id=?",
-            (profile.id, job_id),
-        )
-        runner.start(job_id, profile.specs, airlines=profile.airlines)
-        mark_scanned(
-            conn,
-            profile.id,
-            now=current,
-            cadence_days=profile.cadence_days,
-        )
-        jobs.append({"profile_id": profile.id, "job_id": job_id, "name": profile.name})
+        jobs.append(run_profile(conn, runner, profile.id, now=current))
     return jobs
 
 

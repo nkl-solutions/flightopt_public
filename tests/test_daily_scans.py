@@ -54,9 +54,10 @@ def test_saved_profile_keeps_checked_bags(tmp_path):
         checked_bags=1,
     )
 
-    profile_id = save_profile(conn, "Athen mit Gepäck", [with_bag])
+    now = datetime(2026, 9, 5, 8)
+    profile_id = save_profile(conn, "Athen mit Gepäck", [with_bag], now=now)
 
-    due = due_profiles(conn)
+    due = due_profiles(conn, now=now)
     assert due[0].id == profile_id
     assert due[0].specs[0].checked_bags == 1
 
@@ -86,6 +87,7 @@ def test_dispatch_due_profiles_starts_jobs_and_reschedules(tmp_path):
 
     assert jobs == [{"profile_id": profile_id, "job_id": 1, "name": "Athen Oktober"}]
     assert due_profiles(conn, now=now) == []
+    conn.execute("UPDATE search_job SET status='done' WHERE id=1")
     assert due_profiles(conn, now=now + timedelta(days=1, minutes=1))[0].id == profile_id
 
 

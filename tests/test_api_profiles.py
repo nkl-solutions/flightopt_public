@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -52,8 +52,8 @@ async def test_dispatch_endpoint_starts_due_profiles(monkeypatch, tmp_path):
             name="Athen",
             airports=["BER", "ATH"],
             trip="one_way",
-            window_start=date(2026, 10, 1),
-            window_end=date(2026, 10, 3),
+            window_start=date.today(),
+            window_end=date.today() + timedelta(days=3),
         )
     )
 
