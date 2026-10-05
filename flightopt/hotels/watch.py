@@ -71,6 +71,11 @@ from flightopt.hotels.scan import create_scan, run_scan, scan_days
 from flightopt.hotels.signals import TIER_ERROR, TIER_RANK
 from flightopt.hotels.sources.base import HotelSource
 from flightopt.hotels.store import signal_for
+from flightopt.hotels.watch_history import (
+    capture_watch_scan,
+    complete_watch_scan,
+    ensure_watch_history,
+)
 from flightopt.storage import fx_store
 from flightopt.storage.baseline import refresh_baselines
 
@@ -126,13 +131,16 @@ CREATE TABLE IF NOT EXISTS hotel_watch (
     created_at       TEXT NOT NULL,
     last_run_at      TEXT
 );
-CREATE INDEX IF NOT EXISTS ix_hotel_watch_due ON hotel_watch(enabled, last_run_at);
 """
 
 
 def ensure_hotel_watch(conn: sqlite3.Connection) -> None:
     """Die Tabelle anlegen, falls sie fehlt. Idempotent und billig."""
-    conn.executescript(HOTEL_WATCH_SCHEMA)
+    conn.execute(HOTEL_WATCH_SCHEMA)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS ix_hotel_watch_due ON hotel_watch(enabled, last_run_at)"
+    )
+    ensure_watch_history(conn)
 
 
 def _numbers(raw: str | None) -> tuple[int, ...]:
@@ -256,7 +264,7 @@ def fingerprint(
             _text(sorted(children)),
             str(int(rooms)),
             _text(sorted(stars)),
-            "" if min_review_score is None else f"{float(min_review_score):.1f}",
+            "" if min_review_score is None else str(float(min_review_score)),
             currency.upper(),
             country.upper(),
         ]
@@ -460,17 +468,19 @@ async def run_hotel_watches(
                     window_end=end,
                     now=moment.isoformat(timespec="seconds"),
                 )
-                result = await run_scan(
-                    conn,
-                    watch.query(start),
-                    window_start=start,
-                    window_end=end,
-                    sources=live,
-                    rates=rates,
-                    scan_id=scan_id,
-                    observed_at=moment,
-                )
-                observations += len(result.offers)
+                with capture_watch_scan(conn, watch.id, scan_id):
+                    result = await run_scan(
+                        conn,
+                        watch.query(start),
+                        window_start=start,
+                        window_end=end,
+                        sources=live,
+                        rates=rates,
+                        scan_id=scan_id,
+                        observed_at=moment,
+                    )
+                if result.status == "done":
+                    observations += complete_watch_scan(conn, scan_id)
                 days += result.days_done
                 errors.extend(f"{watch.label}: {line}" for line in result.errors)
                 if result.error:
@@ -658,13 +668,16 @@ def hotel_findings(
 
 def watch_stats(conn: sqlite3.Connection, watch: HotelWatch) -> dict[str, Any]:
     """Wie weit diese Beobachtung ist. Ohne Historie ist nichts messbar."""
+    ensure_hotel_watch(conn)
     row = conn.execute(
         "SELECT count(*) AS observations, "
-        "count(DISTINCT substr(observed_at, 1, 10)) AS days, "
-        "max(observed_at) AS last_observation "
-        "FROM price_observation "
-        "WHERE entity_type='hotel' AND return_or_nights=? AND party_size=?",
-        (str(watch.nights), watch.adults + len(watch.children)),
+        "count(DISTINCT substr(o.observed_at, 1, 10)) AS days, "
+        "max(o.observed_at) AS last_observation "
+        "FROM hotel_watch_scan s "
+        "JOIN hotel_watch_observation h ON h.scan_id=s.scan_id "
+        "JOIN price_observation o ON o.id=h.observation_id "
+        "WHERE s.watch_id=? AND s.completed=1 AND o.entity_type='hotel'",
+        (watch.id,),
     ).fetchone()
     days = int(row["days"] or 0)
     return {

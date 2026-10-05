@@ -1,6 +1,6 @@
 # Preishistorie
 
-Stand 2026-09-09. Wer an Baselines, Preislage oder Preisfehlern arbeitet,
+Stand 2026-10-05. Wer an Baselines, Preislage oder Preisfehlern arbeitet,
 schaut zuerst hier nach. Der Code liegt in `flightopt/storage/cache.py`
 (Schreiben), `flightopt/storage/baseline.py` (Rechnen) und
 `flightopt/hotels/signals.py` (Stufen).
@@ -9,6 +9,22 @@ Die Kurzfassung: eine einzige Beobachtungstabelle fuer Fluege und Hotels, drei
 abgeleitete Baseline-Tabellen darueber, und die feste Regel, dass ein Preis nur
 gegen Preise derselben Art gehalten wird. Fehlt die passende Vergleichsgruppe,
 kommt `unknown` heraus und keine Zahl.
+
+### Fortschritt gespeicherter Hotelbeobachtungen
+
+Globale Hotel-Baselines und der Fortschritt einer gespeicherten Beobachtung
+sind verschiedene Aussagen. `hotel_watch_scan` ordnet einen neuen Scan einer
+Watch zu; `hotel_watch_observation` verknuepft genau die dabei geschriebenen
+Preiszeilen. `watch_history.py` erfasst sie atomar beim INSERT mit einem
+verbindungslokalen TEMP-Trigger und aufgabenlokalem Kontext. Fremde manuelle
+Suchen werden auch bei gleicher Verbindung nicht zugerechnet.
+
+Nur abgeschlossene Scans tragen zu Beobachtungszahl, Aufzeichnungstagen und
+Bereitschaft dieser Watch bei. Alte Preiszeilen bleiben unzugeordnet, statt
+ihre Herkunft aus Ziel, Belegung oder Uhrzeit zu erraten. Fehlerhafte und
+abgebrochene Scans bleiben ebenso ausserhalb dieser Fortschrittszahlen.
+Die eigentliche Baseline nach Objekt und Grundgesamtheit bleibt unveraendert;
+fuenf Aufzeichnungstage einer Watch garantieren keine Baseline fuer jedes Hotel.
 
 ---
 
