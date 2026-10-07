@@ -30,6 +30,7 @@ Teilstrecke. Ein Hotel-Richtwert macht eine Gesamtreise nicht buchungsbestätigt
 - [x] Quellenstatus, Fortschritt, Zwischenresultate und Suchabbruch.
 - [x] Ergebnisfilter und Sortierung ohne erneute Suche.
 - [x] Getrennte Gruppen für geprüfte Routen und Kandidaten.
+- [x] Preis-Top-10-Bilanz mit Prüfgrund je Teilstrecke und erhaltenem Kalendervergleich.
 - [x] Favorit aus geprüften Flugpreisen; mobile Strecke-/Datumsanzeige.
 - [x] Tab-Vervollständigung ab einem Buchstaben und Schutz vor alten Antworten.
 - [x] Getrennte Ansichten für Flugsuche, Hotels, gespeicherte Suchen und Preisradar.
@@ -116,8 +117,11 @@ braucht mindestens 5 % Preisrückgang; ältere Snapshots bleiben sichtbar markie
 
 Danach:
 
-- [ ] Top-10-Prüfung als nachvollziehbares Ergebnis ausweisen: geprüft,
+- [x] Top-10-Prüfung als nachvollziehbares Ergebnis ausweisen: geprüft,
   preislich verändert, nicht verfügbar oder Quelle ohne Tagessuche.
+  Die zehn günstigsten Flugvarianten des Ergebnis-Pools werden ausgewertet,
+  unabhängig von lokalen Filtern. Teilprüfungen, Quellenfehler, Schätzungen
+  und fehlende alte Prüfberichte bleiben getrennt. Keine zusätzlichen Abrufe.
 - [ ] Zeit- und Umstiegspräferenzen sowie sinnvolle Mindestanschlusszeiten
   ergänzen, soweit die Quellen konkrete Segmente liefern.
 - [ ] Flughafenwechsel innerhalb einer Stadt sichtbar machen; unerlaubte

@@ -39,6 +39,8 @@ keine lokale Datenbank.
 - parallele Kalender- und Live-Prüfungen für schnellere Suchen
 - getrennte Ergebnisgruppen für geprüfte Routen und Kandidaten;
   Favorit nur aus geprüften Preisen
+- kompakte Preis-Top-10-Bilanz mit Prüfgrund je Teilstrecke, Cache-Kennzeichnung
+  und gespeichertem Kalendervergleich; alte Ergebnisse erhalten keinen erfundenen Prüfbericht
 - Quellenstatus, Abbruch und schrittweise Ergebnisse während der Suche
 - Währungsumrechnung mit EZB-Referenzkursen und sichtbarem Originalpreis
 - Beobachtungsliste mit rollenden Fenstern, täglichen Scans und optionalem
