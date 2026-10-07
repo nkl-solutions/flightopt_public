@@ -100,8 +100,8 @@ def test_the_hotel_page_is_served_and_carries_no_inline_code():
     page = HOTELS_HTML.read_text(encoding="utf-8")
 
     assert re.search(r'<link rel="stylesheet" href="/static/app\.css\?v=\d+">', page)
-    assert '<link rel="stylesheet" href="/static/app.css?v=2026100502">' in page
-    assert '<script src="/static/hotels.js?v=2026100502"></script>' in page
+    assert '<link rel="stylesheet" href="/static/app.css?v=2026100503">' in page
+    assert '<script src="/static/hotels.js?v=2026100503"></script>' in page
     assert re.search(r"<style", page) is None
     assert re.search(r"<script(?![^>]*\ssrc=)", page) is None
     assert re.search(r"\sstyle=", page) is None

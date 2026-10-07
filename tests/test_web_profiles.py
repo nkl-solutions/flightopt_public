@@ -101,7 +101,7 @@ changeProfile = async (id, payload) => {changes = [id,payload]; return true;};
 el('#profileEditName').value = ' Neue Suche ';
 el('#profileCadence').value = '7';
 await saveProfileEdit();
-assert.deepEqual(changes, [5,{name:'Neue Suche',cadence_days:7}]);
+assert.deepEqual(changes, [5,{name:'Neue Suche',cadence_days:7,price_target_minor:null}]);
 assert.equal(el('#profileEditor').hidden, true);
 editProfile(5);
 el('#profileCadence').value='1.5'; changes=null;

@@ -772,7 +772,7 @@ def test_live_regions_sit_only_where_they_belong():
     # wenn jemand am Server eine Umgebungsvariable setzt.
     assert live_region_ids(page) == {
         "voiceStatus", "progresslabel", "note", "outsummary",
-        "aiStatus", "savedmsg", "scanstate", "watchmsg", "huntmsg", "profilesmsg",
+        "aiStatus", "savedmsg", "scanstate", "watchmsg", "huntmsg", "profilesmsg", "targetAlertsMsg",
     }
     assert '<section class="log" id="log" aria-label="Verlauf der Suche">' in page
     assert '<h2 id="outtitle" tabindex="-1">' in page

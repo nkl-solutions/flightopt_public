@@ -82,9 +82,10 @@ function setWorkspaceView(name, {updateHash=false, focus=false}={}){
     if (typeof window !== "undefined" && typeof window.scrollTo === "function") window.scrollTo(0, 0);
   }
   if (workspaceView === "saved" && previousView !== "saved"){
-    loadProfiles({quiet:true}); loadDeals(); loadScanner();
+    loadProfiles({quiet:true}); loadDeals(); loadScanner(); loadTargetAlerts();
   }
   scheduleProfileRefresh();
+  scheduleTargetAlertRefresh();
   return workspaceView;
 }
 function setupWorkspaceNavigation(){
@@ -748,6 +749,7 @@ function profilePayload(){
   return Object.assign({}, p, {
     name: ($("#profileName").value || `${p.airports.join("-")} täglich`).trim(),
     cadence_days: 1,
+    price_target_minor: parsePriceTarget($("#profileTarget").value),
   });
 }
 let sizeTimer;
@@ -832,6 +834,28 @@ async function saveProfileNow(){
 let savedProfiles = [], profileMutationBusy = false, profileLoadGeneration = 0;
 let editingProfileId = null, profileRefreshTimer = null;
 
+function parsePriceTarget(value){
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const parts = /^(\d+)(?:[,.](\d{1,2}))?$/.exec(raw);
+  const minor = parts ? Number(parts[1]) * 100 + Number((parts[2] || "").padEnd(2, "0")) : NaN;
+  if (!Number.isSafeInteger(minor) || minor < 1 || minor > 100000000){
+    throw Error("Preisziel mit höchstens zwei Nachkommastellen angeben, zwischen 0,01 und 1.000.000.");
+  }
+  return minor;
+}
+
+function priceTargetValue(minor){
+  return minor == null ? "" : `${Math.floor(minor / 100)},${String(minor % 100).padStart(2,"0")}`;
+}
+
+function minorPrice(minor, currency){
+  if (!Number.isSafeInteger(minor) || minor < 0) return "Preis fehlt";
+  try {
+    return new Intl.NumberFormat("de-DE",{style:"currency",currency:currency || "EUR"}).format(minor / 100);
+  } catch { return `${money(minor / 100)} ${currency || ""}`; }
+}
+
 function profileDate(value){
   if (!value) return "";
   const day = new Date(`${value}T00:00:00`);
@@ -851,11 +875,13 @@ function profileRowMarkup(row){
     : `<p class="profileroutes">${esc(routes[0] || "")}</p>`;
   const cadence = row.cadence_days === 1 ? "Täglich" : `Alle ${row.cadence_days || 1} Tage`;
   const next = row.status === "scheduled" ? `Nächster Scan: ${scanTime(row.next_run_at)}` : "";
+  const target = row.price_target_minor != null ? `Preisziel: ${minorPrice(row.price_target_minor,row.currency)}` : "";
   return `<li class="profilerow">
     <div class="profileinfo"><strong>${esc(row.name)}</strong>${route}
       <div class="profilefacts"><span>${esc(profileDate(row.window_start))} bis ${esc(profileDate(row.window_end))}</span>
         <span>${esc(cadence)}</span><span class="profilestate" data-status="${esc(row.status)}">${status}</span></div>
       ${next ? `<div class="profilefacts">${esc(next)}</div>` : ""}
+      ${target ? `<div class="profilefacts">${esc(target)}</div>` : ""}
     </div>
     <div class="profileactions">
       <label class="check"><input type="checkbox" data-profile-id="${row.id}" data-profile-action="toggle"
@@ -891,7 +917,7 @@ function scheduleProfileRefresh(){
   const delay = savedProfiles.some(row => row.status === "running") ? 5000 : 30000;
   profileRefreshTimer = window.setTimeout(async () => {
     if (workspaceView === "saved" && !document.hidden && !profileMutationBusy && editingProfileId === null){
-      await loadProfiles({quiet:true}); await loadDeals();
+      await loadProfiles({quiet:true}); await loadDeals(); await loadTargetAlerts();
     } else scheduleProfileRefresh();
   }, delay);
 }
@@ -963,6 +989,8 @@ function editProfile(id){
   editingProfileId = id;
   $("#profileEditName").value = row.name;
   $("#profileCadence").value = row.cadence_days;
+  $("#profileEditTarget").value = priceTargetValue(row.price_target_minor);
+  $("#profileTargetLabel").textContent = `Flugpreisziel (${row.currency || "EUR"} pro Person)`;
   $("#profileEditor").hidden = false;
   $("#profileEditName").focus({preventScroll:true});
 }
@@ -982,7 +1010,108 @@ async function saveProfileEdit(){
     $("#profilesmsg").textContent = "Name angeben und Abstand von 1 bis 30 Tagen wählen.";
     return;
   }
-  if (await changeProfile(editingProfileId, {name,cadence_days:cadence})) closeProfileEditor();
+  let target;
+  try { target = parsePriceTarget($("#profileEditTarget").value); }
+  catch (err) {
+    $("#profilesmsg").dataset.tone = "err"; $("#profilesmsg").textContent = err.message;
+    return;
+  }
+  if (await changeProfile(editingProfileId, {name,cadence_days:cadence,price_target_minor:target})) closeProfileEditor();
+}
+
+let targetAlerts = [], targetAlertsBusy = false, targetAlertsGeneration = 0, targetAlertsRefreshTimer = null;
+
+function scheduleTargetAlertRefresh(){
+  if (typeof window === "undefined" || typeof window.setTimeout !== "function") return;
+  window.clearTimeout(targetAlertsRefreshTimer);
+  if (workspaceView !== "saved") return;
+  const now = Date.now(), fresh = targetAlerts.filter(row => targetAlertFresh(row,now));
+  if (!fresh.length) return;
+  const expiry = Math.min(...fresh.map(row => new Date(row.checked_at).getTime()+86400000+1-now));
+  targetAlertsRefreshTimer = window.setTimeout(() => renderTargetAlerts(),Math.max(1,Math.min(60000,expiry)));
+}
+
+function targetAlertFresh(row, now=Date.now()){
+  if (typeof row.checked_at !== "string" || !/(?:Z|[+-]\d{2}:\d{2})$/.test(row.checked_at)) return false;
+  const checked = new Date(row.checked_at).getTime();
+  const age = now - checked, today = new Date(now);
+  const localDay = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  return Number.isFinite(checked) && age >= 0 && age <= 86400000
+    && (row.dates || []).length > 0 && row.dates.every(day => day >= localDay);
+}
+
+function targetAlertMarkup(row){
+  const fresh = targetAlertFresh(row);
+  const legs = (row.legs || []).map(leg => fresh ? leg : {...leg,verified:false});
+  const dates = (row.dates || []).map(profileDate).join(" · ");
+  return `<li class="profilerow targetalert">
+    <div class="profileinfo"><strong>${esc(row.profile_name)}</strong>
+      <p class="profileroutes">${esc(row.route || "")}</p>
+      <div class="profilefacts">${esc(dates)}</div>
+      <div class="profilefacts"><span>Geprüft ${esc(scanTime(row.checked_at))}</span>
+        <span class="profilestate" data-stale="${!fresh}">${fresh ? "Geprüfter Flugpreis" : "Älterer Fund"}</span></div>
+      ${bookingLinksMarkup({legs},`${row.id}-link`)}
+    </div>
+    <div class="profileactions"><div class="targetprice">${esc(minorPrice(row.price_minor,row.currency))}
+      <small>Preisziel ${esc(minorPrice(row.target_minor,row.currency))}</small></div>
+      ${row.acknowledged_at ? `<span>Abgehakt</span>` : `<button type="button" data-target-alert-id="${row.id}" data-focus-key="${row.id}-ack"${targetAlertsBusy ? " disabled" : ""}>Abhaken</button>`}
+    </div></li>`;
+}
+
+function renderTargetAlerts(){
+  const list = $("#targetAlertsList"), focused = document.activeElement;
+  const focusKey = focused && focused.dataset && focused.dataset.focusKey;
+  const visible = targetAlerts.filter(row => !$("#targetAlertsOpenOnly").checked || !row.acknowledged_at);
+  list.innerHTML = visible.map(targetAlertMarkup).join("");
+  list.querySelectorAll("[data-target-alert-id]").forEach(button => {
+    button.onclick = () => acknowledgeTargetAlert(Number(button.dataset.targetAlertId));
+  });
+  $("#targetAlertsSummary").textContent = visible.length
+    ? `${visible.length} ${visible.length === 1 ? "Fund" : "Funde"} · lokal gespeichert`
+    : "Keine Preisziel-Funde.";
+  if (/^\d+-(?:ack|link-\d+)$/.test(focusKey || "") && (document.activeElement === focused || document.activeElement === document.body)){
+    const control = list.querySelector(`[data-focus-key="${focusKey}"]`);
+    if (control && !control.disabled) control.focus({preventScroll:true});
+  }
+  scheduleTargetAlertRefresh();
+}
+
+async function loadTargetAlerts(){
+  const version = ++targetAlertsGeneration;
+  try {
+    const onlyOpen = Boolean($("#targetAlertsOpenOnly").checked);
+    const r = await fetch(`/api/profile-alerts?limit=50&only_open=${onlyOpen}`), d = await r.json();
+    if (!r.ok) throw Error(detail(d.detail) || `HTTP ${r.status}`);
+    if (version !== targetAlertsGeneration) return;
+    targetAlerts = d.alerts || []; renderTargetAlerts();
+    $("#targetAlertsMsg").dataset.tone = ""; $("#targetAlertsMsg").textContent = "";
+  } catch (err) {
+    if (version !== targetAlertsGeneration) return;
+    $("#targetAlertsMsg").dataset.tone = "err";
+    $("#targetAlertsMsg").textContent = `Funde nicht abrufbar: ${err.message || err}`;
+  }
+}
+
+async function acknowledgeTargetAlert(id){
+  if (targetAlertsBusy) return;
+  const focused = document.activeElement, focusId = focused && focused.dataset && focused.dataset.targetAlertId;
+  targetAlertsBusy = true; ++targetAlertsGeneration; renderTargetAlerts();
+  try {
+    const r = await fetch(`/api/profile-alerts/${id}/acknowledge`,{method:"POST"}), d = await r.json();
+    if (!r.ok) throw Error(detail(d.detail) || `HTTP ${r.status}`);
+    targetAlerts = targetAlerts.map(row => row.id === id ? d.alert : row); renderTargetAlerts();
+    $("#targetAlertsMsg").dataset.tone = "ok"; $("#targetAlertsMsg").textContent = "Fund abgehakt";
+    await loadTargetAlerts();
+  } catch (err) {
+    $("#targetAlertsMsg").dataset.tone = "err"; $("#targetAlertsMsg").textContent = err.message || "Fund konnte nicht abgehakt werden.";
+  } finally {
+    targetAlertsBusy = false; renderTargetAlerts();
+    if (focusId && (document.activeElement === focused || document.activeElement === document.body)){
+      const control = $("#targetAlertsList").querySelector(`[data-target-alert-id="${Number(focusId)}"]`)
+        || $("#targetAlertsHeading");
+      if (control) control.focus({preventScroll:true});
+    }
+  }
 }
 
 /* Enter im Namensfeld soll das Profil sichern, nicht die Suche starten. Das
@@ -1405,7 +1534,7 @@ function safeBookingUrl(value){
     return link;
   } catch { return ""; }
 }
-function legBookingMarkup(leg, index=null){
+function legBookingMarkup(leg, index=null, focusKey=""){
   const l = leg || {};
   const pair = [l.origin, l.destination].filter(Boolean).join(" - ");
   const summary = index !== null;
@@ -1417,15 +1546,16 @@ function legBookingMarkup(leg, index=null){
   const context = [pair, l.date, l.source, quality].filter(Boolean).join(" · ");
   const label = `${summary ? `Teilstrecke ${index + 1}: ` : ""}${context}: ${action}`;
   return `<a class="bookinglink" href="${esc(link)}" target="_blank" rel="noopener noreferrer"`
+    + (focusKey ? ` data-focus-key="${esc(focusKey)}"` : "")
     + ` aria-label="${esc(label)}" title="${esc(context)}">${
       summary && pair ? esc(pair) + " " : ""}${action}</a>`;
 }
-function bookingLinksMarkup(o){
+function bookingLinksMarkup(o, focusPrefix=""){
   const legs = o.legs || [];
   if (!legs.length) return `<span class="bookingmissing">Buchungslink fehlt</span>`;
   return `<span class="bookinglinks" role="group" aria-label="Buchung je Teilstrecke">`
     + (legs.length > 1 ? `<span class="bookingnote">Getrennte Tickets</span>` : "")
-    + legs.map((leg, index) => legBookingMarkup(leg, index)).join(" ") + "</span>";
+    + legs.map((leg, index) => legBookingMarkup(leg, index,focusPrefix ? `${focusPrefix}-${index}` : "")).join(" ") + "</span>";
 }
 /* Warum dieser Preis nicht live geprueft ist. Drei Faelle, nicht zwei: ein
    Richtwert, ein blosser Tagesbestpreis aus dem Kalender, und dazwischen das
@@ -3027,6 +3157,8 @@ $("#profileName").onkeydown = profileNameKeydown;
 $("#reloadProfiles").onclick = async () => { await loadProfiles(); await loadDeals(); await loadScanner(); };
 $("#profileEditor").onsubmit = e => {e.preventDefault(); saveProfileEdit();};
 $("#profileEditCancel").onclick = closeProfileEditor;
+$("#reloadTargetAlerts").onclick = loadTargetAlerts;
+$("#targetAlertsOpenOnly").onchange = async () => { renderTargetAlerts(); await loadTargetAlerts(); };
 $("#watchAdd").onclick = addWatchRoute;
 $("#watchRun").onclick = runWatchlistNow;
 $("#huntRun").onclick = runHuntNow;
@@ -3045,6 +3177,7 @@ drawTrips(); drawRoute(); loadAirlines().then(() => {
 size();
 loadScanner();
 loadProfiles();
+loadTargetAlerts();
 loadDeals();
 loadWatchlist();
 loadHunt();
