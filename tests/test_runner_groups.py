@@ -239,7 +239,7 @@ async def test_persisted_group_results_keep_route_after_runner_restart(tmp_path,
 
     assert restored["results"][0]["route"] == "LEJ-ATH"
     assert restored["results"][0]["verified"] is False
-    assert restored["results"][0]["estimate"] == 99.0
+    assert restored["results"][0]["estimate"] is None
 
 
 # --- internationale Felder im Payload ----------------------------------------

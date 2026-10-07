@@ -30,12 +30,24 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class LegVerification:
+    """Evidence from the sources actually queried for one leg-date pair."""
+
+    status: str
+    method: str | None = None
+    source: str | None = None
+    checked_sources: tuple[str, ...] = ()
+    failed_sources: tuple[str, ...] = ()
+
+
+@dataclass
 class VerifiedItinerary:
     """A combination after live lookup."""
 
     combination: Combination
     offers: list[Offer | None]
     """One entry per leg. None where no source could confirm a flight."""
+    verification: list[LegVerification] = field(default_factory=list)
 
     @property
     def complete(self) -> bool:
@@ -124,6 +136,7 @@ async def verify(
     # Many combinations reuse the same leg-date, so resolve the distinct set once.
     wanted = pairs_by_rank(shortlist)
     resolved: dict[tuple[int, date], Offer | None] = {}
+    diagnostics: dict[tuple[int, date], LegVerification] = {}
     done = 0
     total = len(wanted)
     if on_progress:
@@ -144,7 +157,7 @@ async def verify(
         seen_errors.add(key)
         report.errors.append(f"{source_name} {where}: {message}")
 
-    async def ask(source, index: int, day: date) -> list[Offer]:
+    async def ask(source, index: int, day: date) -> tuple[list[Offer], str, bool]:
         leg = spec.legs[index]
         key = cache_key(
             source.name, "verify", leg.origin, leg.destination, day,
@@ -153,7 +166,7 @@ async def verify(
         cached = await cache.get(key) if cache is not None else None
         if cached is not None:
             report.cache_hits += 1
-            return [_offer_from_cache(row, source.name) for row in cached]
+            return [_offer_from_cache(row, source.name) for row in cached], "cache", False
 
         try:
             report.calls += 1
@@ -163,7 +176,7 @@ async def verify(
             )
         except SourceError as exc:
             note_error(source.name, f"{leg.origin}-{leg.destination} {day}", str(exc))
-            return []
+            return [], "live", True
         except Exception as exc:  # noqa: BLE001
             note_error(
                 source.name,
@@ -171,16 +184,18 @@ async def verify(
                 f"{type(exc).__name__}: {exc}",
             )
             logger.exception("verify crashed on %s", leg)
-            return []
+            return [], "live", True
 
         if cache is not None:
             await cache.put(
                 key, [_offer_to_cache(o) for o in offers],
                 TTL_VERIFY, source=source.name,
             )
-        return offers
+        return offers, "live", False
 
-    async def resolve_one(index: int, day: date) -> tuple[tuple[int, date], Offer | None]:
+    async def resolve_one(
+        index: int, day: date,
+    ) -> tuple[tuple[int, date], Offer | None, LegVerification]:
         leg = spec.legs[index]
         usable = [
             s for s in sources
@@ -194,12 +209,21 @@ async def verify(
 
         best: Offer | None = None
         best_indicative = False
+        best_method: str | None = None
+        checked_sources: list[str] = []
+        failed_sources: list[str] = []
         for group in (airlines, collectors):
             for source in group:
-                for offer in await ask(source, index, day):
+                checked_sources.append(source.name)
+                offers, method, failed = await ask(source, index, day)
+                if failed and source.name not in failed_sources:
+                    failed_sources.append(source.name)
+                for offer in offers:
                     try:
                         offer = convert_offer(offer, spec.currency, rates)
                     except fx.UnknownCurrency as exc:
+                        if source.name not in failed_sources:
+                            failed_sources.append(source.name)
                         note_error(
                             source.name,
                             f"{leg.origin}-{leg.destination} {day}",
@@ -209,6 +233,7 @@ async def verify(
                     if best is None or offer.price.minor < best.price.minor:
                         best = offer
                         best_indicative = bool(getattr(source, "indicative", False))
+                        best_method = method
             if best is not None:
                 break
 
@@ -232,12 +257,24 @@ async def verify(
                 is_indicative=best_indicative,
             )
 
-        return (index, day), best
+        if best is not None:
+            status = "indicative" if best_indicative else "estimate" if best.is_estimate else "verified"
+        else:
+            status = "error" if failed_sources else "unavailable" if checked_sources else "unsupported"
+        diagnostic = LegVerification(
+            status=status,
+            method=best_method,
+            source=best.source if best is not None else None,
+            checked_sources=tuple(checked_sources),
+            failed_sources=tuple(failed_sources),
+        )
+        return (index, day), best, diagnostic
 
     async def tracked_resolve(index: int, day: date) -> None:
         nonlocal done
-        key, offer = await resolve_one(index, day)
+        key, offer, diagnostic = await resolve_one(index, day)
         resolved[key] = offer
+        diagnostics[key] = diagnostic
         done += 1
         if on_progress:
             on_progress(done, total)
@@ -247,7 +284,10 @@ async def verify(
     out: list[VerifiedItinerary] = []
     for combo in shortlist:
         offers = [resolved.get((i, d)) for i, d in enumerate(combo.dates)]
-        item = VerifiedItinerary(combination=combo, offers=offers)
+        item = VerifiedItinerary(
+            combination=combo, offers=offers,
+            verification=[diagnostics[(i, d)] for i, d in enumerate(combo.dates)],
+        )
         if item.complete:
             report.confirmed += 1
         else:

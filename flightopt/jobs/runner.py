@@ -324,6 +324,12 @@ class JobRunner:
             if detail and isinstance(detail[0], dict):
                 route = detail[0].get("route")
             total = r["price_total_minor"] / 100
+            calendar = [leg.get("calendar_price_minor") for leg in detail if isinstance(leg, dict)]
+            estimate_minor = sum(calendar) if (
+                detail and len(calendar) == len(detail)
+                and all(type(price) is int and price >= 0 for price in calendar)
+            ) else None
+            estimate = estimate_minor / 100 if estimate_minor is not None else None
             results.append(
                 {
                     "rank": r["rank"],
@@ -332,8 +338,9 @@ class JobRunner:
                     "total": total,
                     "currency": r["currency"],
                     "verified": not bool(r["is_estimate"]),
-                    "estimate": total,
-                    "drift": None,
+                    "estimate": estimate,
+                    "drift": (r["price_total_minor"] - estimate_minor) / 100
+                    if estimate_minor is not None and not r["is_estimate"] else None,
                     "legs": detail,
                 }
             )
@@ -399,6 +406,8 @@ class JobRunner:
             "destination": leg.destination,
             "date": day.isoformat(),
             "price": grid[i][day].minor / 100,
+            "calendar_price_minor": grid[i][day].minor,
+            "verification": {"status": "not_checked"},
             "verified": False,
         }
         if estimated_by:
@@ -420,6 +429,9 @@ class JobRunner:
             }
         # Unknown until a real flight is found: a calendar day has no itinerary.
         out["stops"] = None
+        checks = getattr(live, "verification", ())
+        if i < len(checks):
+            out["verification"] = asdict(checks[i])
         offer = live.offers[i] if live is not None else None
         if offer is None:
             return out
