@@ -11,6 +11,7 @@ from typing import Any
 
 from flightopt.hotels.watch import run_hotel_watches
 from flightopt.jobs.daily import dispatch_due_profiles
+from flightopt.jobs import price_targets
 from flightopt.jobs.hunt import run_hunt
 from flightopt.jobs.watchlist import run_watchlist
 from flightopt.storage.cache import SqliteCache
@@ -52,7 +53,12 @@ class DailyScanScheduler:
         conn = self.runner._conn()
         try:
             await purge_cache(conn)
-            return dispatch_due_profiles(conn, self.runner, now=self.now())
+            now = self.now()
+            try:
+                price_targets.evaluate_pending(conn, now=now)
+            except Exception:
+                logger.exception("price target recovery failed")
+            return dispatch_due_profiles(conn, self.runner, now=now)
         finally:
             conn.close()
 

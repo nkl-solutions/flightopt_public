@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS search_profile (
     spec           TEXT NOT NULL,
     airlines       TEXT NOT NULL DEFAULT '[]',
     cadence_days   INTEGER NOT NULL DEFAULT 1,
+    price_target_minor INTEGER,
     enabled        INTEGER NOT NULL DEFAULT 1,
     created_at     TEXT NOT NULL,
     last_run_at    TEXT,
@@ -299,6 +300,7 @@ CREATE INDEX IF NOT EXISTS ix_alert_event_recent ON alert_event(created_at);
 
 
 ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("search_profile", "price_target_minor", "INTEGER"),
     ("search_job", "profile_id", "INTEGER REFERENCES search_profile(id) ON DELETE SET NULL"),
     ("price_observation", "is_indicative", "INTEGER NOT NULL DEFAULT 0"),
     ("hotel_scan", "retries", "INTEGER NOT NULL DEFAULT 0"),

@@ -12,6 +12,14 @@ from flightopt.domain.models import Cabin, LegSpec, Pax, SearchSpec, StayRange
 from flightopt.jobs.runner import specs_to_dict
 from flightopt.storage.baseline import chain_price_signal
 
+MAX_PRICE_TARGET_MINOR = 100_000_000
+_UNSET = object()
+
+
+def _validate_price_target(value: object) -> None:
+    if value is not None and (type(value) is not int or not 1 <= value <= MAX_PRICE_TARGET_MINOR):
+        raise ValueError("Preisziel muss zwischen 1 Cent und 1.000.000 liegen.")
+
 
 @dataclass(frozen=True, slots=True)
 class SearchProfile:
@@ -49,14 +57,16 @@ def _specs_from_json(value: str) -> list[SearchSpec]:
 
 def save_profile(conn: sqlite3.Connection, name: str, specs: Sequence[SearchSpec], *,
                  airlines: Sequence[str] = (), cadence_days: int = 1,
+                 price_target_minor: int | None = None,
                  now: datetime | None = None) -> int:
     if not specs:
         raise ValueError("a saved profile needs at least one route")
+    _validate_price_target(price_target_minor)
     ts = (now or datetime.now()).isoformat(timespec="seconds")
     cur = conn.execute(
         "INSERT INTO search_profile("
-        "name, spec, airlines, cadence_days, enabled, created_at, next_run_at"
-        ") VALUES(?,?,?,?,?,?,?)",
+        "name, spec, airlines, cadence_days, enabled, created_at, next_run_at, price_target_minor"
+        ") VALUES(?,?,?,?,?,?,?,?)",
         (
             name,
             json.dumps(specs_to_dict(specs)),
@@ -65,6 +75,7 @@ def save_profile(conn: sqlite3.Connection, name: str, specs: Sequence[SearchSpec
             1,
             ts,
             ts,
+            price_target_minor,
         ),
     )
     return int(cur.lastrowid)
@@ -131,12 +142,15 @@ def list_profiles(conn: sqlite3.Connection, *, now: datetime | None = None) -> l
             "window_start": min(spec.window_start for spec in specs).isoformat(),
             "window_end": max(spec.window_end for spec in specs).isoformat(),
             "airlines": json.loads(row["airlines"]),
+            "currency": specs[0].currency,
+            "price_target_minor": row["price_target_minor"],
         })
     return profiles
 
 
 def update_profile(conn: sqlite3.Connection, profile_id: int, *, name: str | None = None,
-                   enabled: bool | None = None, cadence_days: int | None = None) -> None:
+                   enabled: bool | None = None, cadence_days: int | None = None,
+                   price_target_minor=_UNSET) -> None:
     row = conn.execute("SELECT * FROM search_profile WHERE id=?", (profile_id,)).fetchone()
     if row is None:
         raise LookupError("Gespeicherte Suche nicht gefunden.")
@@ -144,16 +158,18 @@ def update_profile(conn: sqlite3.Connection, profile_id: int, *, name: str | Non
         raise ValueError("Name muss 1 bis 120 Zeichen enthalten.")
     if cadence_days is not None and not 1 <= cadence_days <= 30:
         raise ValueError("Abstand muss 1 bis 30 Tage betragen.")
+    target = row["price_target_minor"] if price_target_minor is _UNSET else price_target_minor
+    _validate_price_target(target)
     next_run_at = row["next_run_at"]
     if cadence_days is not None and row["last_run_at"]:
         next_run_at = (datetime.fromisoformat(row["last_run_at"]) + timedelta(
             days=cadence_days
         )).isoformat(timespec="seconds")
     conn.execute(
-        "UPDATE search_profile SET name=?, enabled=?, cadence_days=?, next_run_at=? WHERE id=?",
+        "UPDATE search_profile SET name=?, enabled=?, cadence_days=?, next_run_at=?, price_target_minor=? WHERE id=?",
         (name.strip() if name is not None else row["name"],
          int(enabled) if enabled is not None else row["enabled"],
-         cadence_days if cadence_days is not None else row["cadence_days"], next_run_at, profile_id),
+         cadence_days if cadence_days is not None else row["cadence_days"], next_run_at, target, profile_id),
     )
 
 

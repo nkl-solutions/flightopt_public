@@ -23,7 +23,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import (
     FileResponse,
     JSONResponse,
@@ -61,6 +61,7 @@ from flightopt.jobs.hotel_runner import (
     stored_rows,
 )
 from flightopt.jobs.runner import JobRunner
+from flightopt.jobs import price_targets
 from flightopt.jobs.scheduler import DailyScanScheduler, purge_cache
 from flightopt.search.dp import count_combinations, feasible_dates
 from flightopt.sources.registry import build_sources
@@ -384,6 +385,7 @@ class SearchRequest(BaseModel):
 class ProfileRequest(SearchRequest):
     name: str
     cadence_days: int = Field(default=1, ge=1, le=30)
+    price_target_minor: int | None = Field(default=None, ge=1, le=100_000_000, strict=True)
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -392,11 +394,12 @@ class ProfileUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     enabled: bool | None = Field(default=None, strict=True)
     cadence_days: int | None = Field(default=None, ge=1, le=30, strict=True)
+    price_target_minor: int | None = Field(default=None, ge=1, le=100_000_000, strict=True)
 
     @model_validator(mode="after")
     def validate_changes(self):
         changes = self.model_dump(exclude_unset=True)
-        if not changes or any(value is None for value in changes.values()):
+        if not changes or any(value is None for key, value in changes.items() if key != "price_target_minor"):
             raise ValueError("Mindestens eine gültige Änderung erforderlich.")
         if self.name is not None:
             self.name = self.name.strip()
@@ -1134,6 +1137,7 @@ async def save_profile_endpoint(req: ProfileRequest) -> dict[str, Any]:
             specs,
             airlines=[a.upper() for a in req.airlines],
             cadence_days=req.cadence_days,
+            price_target_minor=req.price_target_minor,
         )
         row = conn.execute(
             "SELECT next_run_at FROM search_profile WHERE id=?",
@@ -1196,6 +1200,28 @@ async def update_profile_endpoint(profile_id: int, req: ProfileUpdateRequest) ->
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        conn.close()
+
+
+@app.get("/api/profile-alerts")
+async def profile_alerts_endpoint(
+    limit: int = Query(default=50, ge=1, le=500), only_open: bool = False,
+) -> dict[str, Any]:
+    conn = runner._conn()
+    try:
+        return {"alerts": price_targets.list_alerts(conn, limit=limit, only_open=only_open)}
+    finally:
+        conn.close()
+
+
+@app.post("/api/profile-alerts/{alert_id}/acknowledge")
+async def acknowledge_profile_alert_endpoint(alert_id: int) -> dict[str, Any]:
+    conn = runner._conn()
+    try:
+        return {"alert": price_targets.acknowledge(conn, alert_id)}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     finally:
         conn.close()
 

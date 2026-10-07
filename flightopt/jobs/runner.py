@@ -262,6 +262,14 @@ class JobRunner:
         if subs and q in subs:
             subs.remove(q)
 
+    def _evaluate_price_target(self, conn, job_id: int) -> None:
+        from flightopt.jobs import price_targets
+
+        try:
+            price_targets.evaluate_job(conn, job_id)
+        except Exception:
+            logger.exception("price target evaluation failed for job %s", job_id)
+
     def _emit(self, job_id: int, progress: Progress) -> None:
         self._history.setdefault(job_id, []).append(progress)
         for q in self._queues.get(job_id, []):
@@ -914,6 +922,7 @@ class JobRunner:
             conn.commit()
             self._raise_if_cancelled(job_id)
 
+            self._evaluate_price_target(conn, job_id)
             self._results[job_id] = {"status": "done", "error": None, "results": payload}
             confirmed_n = sum(1 for p in payload if p.get("verified"))
             self._emit(
@@ -1195,6 +1204,7 @@ class JobRunner:
             conn.commit()
             self._raise_if_cancelled(job_id)
 
+            self._evaluate_price_target(conn, job_id)
             self._results[job_id] = {"status": "done", "error": None, "results": payload}
             confirmed_n = sum(1 for p in payload if p.get("verified"))
             self._emit(
