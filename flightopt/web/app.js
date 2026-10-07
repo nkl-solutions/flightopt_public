@@ -1572,6 +1572,64 @@ function unverifiedNote(leg){
       + " live nachgeprüft";
   return "Tagesbestpreis, kein konkreter Flug geprüft";
 }
+
+const CHECK_LABELS = {verified:"Preis geprüft",indicative:"Nur Richtwert",estimate:"Nur Schätzung",
+  unavailable:"Kein Angebot gefunden",error:"Quelle gestört",unsupported:"Keine Tagesprüfung verfügbar",
+  not_checked:"Noch nicht geprüft",unknown:"Prüfung nicht dokumentiert"};
+
+function routeVerification(row){
+  const legs = row.legs || [];
+  const statuses = legs.map(leg => (leg.verification || {}).status || "unknown");
+  const checked = legs.filter((leg,i) => statuses[i] === "verified"
+    && leg.verified === true && leg.indicative === false).length;
+  let status = "unknown";
+  if (legs.length && checked === legs.length) status = "verified";
+  else if (checked) status = "partial";
+  else if (statuses.includes("error")) status = "error";
+  else if (statuses.includes("unavailable")) status = "unavailable";
+  else if (statuses.includes("unsupported")) status = "unsupported";
+  else if (statuses.some(s => ["verified","indicative","estimate"].includes(s))) status = "candidate";
+  else if (statuses.includes("not_checked")) status = "pending";
+  return {status,checked,total:legs.length};
+}
+
+function hasDocumentedDrift(row){
+  return routeVerification(row).status === "verified" && Number.isFinite(row.estimate)
+    && row.estimate >= 0 && Number.isFinite(row.drift) && Math.abs(row.drift) >= 0.005;
+}
+
+function verificationLabel(row){
+  const check = routeVerification(row);
+  if (check.status === "partial") return `${check.checked}/${check.total} geprüft`;
+  if (check.status === "verified") return hasDocumentedDrift(row) ? "Preis geändert" : "Preise geprüft";
+  return {error:"Quelle gestört",unavailable:"kein Angebot",unsupported:"keine Tagesprüfung",
+    candidate:"nur Richtwert/Schätzung",pending:"noch ungeprüft",unknown:"ohne Prüfbericht"}[check.status];
+}
+
+function verificationOverview(results){
+  const top = [...results].sort((a,b) => a.total-b.total).slice(0,10);
+  if (!top.length) return "";
+  const counts = {};
+  top.forEach(row => {const status=routeVerification(row).status;counts[status]=(counts[status] || 0)+1;});
+  const labels = {verified:"geprüft",partial:"teilweise geprüft",error:"Quelle gestört",
+    unavailable:"ohne Angebot",unsupported:"ohne Tagesprüfung",candidate:"Richtwert/Schätzung",
+    pending:"noch ungeprüft",unknown:"nicht dokumentiert"};
+  const parts = Object.entries(labels).filter(([key]) => counts[key]).map(([key,label]) => `${counts[key]} ${label}`);
+  const changed = top.filter(hasDocumentedDrift).length;
+  if (changed) parts.push(`${changed} ${changed === 1 ? "Preisänderung" : "Preisänderungen"}`);
+  return `Preis-Top ${top.length}: ${parts.join(" · ")}`;
+}
+
+function legVerificationMarkup(leg){
+  const check = leg.verification || {}, label = CHECK_LABELS[check.status] || CHECK_LABELS.unknown;
+  const parts = [label];
+  if (check.method === "cache") parts.push("aus Zwischenspeicher");
+  else if (check.method === "live") parts.push("Tagesabfrage");
+  if ((check.checked_sources || []).length) parts.push(`abgefragt: ${check.checked_sources.join(", ")}`);
+  if ((check.failed_sources || []).length) parts.push(`gestört: ${check.failed_sources.join(", ")}`);
+  return `<i class="legcheck">${esc(parts.join(" · "))}</i>`;
+}
+
 function detailRows(o){
   const rows = o.legs.map(l => {
     const link = legBookingMarkup(l);
@@ -1587,7 +1645,7 @@ function detailRows(o){
         <span class="pair">${esc(l.origin)}-${esc(l.destination)}</span>
         <span class="when">${fmtDay(l.date)}</span>
         <span class="miss">${why}.${bag}${nativeNote?" "+esc(nativeNote)+".":""}
-          ${legSourceNote(l)}${legBandMarkup(l)}</span>
+          ${legSourceNote(l)}${legBandMarkup(l)}${legVerificationMarkup(l)}</span>
         <span class="fare">${money(l.price)} €</span>${link}</div>`;
     }
     const c = (l.carriers||[])[0] || "";
@@ -1609,17 +1667,23 @@ function detailRows(o){
       <span>${c?tailMark(c):""}</span>
       <span class="pair">${esc(l.origin)}-${esc(l.destination)}</span>
       <span class="when">${fmtDay(l.date)}</span>
-      <span class="times">${times}${bag}${native}${legSourceNote(l)}${legBandMarkup(l)}</span>
+      <span class="times">${times}${bag}${native}${legSourceNote(l)}${legBandMarkup(l)}${legVerificationMarkup(l)}</span>
       <span class="fare">${money(l.price)} €</span>${link}</div>`;
   }).join("");
   let foot;
-  if (resultQuality(o) === "verified"){
+  const check = routeVerification(o);
+  if (check.status === "verified"){
     const d = o.drift;
-    foot = (d===null||d===undefined||Math.abs(d)<0.01)
-      ? "Live geprüft, Preis wie geschätzt."
-      : `Live geprüft. <b>${d>0?"+":""}${money(d)} €</b> gegenüber der Schätzung von ${money(o.estimate)} €.`;
+    foot = !Number.isFinite(o.estimate) ? "Teilstreckenpreise geprüft. Kalendervergleich fehlt."
+      : !Number.isFinite(d) ? "Teilstreckenpreise geprüft. Preisänderung nicht dokumentiert."
+      : Math.abs(d)<0.01 ? "Teilstreckenpreise geprüft, Preis wie geschätzt."
+      : `Teilstreckenpreise geprüft. <b>${d>0?"+":""}${money(d)} €</b> gegenüber der Schätzung von ${money(o.estimate)} €.`;
+  } else if (check.status === "partial"){
+    foot = `${check.checked}/${check.total} Teilstreckenpreise geprüft. Gesamtpreis bleibt Kandidat.`;
   } else {
-    foot = "Nur die vordersten Varianten werden live nachgeprüft.";
+    foot = check.status === "unknown" ? CHECK_LABELS.unknown + "."
+      : check.status === "pending" ? "Prüfung steht noch aus."
+      : `${verificationLabel(o)}. Gesamtpreis bleibt Kandidat.`;
   }
   // Naechte werden aus Abflugdaten gerechnet. Bei einem Nachtflug ist das
   // erklaerungsbeduerftig, sonst zaehlt jemand eine Nacht zu wenig.
@@ -1789,9 +1853,9 @@ function rowMarkup(o, n, favorite=false){
       aria-expanded="${open}" aria-controls="det-${n}"
       >${esc(resultRankLabel(n, favorite))}</button></td>
     <td class="c-price">${money(o.total)}<small>€</small
-      ><small class="rowstatus">${esc(status)}</small></td>
+      ><small class="rowstatus">${esc(status)}</small><small class="rowstatus checkstatus">${esc(verificationLabel(o))}</small></td>
     <td class="c-price c-grand">${grandCell(o)}</td>
-    <td class="c-status">${esc(status)}</td>
+    <td class="c-status">${esc(status)}<small class="checkstatus">${esc(verificationLabel(o))}</small></td>
     <td class="c-status c-band" data-signal="${esc(band.tier)}"
       >${bandCell(band.tier)}</td>
     <td class="c-rail"><span class="rail"><i class="line"
@@ -1851,6 +1915,7 @@ function renderNoResults(message){
   $("#ruler").innerHTML = "";
   $("#resetfilters").hidden = true;
   $("#outtitle").textContent = "Keine Treffer";
+  $("#verificationSummary").textContent = "";
   announceSummary(message);
   $("#out").classList.add("on");
 }
@@ -1861,6 +1926,7 @@ function renderTable(results){
   body.innerHTML = "";
   $("#usedby").textContent = "";
   announceSummary("");
+  $("#verificationSummary").textContent = verificationOverview(results);
   if (!results.length){
     $("#out").classList.remove("on");
     openRows = new Set(); seenRows = new Set();

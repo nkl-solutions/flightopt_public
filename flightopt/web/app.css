@@ -111,6 +111,11 @@ input[type=date]{font-variant-numeric:tabular-nums;min-width:0}
 .tablewrap[hidden]{display:none}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
   clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.verification-summary{font-size:var(--t12);color:var(--ink-muted);margin:var(--s2) 0;overflow-wrap:anywhere}
+.verification-summary:empty{display:none}
+.c-status .checkstatus{display:block;font-size:var(--t12);font-weight:400;color:var(--ink-muted);margin-top:var(--s1)}
+.fl .times .legcheck,.fl .miss .legcheck{display:block;margin:var(--s1) 0 0;
+  font-size:var(--t12);font-style:normal;color:var(--ink-muted);overflow-wrap:anywhere}
 .pagehead{padding:var(--s6) 0 var(--s5)}
 .pagehead h1{font-size:26px;line-height:1.25;font-weight:600}
 .pagehead h1:focus{outline:0}
@@ -798,7 +803,7 @@ tr.detrow.open .detinner{padding:var(--s2) var(--s3) var(--s4)}
     font-family:var(--sans);color:var(--ink-subtle);margin-top:1px}
   tr.opt.best .rowstatus{font-size:var(--t12)}
   .fl{grid-template-columns:1fr auto;gap:var(--s1) var(--s3)}
-  .fl .times,.fl .when{grid-column:1/-1;white-space:normal}
+  .fl .times,.fl .when,.fl .miss{grid-column:1/-1;white-space:normal}
   .fl i.band,.fl i.src{margin-left:0;white-space:normal}
 }
 /* 375 px ist der Arbeitsplatz, nicht der Sonderfall. Bei neun Spalten ist die
