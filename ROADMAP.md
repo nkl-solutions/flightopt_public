@@ -1,6 +1,6 @@
 # flightopt Roadmap
 
-Stand: 5. Oktober 2026. Dieser Plan beschreibt den aktuellen Funktionsstand
+Stand: 7. Oktober 2026. Dieser Plan beschreibt den aktuellen Funktionsstand
 und die nächsten Entwicklungsschritte. Die Reihenfolge richtet sich nach
 verlässlichen Preisen, Multistop-Nutzen und einem stabilen täglichen Betrieb.
 Er ist kein Versprechen eines Fertigstellungstermins.
@@ -39,6 +39,7 @@ Teilstrecke. Ein Hotel-Richtwert macht eine Gesamtreise nicht buchungsbestätigt
 - [x] Gespeicherte Flugprofile, Scheduler und eindeutige Profil-Job-Zuordnung.
 - [x] Profilverwaltung: Name, Scanrhythmus, Pausieren und gezielter Einzelstart.
 - [x] Ablaufprüfung fester Profilfenster und Schutz vor doppelten laufenden Jobs.
+- [x] Lokale Profil-Preiszielalarme für vollständig geprüfte Flugreisen mit Links.
 - [x] Rollende Strecken-Watchlist und tägliche Preisbeobachtung.
 - [x] Optionaler 20-Minuten-Takt mit Quellenbudgets und Cache-Frische.
 - [x] Getrennte Preisbaselines, Ausreißer- und Fehltarif-Erkennung.
@@ -95,19 +96,23 @@ Vor weiterer Funktionsbreite abschließen oder dauerhaft prüfen.
 
 ## P1: Multistop-Mehrwert
 
-Der nächste Funktionsschritt ist ein Preiszielalarm für vollständige Reisen.
+Preiszielalarme für vollständige Flugreisen sind lokal umgesetzt.
 
-- [ ] Profil-Preisziel in Euro eingeben, intern in Cent speichern.
-- [ ] Nach abgeschlossenem Profiljob die billigste vollständig geprüfte,
+- [x] Profil-Preisziel in Euro eingeben, intern in Cent speichern.
+- [x] Nach abgeschlossenem Profiljob die billigste vollständig geprüfte,
   nicht-indikative Flugroute gegen das Ziel vergleichen.
-- [ ] Alarm mit Profil, Route, Datumskette, Währung, Preis und Links speichern.
-- [ ] Wiederholungen entdoppeln und relevante Preisrückgänge berücksichtigen.
-- [ ] Zunächst lokal als Trockenlauf anzeigen, anschließend Discord optional
-  anschließen. Die Prüfung verwendet fertige Jobs ohne weitere Preisabrufe.
+- [x] Alarm mit Profil, Route, Datumskette, Währung, Preis und Links speichern.
+- [x] Wiederholungen entdoppeln und relevante Preisrückgänge berücksichtigen.
+- [x] Lokal als Trockenlauf anzeigen und abhaken. Die Prüfung verwendet fertige
+  Jobs ohne weitere Preisabrufe; Neustarts holen höchstens 24 Stunden alte Jobs nach.
+- [ ] Optionalen Discord-Versand für diese vollständigen Reisen anschließen.
 
 Abschluss: Schätzungen, Richtwerte, abgebrochene Jobs und Teilprüfungen lösen
 keinen bestätigten Reisealarm aus. Identische Profile bleiben getrennt.
 Budgetgrenzen, Wiederholungen und Neustarts sind durch Tests abgedeckt.
+Das Ziel betrifft nur die Flugsumme pro Person, keine Hotels. Angenommene
+Gepäckzuschläge lösen keinen Alarm aus. Ein erneuter Fund derselben Datumskette
+braucht mindestens 5 % Preisrückgang; ältere Snapshots bleiben sichtbar markiert.
 
 Danach:
 

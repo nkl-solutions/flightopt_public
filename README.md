@@ -28,6 +28,8 @@ keine lokale Datenbank.
 - gespeicherte Suchprofile als Basis für tägliche Scans
 - Profilverwaltung mit Status, Pausieren, Name-/Rhythmusänderung und Einzelstart;
   abgelaufene Reisezeiträume werden nicht mehr abgefragt
+- optionales Flugpreisziel pro Person; lokale Funde mit geprüften Teilpreisen,
+  Buchungslinks und Prüfzeitpunkt, ohne zusätzliche Preisabrufe
 - Preisbaseline aus Median und MAD, getrennt nach Kalenderpreisen,
   geprüften Angeboten und Richtwerten
 - transparente Aufgabegepäck-Annahmen je Airline
